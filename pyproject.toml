@@ -1,0 +1,96 @@
+[project]
+name = "frontprompt"
+version = "0.0.1"
+description = "MCP server for browser automation — an in-page inspector overlay plus programmatic page control via Playwright."
+readme = "README.md"
+authors = [
+    { name = "SurrealMind", email = "admin@surrealmind.ai" },
+]
+requires-python = ">=3.13"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+keywords = ["mcp", "browser-automation", "websocket", "json-rpc", "pydantic", "playwright"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: Pydantic :: 2",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+dependencies = [
+    "anyio>=4.13,<5",
+    "click>=8.1,<9",
+    "filelock>=3.16,<4",
+    "mcp>=1.0,<2",
+    "pydantic>=2.13,<3",
+    "scrapling==0.4.8",
+    # scrapling 0.4.8 runtime deps NOT transitively pulled — explicit per scrapling-verification-spike-2026:
+    "browserforge>=1.2,<2",       # scrapling AsyncStealthySession fingerprint generation
+    "curl-cffi>=0.7,<1",          # scrapling AsyncFetcher HTTP backend
+    "msgspec>=0.18,<1",           # scrapling Adaptor selector cache
+    "playwright>=1.50,<2",        # scrapling AsyncDynamicSession Chromium driver
+    "starlette>=1.0,<2",          # HTTP Mutation Endpoint — explizit pinnen statt transitivem sse-starlette
+    "uvicorn>=0.34,<1",           # ASGI server für run_http_server()
+    "structlog>=25.1,<26",
+    "websockets>=14,<17",         # wire/ws_server.py uses websockets.asyncio.server.serve() directly
+    "pydantic-zod-codegen>=1.0,<2",
+]
+
+[project.scripts]
+frontprompt = "frontprompt.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/SurrealMindAI/frontprompt"
+Repository = "https://github.com/SurrealMindAI/frontprompt"
+Issues = "https://github.com/SurrealMindAI/frontprompt/issues"
+
+[build-system]
+requires = ["uv_build>=0.11.13,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "anyio[trio]>=4.13,<5",       # anyio Trio-Backend für httpx ASGITransport (tests)
+    "black>=26.3.1",
+    "httpx>=0.28,<1",             # httpx für httpx.ASGITransport in Tests
+    "hypothesis>=6.152",
+    "mypy>=2.1",
+    "pytest>=9",
+    # NOTE: do NOT add `pytest-anyio` — it is a phantom package on PyPI.
+    # anyio>=4.13 (bereits in [project.dependencies]) liefert sein pytest-plugin
+    # selbst via entry_points["pytest11"] = "anyio:pytest_plugin". `markers = ["anyio: ..."]`
+    # in [tool.pytest.ini_options] reicht (bereits aus daemon-skeleton vorhanden).
+    "ruff>=0.15",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ANN", "RUF"]
+# ANN401: allow Any in narrow surface helpers.
+# E501: line length is enforced by `ruff format` for code; E501 only flags
+#   unsplittable strings/comments/docstrings (MCP tool-descriptions, doc URLs),
+#   which we accept rather than mangle.
+ignore = ["ANN401", "E501"]
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_decorators = false
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers -m 'not drift'"
+markers = [
+    "anyio: anyio async test (provided by anyio.pytest_plugin)",
+    "integration: marks tests that require external resources (playwright install chromium)",
+    "drift: pydantic-zod-codegen drift gate — CI-gated, nicht default-run",
+]

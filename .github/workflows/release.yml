@@ -1,0 +1,55 @@
+name: release
+
+# Publishes a self-contained wheel (frontend overlay embedded) to PyPI on a
+# version tag (vX.Y.Z). Auth via the repo secret PYPI_API_TOKEN. Set it with:
+#   gh secret set PYPI_API_TOKEN -R SurrealMindAI/frontprompt
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Sync deps
+        run: uv sync --frozen
+
+      - name: Install frontend deps
+        run: cd frontend && bun install --frozen-lockfile
+
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Building version $VERSION"
+          sed -i "0,/^version = .*/s//version = \"$VERSION\"/" pyproject.toml
+
+      - name: Build self-contained wheel (codegen + vite + embed)
+        run: uv run python -m frontprompt.build --wheel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*.whl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

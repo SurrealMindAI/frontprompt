@@ -1,0 +1,17 @@
+{
+  "name": "frontprompt",
+  "owner": { "name": "SurrealMind" },
+  "metadata": {
+    "description": "Browser automation MCP server with in-page Svelte overlay — each daemon process owns its own private browser session.",
+    "homepage": "https://github.com/SurrealMindAI/frontprompt"
+  },
+  "plugins": [
+    {
+      "name": "frontprompt",
+      "version": "0.0.1",
+      "source": "./plugin",
+      "description": "Browser automation MCP server — each daemon process spawns its own private `frontprompt show` browser child and exposes 5 read-only tools.",
+      "category": "development"
+    }
+  ]
+}

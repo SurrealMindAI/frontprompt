@@ -1,0 +1,405 @@
+"""SqlitePersistence — SQLite-backed persistence implementation.
+
+Phase-2 disk-persistence provider. One long-lived ``sqlite3.Connection`` per
+instance, WAL mode, idempotent DDL via ``CREATE TABLE IF NOT EXISTS``.
+
+State classification: Python is authoritative; this module serialises/deserialises Pydantic
+models via ``model_dump_json`` / ``model_validate_json`` — no hand-rolled SQL
+column mapping.
+
+Resilience contract (Task 5):
+- Corrupt rows (bad JSON / failed Pydantic validation) are skipped with a warning.
+- Write failures (``sqlite3.Error``) are swallowed with a warning — no raise.
+- :func:`make_persistence` is the factory that callers should use; it falls back to
+  :class:`~frontprompt.state.persistence.in_memory.InMemoryPersistence` on any init error.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import pydantic
+import structlog
+
+if TYPE_CHECKING:
+    from frontprompt.state.persistence.protocol import StatePersistence
+    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Region, Relation
+
+_LOG = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# DDL — must match spec exactly (idempotent via IF NOT EXISTS)
+# ---------------------------------------------------------------------------
+
+_DDL = """\
+CREATE TABLE IF NOT EXISTS panel_state (
+    id          INTEGER PRIMARY KEY CHECK (id = 0),
+    payload_json TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS picks (
+    pick_id        TEXT PRIMARY KEY,
+    origin_session TEXT,
+    url            TEXT,
+    payload_json   TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS regions (
+    region_id      TEXT PRIMARY KEY,
+    origin_session TEXT,
+    payload_json   TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS relations (
+    relation_id    TEXT PRIMARY KEY,
+    origin_session TEXT,
+    payload_json   TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schema_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
+_SEED_SCHEMA_VERSION = "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)"
+
+
+class SqlitePersistence:
+    """SQLite-backed persistence — Phase-2 disk provider.
+
+    Implements :class:`~frontprompt.state.persistence.protocol.StatePersistence`.
+    Panel-state serialised as single JSON row at ``id=0`` (singleton).
+    Inspector-state methods are Task-4 stubs.
+
+    Parameters
+    ----------
+    db_path:
+        Filesystem path to the SQLite database file.  Parent directories are
+        created automatically.  WAL journal mode is activated on every open so
+        readers never block writers.
+    """
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._log = _LOG.bind(impl="sqlite", db_path=str(db_path))
+
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._conn = sqlite3.connect(str(db_path))
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.executescript(_DDL)
+        self._conn.execute(_SEED_SCHEMA_VERSION, ("db_schema_version", "1"))
+        self._conn.commit()
+
+        self._log.debug("state.persistence.sqlite.init_ok")
+
+    # ------------------------------------------------------------------
+    # Panel-state
+    # ------------------------------------------------------------------
+
+    def load_panel_state(self) -> PanelStateView | None:
+        """Return persisted panel-state or ``None`` when no row exists."""
+        from frontprompt.state.state import PanelStateView
+
+        row = self._conn.execute("SELECT payload_json FROM panel_state WHERE id = 0").fetchone()
+
+        if row is None:
+            self._log.debug("state.persistence.sqlite.load_panel.empty")
+            return None
+
+        self._log.debug("state.persistence.sqlite.load_panel.hit")
+        return PanelStateView.model_validate_json(row[0])
+
+    def save_panel_state(self, panel_state: PanelStateView) -> None:
+        """Upsert panel-state as singleton row (``id=0``).
+
+        Write failures (``sqlite3.Error``) are swallowed and logged as warnings.
+        """
+        payload = panel_state.model_dump_json()
+        try:
+            self._conn.execute(
+                """
+                INSERT INTO panel_state (id, payload_json, updated_at)
+                VALUES (0, ?, datetime('now'))
+                ON CONFLICT (id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at   = excluded.updated_at
+                """,
+                (payload,),
+            )
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_panel_state", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.save_panel.ok")
+
+    # ------------------------------------------------------------------
+    # Inspector-state
+    # ------------------------------------------------------------------
+
+    def load_inspector_state(self) -> InspectorState | None:
+        """Read all inspector entities from disk and assemble a fresh InspectorState.
+
+        Ephemeral selection fields (``active``, ``active_pick_id``, ``active_region_id``)
+        are intentionally NOT restored — they default to their model defaults (False / None).
+
+        Returns ``None`` when all three tables are empty.
+        """
+        from frontprompt.state.state import InspectorState, Pick, Region, Relation
+
+        pick_rows = self._conn.execute("SELECT payload_json FROM picks").fetchall()
+        region_rows = self._conn.execute("SELECT payload_json FROM regions").fetchall()
+        relation_rows = self._conn.execute("SELECT payload_json FROM relations").fetchall()
+
+        if not pick_rows and not region_rows and not relation_rows:
+            self._log.debug("state.persistence.sqlite.load_inspector.empty")
+            return None
+
+        picks: list[Pick] = []
+        for r in pick_rows:
+            try:
+                picks.append(Pick.model_validate_json(r[0]))
+            except (json.JSONDecodeError, pydantic.ValidationError) as exc:
+                self._log.warning("state.persistence.load.row_skipped", table="picks", error=str(exc))
+
+        regions: list[Region] = []
+        for r in region_rows:
+            try:
+                regions.append(Region.model_validate_json(r[0]))
+            except (json.JSONDecodeError, pydantic.ValidationError) as exc:
+                self._log.warning("state.persistence.load.row_skipped", table="regions", error=str(exc))
+
+        relations: list[Relation] = []
+        for r in relation_rows:
+            try:
+                relations.append(Relation.model_validate_json(r[0]))
+            except (json.JSONDecodeError, pydantic.ValidationError) as exc:
+                self._log.warning("state.persistence.load.row_skipped", table="relations", error=str(exc))
+
+        self._log.debug(
+            "state.persistence.sqlite.load_inspector.hit",
+            picks=len(picks),
+            regions=len(regions),
+            relations=len(relations),
+        )
+        return InspectorState(picks=picks, regions=regions, relations=relations)
+
+    # ----- Per-entity write-through (authoritative + idempotent on id) --------
+    #
+    # Runtime mutations write ONE entity at a time. The disk is the source of
+    # truth for "what exists" — a session never rewrites the full set from its
+    # (possibly stale) in-memory copy, so a delete in one session is never
+    # resurrected by another session's flush. Fixes the cross-session
+    # picks-accumulation bug (tests/state/persistence/test_sqlite_accumulation.py).
+
+    _UPSERT_PICK = """
+        INSERT INTO picks (pick_id, origin_session, url, payload_json, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (pick_id) DO UPDATE SET
+            origin_session = excluded.origin_session,
+            url            = excluded.url,
+            payload_json   = excluded.payload_json,
+            updated_at     = excluded.updated_at
+    """
+
+    _UPSERT_REGION = """
+        INSERT INTO regions (region_id, origin_session, payload_json, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT (region_id) DO UPDATE SET
+            origin_session = excluded.origin_session,
+            payload_json   = excluded.payload_json,
+            updated_at     = excluded.updated_at
+    """
+
+    _UPSERT_RELATION = """
+        INSERT INTO relations (relation_id, origin_session, payload_json, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT (relation_id) DO UPDATE SET
+            origin_session = excluded.origin_session,
+            payload_json   = excluded.payload_json,
+            updated_at     = excluded.updated_at
+    """
+
+    def upsert_pick(self, pick: Pick) -> None:
+        """Insert-or-replace one pick keyed on ``pick_id``. Idempotent."""
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_PICK,
+                    (pick.pick_id, pick.origin_session, pick.url, pick.model_dump_json()),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="upsert_pick", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.upsert_pick.ok", pick_id=pick.pick_id)
+
+    def delete_pick(self, pick_id: str) -> None:
+        """Delete one pick by ``pick_id``. Idempotent (no-op if absent)."""
+        try:
+            with self._conn:
+                self._conn.execute("DELETE FROM picks WHERE pick_id = ?", (pick_id,))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="delete_pick", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.delete_pick.ok", pick_id=pick_id)
+
+    def upsert_region(self, region: Region) -> None:
+        """Insert-or-replace one region keyed on ``region_id``. Idempotent."""
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_REGION,
+                    (region.region_id, region.origin_session, region.model_dump_json()),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="upsert_region", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.upsert_region.ok", region_id=region.region_id)
+
+    def delete_region(self, region_id: str) -> None:
+        """Delete one region by ``region_id``. Idempotent (no-op if absent)."""
+        try:
+            with self._conn:
+                self._conn.execute("DELETE FROM regions WHERE region_id = ?", (region_id,))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="delete_region", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.delete_region.ok", region_id=region_id)
+
+    def upsert_relation(self, relation: Relation) -> None:
+        """Insert-or-replace one relation keyed on ``relation_id``. Idempotent."""
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_RELATION,
+                    (relation.relation_id, relation.origin_session, relation.model_dump_json()),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="upsert_relation", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.upsert_relation.ok", relation_id=relation.relation_id)
+
+    def delete_relation(self, relation_id: str) -> None:
+        """Delete one relation by ``relation_id``. Idempotent (no-op if absent)."""
+        try:
+            with self._conn:
+                self._conn.execute("DELETE FROM relations WHERE relation_id = ?", (relation_id,))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="delete_relation", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.delete_relation.ok", relation_id=relation_id)
+
+    def save_inspector_state(self, inspector_state: InspectorState) -> None:
+        """Bulk-seed the inspector entities (upsert-all + prune-missing).
+
+        Seed/initialisation helper only — see protocol docstring. Runs in a
+        single transaction: upsert-all + delete-missing for picks / regions /
+        relations. **Runtime mutations use the per-entity methods instead**;
+        this whole-set overwrite is reserved for one-shot seeding where a single
+        writer owns the entire set.
+
+        Write failures (``sqlite3.Error``) are swallowed and logged as warnings.
+        """
+        try:
+            with self._conn:
+                # --- picks ---
+                for pick in inspector_state.picks:
+                    self._conn.execute(
+                        self._UPSERT_PICK,
+                        (pick.pick_id, pick.origin_session, pick.url, pick.model_dump_json()),
+                    )
+                if inspector_state.picks:
+                    placeholders = ",".join("?" * len(inspector_state.picks))
+                    self._conn.execute(
+                        f"DELETE FROM picks WHERE pick_id NOT IN ({placeholders})",
+                        [p.pick_id for p in inspector_state.picks],
+                    )
+                else:
+                    self._conn.execute("DELETE FROM picks")
+
+                # --- regions ---
+                for region in inspector_state.regions:
+                    self._conn.execute(
+                        self._UPSERT_REGION,
+                        (region.region_id, region.origin_session, region.model_dump_json()),
+                    )
+                if inspector_state.regions:
+                    placeholders = ",".join("?" * len(inspector_state.regions))
+                    self._conn.execute(
+                        f"DELETE FROM regions WHERE region_id NOT IN ({placeholders})",
+                        [r.region_id for r in inspector_state.regions],
+                    )
+                else:
+                    self._conn.execute("DELETE FROM regions")
+
+                # --- relations ---
+                for relation in inspector_state.relations:
+                    self._conn.execute(
+                        self._UPSERT_RELATION,
+                        (relation.relation_id, relation.origin_session, relation.model_dump_json()),
+                    )
+                if inspector_state.relations:
+                    placeholders = ",".join("?" * len(inspector_state.relations))
+                    self._conn.execute(
+                        f"DELETE FROM relations WHERE relation_id NOT IN ({placeholders})",
+                        [r.relation_id for r in inspector_state.relations],
+                    )
+                else:
+                    self._conn.execute("DELETE FROM relations")
+
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_inspector_state", error=str(exc))
+            return
+
+        self._log.debug(
+            "state.persistence.sqlite.save_inspector.ok",
+            picks=len(inspector_state.picks),
+            regions=len(inspector_state.regions),
+            relations=len(inspector_state.relations),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Factory
+# ---------------------------------------------------------------------------
+
+
+def make_persistence(db_path: Path | None = None) -> StatePersistence:
+    """Factory for the disk-backed persistence provider.
+
+    Tries to construct :class:`SqlitePersistence` at ``db_path`` (resolved via
+    :func:`~frontprompt.state.persistence.paths.state_db_path` when ``None``).
+    On any :class:`sqlite3.Error` or :class:`OSError` (e.g. unwritable parent
+    directory) it falls back to
+    :class:`~frontprompt.state.persistence.in_memory.InMemoryPersistence`,
+    logs a warning, and never raises.
+
+    Returns:
+        A concrete :class:`~frontprompt.state.persistence.protocol.StatePersistence`
+        implementation — either :class:`SqlitePersistence` or
+        :class:`~frontprompt.state.persistence.in_memory.InMemoryPersistence`.
+    """
+    from frontprompt.state.persistence.in_memory import InMemoryPersistence
+    from frontprompt.state.persistence.paths import state_db_path
+
+    resolved = db_path if db_path is not None else state_db_path()
+    try:
+        return SqlitePersistence(resolved)
+    except (sqlite3.Error, OSError) as exc:
+        _LOG.warning(
+            "state.persistence.init.degraded_to_in_memory",
+            db_path=str(resolved),
+            error=str(exc),
+        )
+        return InMemoryPersistence()
+
+
+__all__ = ["SqlitePersistence", "make_persistence"]

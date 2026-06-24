@@ -1,0 +1,21 @@
+/* frontprompt Design Tokens — Typography */
+:root {
+  --fp-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fp-font-mono:
+    ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+
+  --fp-font-size-xs: 0.75rem; /* 12px */
+  --fp-font-size-sm: 0.875rem; /* 14px */
+  --fp-font-size-md: 1rem; /* 16px */
+  --fp-font-size-lg: 1.125rem; /* 18px */
+  --fp-font-size-xl: 1.25rem; /* 20px */
+  --fp-font-size-2xl: 1.5rem; /* 24px */
+
+  --fp-line-height-tight: 1.25;
+  --fp-line-height-normal: 1.5;
+  --fp-line-height-relaxed: 1.75;
+
+  --fp-font-weight-normal: 400;
+  --fp-font-weight-medium: 500;
+  --fp-font-weight-semibold: 600;
+}
