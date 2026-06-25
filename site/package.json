@@ -1,0 +1,25 @@
+{
+  "name": "@surrealmind/frontprompt-site",
+  "version": "0.0.5",
+  "private": true,
+  "type": "module",
+  "description": "Marketing + docs surface for frontprompt — renders the repo Markdown (SSoT) through the frontprompt design system.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@iconify-json/ph": "^1.2.2",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/markdown-it": "^14.1.2",
+    "svelte": "^5.55.2",
+    "typescript": "^6.0.2",
+    "unplugin-icons": "^23.0.1",
+    "vite": "^8.0.7"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0"
+  }
+}

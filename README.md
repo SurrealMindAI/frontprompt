@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/frontprompt-logo.svg" alt="frontprompt" width="96" height="96">
+</p>
+
 # frontprompt
 
 **Annotate any web page, and drive it from an AI agent.**

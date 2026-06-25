@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Verify every version string in the repo is identical.
 
-frontprompt is released as ONE version across six places: the Python package,
+frontprompt is released as ONE version across seven places: the Python package,
 the CLI ``__version__``, both Claude Code ``plugin.json`` bundles, the
-``marketplace.json`` entry, and the pinned ``uvx`` launch in ``plugin/.mcp.json``.
-If they drift, a plugin update in Claude Code stops mapping cleanly to a PyPI
-release. This script asserts they all match.
+``marketplace.json`` entry, the pinned ``uvx`` launch in ``plugin/.mcp.json``,
+and the marketing/docs ``site/package.json``. If they drift, a plugin update in
+Claude Code stops mapping cleanly to a PyPI release (and the published site
+stops matching the shipped tool). This script asserts they all match.
 
 Run by:
   - the ``pre-push`` git hook (``.githooks/pre-push``) — blocks drift before push,
@@ -77,6 +78,7 @@ def main() -> int:
         "plugin/.claude-plugin/plugin.json": _json_field("plugin/.claude-plugin/plugin.json", "version"),
         ".claude-plugin/marketplace.json": _json_field(".claude-plugin/marketplace.json", "plugins", "0", "version"),
         "plugin/.mcp.json (uvx pin)": _mcp_pin(),
+        "site/package.json": _json_field("site/package.json", "version"),
     }
     if args.tag is not None:
         sources["git tag"] = args.tag.lstrip("v")

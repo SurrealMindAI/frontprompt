@@ -1,0 +1,30 @@
+<svg width="128" height="128" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="frontprompt">
+  <defs>
+    <linearGradient id="fp-bracket" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8bbcff"/>
+      <stop offset="1" stop-color="#5b9dff"/>
+    </linearGradient>
+    <radialGradient id="fp-dot" cx="0.5" cy="0.5" r="0.5">
+      <stop stop-color="#ff8dc0"/>
+      <stop offset="1" stop-color="#ff5fa2"/>
+    </radialGradient>
+    <filter id="fp-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- tile -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#0b0f17" stroke="#1b2536" stroke-width="1.5"/>
+
+  <!-- selection brackets -->
+  <g stroke="url(#fp-bracket)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#fp-glow)">
+    <path d="M15 26 V15 H26"/>
+    <path d="M49 26 V15 H38"/>
+    <path d="M15 38 V49 H26"/>
+    <path d="M49 38 V49 H38"/>
+  </g>
+
+  <!-- target -->
+  <circle cx="32" cy="32" r="5.4" fill="url(#fp-dot)" filter="url(#fp-glow)"/>
+</svg>

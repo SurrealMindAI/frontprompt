@@ -48,3 +48,7 @@ frontend/src/_generated/
 # the wheel (it globs the module dir on disk, ignoring .gitignore). Rebuild via
 # `python -m frontprompt.build`; package via `--wheel`.
 src/frontprompt/_overlay/
+
+# site (marketing + docs)
+site/node_modules/
+site/dist/
