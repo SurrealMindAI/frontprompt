@@ -27,6 +27,7 @@ import { backendState } from './backend-state/backend-state.svelte';
 import { overlayContext } from './services/context/overlay-context.svelte';
 import { bridge, setupBridge } from './bridge/bridge.svelte';
 import { eventInterceptor } from './services/event-interceptor';
+import { applyHostFrameInset } from './services/host-frame';
 import { isDevModeEnabled, startInteractionBlockersMonitor } from './services/interaction-blockers';
 import { BUILD_SESSION } from './_generated/build-info';
 import { SCHEMA_VERSION } from './schema-version';
@@ -154,6 +155,13 @@ async function mountOverlay(): Promise<void> {
     //
     // Side-effect-frei: position: fixed lebt unabhängig vom DOM-parent.
     document.documentElement.appendChild(host);
+
+    // Host-Seite in den minimierten Overlay-Rahmen einrücken: der echte
+    // Seiteninhalt wird VOM Overlay umrahmt ("gewrapped"), statt nur überlagert.
+    // Konstanter Inset = die vier Panel-Laschen-Dicken (immer sichtbar). Panel-
+    // Expansion legt sich nur drüber, schiebt den Inhalt nicht weiter. Läuft pro
+    // Dokument-Load erneut (inkl. Cross-Origin-Nav), weil mountOverlay neu greift.
+    applyHostFrameInset();
 
     // Interaction-blockers monitor (opt-in, DEV-flag gated).
     // Detected page-mechanismen die unsere overlay-interaction blocken:
