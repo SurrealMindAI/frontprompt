@@ -1,6 +1,6 @@
 {
   "name": "@surrealmind/frontprompt-site",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "description": "Marketing + docs surface for frontprompt — renders the repo Markdown (SSoT) through the frontprompt design system.",
