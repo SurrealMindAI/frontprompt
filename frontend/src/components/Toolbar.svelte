@@ -143,18 +143,39 @@
 
 <div class="toolbar">
   <span class="brand">
-    <!-- frontprompt mark: overlay-frame (rounded square) + prompt chevron `>_`.
-         currentColor → erbt den Accent von .brand. -->
-    <svg class="brand__logo" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
-      <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="3.4" stroke="currentColor" stroke-width="1.5" />
-      <path
-        d="M5.1 5.2 L8.1 8 L5.1 10.8"
-        stroke="currentColor"
-        stroke-width="1.5"
+    <!-- Official frontprompt logo (assets/frontprompt-logo.svg — same mark used in
+         the README + GitHub Pages site), inlined per the no-external-assets / IIFE
+         constraint. Has its own brand colours (dark tile + gradient brackets + dot). -->
+    <svg class="brand__logo" viewBox="0 0 64 64" width="18" height="18" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="fp-bracket" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#8bbcff" />
+          <stop offset="1" stop-color="#5b9dff" />
+        </linearGradient>
+        <radialGradient id="fp-dot" cx="0.5" cy="0.5" r="0.5">
+          <stop stop-color="#ff8dc0" />
+          <stop offset="1" stop-color="#ff5fa2" />
+        </radialGradient>
+        <filter id="fp-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.2" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <rect x="2" y="2" width="60" height="60" rx="15" fill="#0b0f17" stroke="#1b2536" stroke-width="1.5" />
+      <g
+        stroke="url(#fp-bracket)"
+        stroke-width="3.4"
         stroke-linecap="round"
         stroke-linejoin="round"
-      />
-      <line x1="9.2" y1="10.8" x2="11" y2="10.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        fill="none"
+        filter="url(#fp-glow)"
+      >
+        <path d="M15 26 V15 H26" />
+        <path d="M49 26 V15 H38" />
+        <path d="M15 38 V49 H26" />
+        <path d="M49 38 V49 H38" />
+      </g>
+      <circle cx="32" cy="32" r="5.4" fill="url(#fp-dot)" filter="url(#fp-glow)" />
     </svg>
     <span class="brand__text">frontprompt</span>
   </span>
