@@ -106,19 +106,14 @@
     );
   }
 
-  // Keep the pick-surface live for the whole quick-comment session: submitPick
-  // deactivates the inspector after each pick, so re-activate while the mode is
-  // on (untracked on inspector.active to avoid a feedback loop). Entering the
-  // mode also flips inspector.active on for the first click.
-  $effect(() => {
-    if (!quickCommentMode.active) return;
-    untrack(() => {
-      if (!backendState.inspector.active) backendState.inspector.activate();
-    });
-    // Re-track inspector.active so this effect re-runs after submitPick turns it
-    // off, re-arming the surface for the next click.
-    void backendState.inspector.active;
-  });
+  // NB: no effect syncs inspector.active for quick mode. The `{#if quickMode}`
+  // block below mounts the InspectorLayer straight off quickCommentMode.active,
+  // and the layer captures every click while mounted (it never gates on
+  // inspector.active). submitPick still flips inspector.active=false per pick —
+  // harmless, since the quickMode branch does not depend on it — and on exit
+  // nothing has forced it true, so the `{:else if inspectorActive}` branch does
+  // NOT re-mount the picker. (An earlier effect forced inspector.active on, which
+  // then lingered after Done/✕ and kept the picker alive — that was the bug.)
   const gridTemplateRows = $derived(
     backendState.panel.gridTemplateRowsWith(pageToolActive || isAboutBlank)
   );
