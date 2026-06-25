@@ -23,7 +23,6 @@
  */
 import { bridge } from '../bridge/bridge.svelte';
 import { nextColorIndex } from '../services/color-palette';
-import { fingerprintHash } from '../services/element-locator';
 import type {
   InspectorState as InspectorView,
   Pick,
@@ -108,8 +107,12 @@ export class InspectorState {
    * um sein value zu setzen.
    */
   submitPick(pick: Pick): string {
-    const newHash = fingerprintHash(pick.element.fingerprint);
-    const existing = this.picks.find((p) => fingerprintHash(p.element.fingerprint) === newHash);
+    // Dedup by the positionally-unique CSS selector (a tag:nth-of-type ancestor
+    // chain), NOT the structural fingerprint: the fingerprint excludes text/rect/
+    // index, so structurally identical siblings (e.g. two <li> with no distinguishing
+    // attributes) hash equal — a second, genuinely-distinct pick was then wrongly
+    // dropped ("3 picks made, 2 taken"). The selector tells siblings apart.
+    const existing = this.picks.find((p) => p.element.selector === pick.element.selector);
     if (existing) {
       // Same DOM-element already picked — reuse its identity, just select it.
       this.activePickId = existing.pick_id;
