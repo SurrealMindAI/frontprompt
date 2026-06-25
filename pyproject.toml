@@ -1,6 +1,6 @@
 [project]
 name = "frontprompt"
-version = "0.0.3"
+version = "0.0.4"
 description = "MCP server for browser automation — an in-page inspector overlay plus programmatic page control via Playwright."
 readme = "README.md"
 authors = [
@@ -15,6 +15,7 @@ classifiers = [
     "Framework :: Pydantic :: 2",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -56,6 +57,7 @@ dev = [
     "hypothesis>=6.152",
     "mypy>=2.1",
     "pytest>=9",
+    "pytest-rerunfailures>=15",   # retry the inherently-flaky real-Chromium-under-xvfb tests in CI
     # NOTE: do NOT add `pytest-anyio` — it is a phantom package on PyPI.
     # anyio>=4.13 (bereits in [project.dependencies]) liefert sein pytest-plugin
     # selbst via entry_points["pytest11"] = "anyio:pytest_plugin". `markers = ["anyio: ..."]`

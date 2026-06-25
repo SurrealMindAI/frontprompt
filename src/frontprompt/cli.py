@@ -267,137 +267,26 @@ def ping_command(session_id: str | None) -> None:
     anyio.run(_run)
 
 
-def _resolve_run_mcp_path() -> str | None:
-    """Return the absolute path to ``run-mcp.sh`` or ``None`` if unresolvable.
-
-    Resolution order (mirrors ``run-mcp.sh`` own ``$DIR`` logic):
-
-    1. ``~/.frontprompt/install.path`` sentinel written by ``setup.sh``.
-    2. Derive from this package's location (``__file__``).
-    """
-    from pathlib import Path as _Path
-
-    # 1. Sentinel
-    sentinel = _Path.home() / ".frontprompt" / "install.path"
-    if sentinel.exists():
-        try:
-            repo_root = _Path(sentinel.read_text().strip())
-            candidate = repo_root / "run-mcp.sh"
-            if candidate.exists():
-                return str(candidate)
-        except OSError:
-            pass
-
-    # 2. Derive from package location
-    #    src/frontprompt/cli.py → repo root is 3 parents up (src/frontprompt → src → repo)
-    try:
-        pkg_file = _Path(__file__).resolve()
-        repo_root = pkg_file.parents[2]
-        candidate = repo_root / "run-mcp.sh"
-        if candidate.exists():
-            return str(candidate)
-    except (IndexError, OSError):
-        pass
-
-    return None
-
-
-def _print_mcp_snippet(run_mcp_path: str | None, *, write_mcp_json: bool = False) -> None:
-    """Print (and optionally write) the Claude-Code MCP registration snippet.
-
-    Parameters
-    ----------
-    run_mcp_path:
-        Absolute path to ``run-mcp.sh``, or ``None`` if unresolvable.
-    write_mcp_json:
-        When ``True``, merge-write the entry into ``~/.mcp.json``.
-    """
-    import json as _json
-    from pathlib import Path as _Path
-
-    click.echo("  [..] MCP setup ......... generating snippet...")
-
-    if run_mcp_path is None:
-        cmd_value = "<path-to-run-mcp.sh>"
-        click.echo("  [!!] MCP setup ......... sentinel not found — run frontprompt setup to write the sentinel")
-    else:
-        cmd_value = run_mcp_path
-
-    snippet: dict[str, object] = {
-        "mcpServers": {
-            "frontprompt": {
-                "command": cmd_value,
-                "args": [],
-            }
-        }
-    }
-    snippet_text = _json.dumps(snippet, indent=2)
-
-    click.echo("")
-    click.echo("  Add to ~/.mcp.json (or project .mcp.json):")
-    click.echo("")
-    for line in snippet_text.splitlines():
-        click.echo(f"  {line}")
-    click.echo("")
-    click.echo("  Or register via CLI:")
-    click.echo("")
-    click.echo(f"    claude mcp add frontprompt {cmd_value}")
-    click.echo("")
-
-    if write_mcp_json and run_mcp_path is not None:
-        mcp_json_path = _Path.home() / ".mcp.json"
-        existing: dict[str, object] = {}
-        if mcp_json_path.exists():
-            try:
-                existing = _json.loads(mcp_json_path.read_text())
-            except (_json.JSONDecodeError, OSError):
-                existing = {}
-
-        mcp_servers = existing.get("mcpServers", {})
-        assert isinstance(mcp_servers, dict)
-        current_entry = mcp_servers.get("frontprompt", {})
-        assert isinstance(current_entry, dict)
-
-        if current_entry.get("command") == run_mcp_path and current_entry.get("args") == []:
-            click.echo("  [ok] MCP setup ......... ~/.mcp.json already up-to-date")
-            return
-
-        mcp_servers["frontprompt"] = {"command": run_mcp_path, "args": []}
-        existing["mcpServers"] = mcp_servers
-        mcp_json_path.write_text(_json.dumps(existing, indent=2))
-        click.echo("  [ok] MCP setup ......... wrote ~/.mcp.json")
-        return
-
-    click.echo("  [ok] MCP setup ......... snippet ready")
-
-
 @main.command("bootstrap")
 @click.option(
     "--chromium/--no-chromium",
     default=True,
     help="Install the Playwright Chromium driver (default: yes).",
 )
-@click.option(
-    "--write-mcp-json",
-    is_flag=True,
-    default=False,
-    help="Merge-write the MCP registration entry into ~/.mcp.json.",
-)
-def bootstrap_command(chromium: bool, write_mcp_json: bool) -> None:
-    """Install runtime prerequisites for an installed frontprompt.
+def bootstrap_command(chromium: bool) -> None:
+    """Pre-install runtime prerequisites for an installed frontprompt.
 
     The overlay frontend ships *inside* the package (embedded at build time), so
     a ``uv tool install`` of the wheel already carries it. What a wheel cannot
     bundle is the Chromium browser binary — this command installs it via
-    Playwright. Run once after installing the tool::
+    Playwright.
+
+    This is **optional**: ``frontprompt show`` / ``frontprompt mcp`` self-install
+    Chromium on first launch if it is missing. Run ``bootstrap`` only to
+    pre-install it eagerly (e.g. in CI or offline prep)::
 
         uv tool install ./dist/frontprompt-*.whl
         frontprompt bootstrap
-
-    Verifies the embedded overlay bundle is present, then (unless
-    ``--no-chromium``) runs ``python -m playwright install chromium``.
-    Prints the Claude-Code MCP registration snippet so the daemon can be
-    wired without manual diagnosis.
     """
     import subprocess as _subprocess
     import sys as _sys
@@ -429,10 +318,6 @@ def bootstrap_command(chromium: bool, write_mcp_json: bool) -> None:
         click.echo("  [ok] chromium ....... installed")
     else:
         click.echo("  [--] chromium ....... skipped (--no-chromium)")
-
-    # 3. Print MCP registration snippet.
-    run_mcp_path = _resolve_run_mcp_path()
-    _print_mcp_snippet(run_mcp_path, write_mcp_json=write_mcp_json)
 
     click.echo("bootstrap complete — `frontprompt show <url>` is ready.")
 
