@@ -82,6 +82,19 @@
     border-bottom: 1px solid var(--fp-color-border-subtle);
     background: var(--fp-color-surface-secondary);
     flex-shrink: 0;
+    /* Tab-header darf nicht überlaufen (z.B. picks/regions/relations/events in
+       einem schmalen Panel) — horizontal scrollbar statt abgeschnittener tabs. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .tabs::-webkit-scrollbar {
+    height: 6px;
+  }
+  .tabs::-webkit-scrollbar-thumb {
+    background: var(--fp-color-border-strong);
+    border-radius: 3px;
   }
 
   .tab {
@@ -95,6 +108,8 @@
     text-transform: lowercase;
     padding: 6px 12px;
     cursor: pointer;
+    flex-shrink: 0; /* Tabs behalten ihre Breite → der header scrollt statt zu quetschen */
+    white-space: nowrap;
     transition:
       color 120ms ease,
       background 120ms ease,
