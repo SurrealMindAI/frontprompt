@@ -83,18 +83,10 @@
     background: var(--fp-color-surface-secondary);
     flex-shrink: 0;
     /* Tab-header darf nicht überlaufen (z.B. picks/regions/relations/events in
-       einem schmalen Panel) — horizontal scrollbar statt abgeschnittener tabs. */
+       einem schmalen Panel) — horizontal scrollbar statt abgeschnittener tabs.
+       Das Scrollbar-Styling kommt global aus App.svelte. */
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
-  }
-
-  .tabs::-webkit-scrollbar {
-    height: 6px;
-  }
-  .tabs::-webkit-scrollbar-thumb {
-    background: var(--fp-color-border-strong);
-    border-radius: 3px;
   }
 
   .tab {

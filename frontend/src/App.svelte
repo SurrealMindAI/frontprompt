@@ -289,6 +289,36 @@
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
   }
 
+  /* ── Global scrollbar restyle ───────────────────────────────────────────
+     One slim, branded scrollbar for EVERY scrollable container inside the HUD
+     (picks/regions/relations lists, tab header, dashboard, debug panel …).
+     :global() so it reaches nested components; CE-mode keeps it inside the
+     shadow root, so the host page's own scrollbars are untouched. */
+  :global(*) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-color-border-strong) transparent;
+  }
+  :global(::-webkit-scrollbar) {
+    width: 8px;
+    height: 8px;
+  }
+  :global(::-webkit-scrollbar-track) {
+    background: transparent;
+  }
+  :global(::-webkit-scrollbar-thumb) {
+    background: var(--fp-color-border-strong);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  :global(::-webkit-scrollbar-thumb:hover) {
+    background: var(--fp-color-text-muted);
+    background-clip: padding-box;
+  }
+  :global(::-webkit-scrollbar-corner) {
+    background: transparent;
+  }
+
   .grid {
     display: grid;
     grid-template-areas:
