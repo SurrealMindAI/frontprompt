@@ -101,7 +101,7 @@
     aria-label={allHidden ? 'show all panels' : 'hide all panels'}
     title={allHidden ? 'Show all panels' : 'Hide all panels'}
   >
-    <span class="tool-btn__icon" aria-hidden="true">{allHidden ? '▣' : '▢'}</span>
+    <span class="tool-btn__icon" aria-hidden="true">{allHidden ? '⊞' : '⊟'}</span>
     <span class="tool-btn__label">{allHidden ? 'show all' : 'hide all'}</span>
   </button>
 </div>
@@ -110,6 +110,7 @@
   .tools {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap; /* alle Tools (pick/region/quick/hide-all) umbrechen statt überlaufen */
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
