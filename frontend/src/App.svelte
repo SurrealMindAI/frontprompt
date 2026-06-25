@@ -51,24 +51,17 @@
   import type { Pick } from './_generated/state';
   import { resize } from './managers/resize-manager.svelte';
   import { setupPositionTracker } from './services/relations';
-  import { effectiveBackgroundColor, relativeLuminance } from './services/color-contrast';
   import { overlayContext } from './services/context/overlay-context.svelte';
 
   // Während aktivem Drag disablen wir die grid-template-Transition,
   // sonst rendert jeder pointermove einen 220ms-Tween statt instant zu folgen.
   const isDragging = $derived(resize.isDragging);
 
-  // Dynamic HUD theme (task "dynamisch färben") — the panels auto-switch between
-  // a light and a dark token-set based on the PAGE background luminance, so the
-  // HUD always contrasts the content behind it. Detected once on mount (page bg
-  // is stable within a session; cross-origin nav re-mounts the overlay → re-runs).
-  // The chosen id flows onto `.grid[data-fp-theme]`; all panels inherit the
-  // CSS custom properties across the shadow boundary.
-  let themeId = $state<'light' | 'dark'>('dark');
-  $effect(() => {
-    const lum = relativeLuminance(effectiveBackgroundColor(document.body));
-    themeId = lum > 0.5 ? 'light' : 'dark';
-  });
+  // HUD theme: a single fixed dark token-set, page-INDEPENDENT. There is no light
+  // mode and no per-page adaptation. An earlier "dynamisch färben" feature derived
+  // the theme from the PAGE background luminance, which made the HUD flip light/dark
+  // per site (dark on Google, light on Wikipedia) and looked inconsistent — removed.
+  // The tokens live unconditionally on `.grid` in the style block below.
 
   // about:blank-detect: reaktiv über overlayContext.isAboutBlank (refresh() nach
   // nav). Steuert das Dashboard-gate im center slot UND die forceClosed-OR für
@@ -178,7 +171,6 @@
   class:grid--dragging={isDragging}
   class:grid--mounted={mounted}
   class:grid--quick={quickMode}
-  data-fp-theme={themeId}
   style:grid-template-rows={gridTemplateRows}
   style:grid-template-columns={gridTemplateColumns}
 >
@@ -221,7 +213,7 @@
 
   <!--
     QuickCommentBox lives INSIDE .grid so it inherits the --fp-color-* theme
-    tokens (defined on .grid, scoped per data-fp-theme). Its own .qc-box/.qc-input
+    tokens (defined on .grid). Its own .qc-box/.qc-input
     are position:fixed so they escape the grid layout entirely; .grid--quick hides
     the panel .area children so only this box shows.
   -->
@@ -267,12 +259,12 @@
 
 <style>
   /* ── HUD theme tokens ──────────────────────────────────────────────────
-     Single source of truth for panel colours. Components consume these via
-     var(--fp-color-*); the dark set is the default, the light set overrides
-     when the page background is light (data-fp-theme='light'). Custom
-     properties inherit across the shadow boundary, so defining them on .grid
-     reaches every panel + nested component. Values are inlined (not via the
-     primitive scale) to stay self-contained inside the injected bundle. */
+     Single source of truth for panel colours — one fixed dark set, page-
+     independent (no light mode, no per-page adaptation). Components consume
+     these via var(--fp-color-*). Custom properties inherit across the shadow
+     boundary, so defining them on .grid reaches every panel + nested component.
+     Values are inlined (not via the primitive scale) to stay self-contained
+     inside the injected bundle. */
   .grid {
     --fp-color-surface-primary: rgb(18, 18, 26);
     --fp-color-surface-secondary: rgba(42, 42, 56, 0.92);
@@ -287,22 +279,6 @@
     --fp-color-accent-text: #0b1220;
     --fp-color-error: #ff6b6b;
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
-  }
-
-  .grid[data-fp-theme='light'] {
-    --fp-color-surface-primary: #f6f7f9;
-    --fp-color-surface-secondary: #ffffff;
-    --fp-color-surface-overlay: #ffffff;
-    --fp-color-text-primary: #16181d;
-    --fp-color-text-secondary: rgba(20, 22, 28, 0.66);
-    --fp-color-text-muted: rgba(20, 22, 28, 0.42);
-    --fp-color-border: rgba(0, 0, 0, 0.14);
-    --fp-color-border-strong: rgba(0, 0, 0, 0.28);
-    --fp-color-border-subtle: rgba(0, 0, 0, 0.07);
-    --fp-color-accent: #2563eb;
-    --fp-color-accent-text: #ffffff;
-    --fp-color-error: #dc2626;
-    --fp-color-hover-bg: rgba(0, 0, 0, 0.06);
   }
 
   .grid {
