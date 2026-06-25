@@ -142,7 +142,22 @@
 </script>
 
 <div class="toolbar">
-  <span class="brand">frontprompt</span>
+  <span class="brand">
+    <!-- frontprompt mark: overlay-frame (rounded square) + prompt chevron `>_`.
+         currentColor → erbt den Accent von .brand. -->
+    <svg class="brand__logo" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+      <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="3.4" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="M5.1 5.2 L8.1 8 L5.1 10.8"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <line x1="9.2" y1="10.8" x2="11" y2="10.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+    <span class="brand__text">frontprompt</span>
+  </span>
 
   <div class="stats">
     <StatPill
@@ -245,13 +260,24 @@
   }
 
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--fp-color-accent);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .brand__logo {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .brand__text {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: lowercase;
-    color: var(--fp-color-accent);
-    white-space: nowrap;
-    flex-shrink: 0;
   }
 
   /* ---- stats cluster (centered) ---- */
