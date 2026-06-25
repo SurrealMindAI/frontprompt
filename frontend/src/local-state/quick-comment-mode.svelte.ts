@@ -14,9 +14,6 @@
  *     rect }``) or null. ``rect`` is the picked element's viewport rect (from
  *     the Pick), used to position the inline input; null falls back to the
  *     hovering box.
- *   - ``commentedCount`` — running tally of how many comments were saved in the
- *     current mode-session (resets on each ``enter()``), drives the live "N
- *     commented" counter in the hovering box.
  *
  * This store holds NO backend-counterpart and sends NO wire-messages — it only
  * orchestrates the UI. Persisting the typed comment goes through
@@ -52,20 +49,13 @@ class QuickCommentMode {
   /** The pick currently awaiting an inline comment, or null. */
   pending = $state<PendingQuickComment | null>(null);
 
-  /**
-   * How many comments were saved since the mode was last entered. Drives the
-   * live "N commented" counter in the hovering box.
-   */
-  commentedCount = $state(0);
-
-  /** Enter quick-comment mode. Resets the per-session counter + clears pending. */
+  /** Enter quick-comment mode. Clears any pending input. */
   enter(): void {
     this.active = true;
     this.pending = null;
-    this.commentedCount = 0;
   }
 
-  /** Exit quick-comment mode. Clears pending; the counter is left as-is. */
+  /** Exit quick-comment mode. Clears pending. */
   exit(): void {
     this.active = false;
     this.pending = null;
@@ -82,13 +72,11 @@ class QuickCommentMode {
   }
 
   /**
-   * The user committed a comment (Enter, or blur-with-text). Bumps the counter
-   * and clears pending so the next pick is ready. The actual persistence is the
-   * caller's job (``updateComment``). Empty comments still count as "moved on"
-   * but do NOT bump the counter.
+   * The user finished the inline input (Enter, or blur-with-text) — clear pending
+   * so the next pick is ready. The actual persistence is the caller's job
+   * (``updateComment``); this store only orchestrates the loop.
    */
-  commitInput(saved: boolean): void {
-    if (saved) this.commentedCount += 1;
+  commitInput(): void {
     this.pending = null;
   }
 

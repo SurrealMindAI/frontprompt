@@ -3,8 +3,9 @@
   inline comment input that pops up next to each freshly picked element.
 
   Quick-comment mode (``quickCommentMode`` localState) collapses the whole HUD:
-  App.svelte hides the normal panels and renders only this box. The box itself
-  shows the mode is active, a live "N commented" counter, and an exit button.
+  App.svelte hides the normal panels and renders only this box. The box shows the
+  mode is active plus a Done + ✕ button (both exit the mode — picks are saved on
+  click, a half-typed note is flushed on blur).
 
   The rapid loop:
     click element  → InspectorLayer captures the Pick → submitPick + openInput
@@ -30,7 +31,6 @@
 
   const active = $derived(quickCommentMode.active);
   const pending = $derived(quickCommentMode.pending);
-  const commentedCount = $derived(quickCommentMode.commentedCount);
 
   // The inline input's value — local draft, reset every time a new pick opens.
   let draft = $state('');
@@ -54,8 +54,7 @@
 
   /**
    * Save the typed comment (if any) for the pending pick + ready the next pick.
-   * Empty/whitespace-only drafts are NOT persisted and do NOT bump the counter,
-   * but still advance the loop (commitInput(false)).
+   * Empty/whitespace-only drafts are NOT persisted, but still advance the loop.
    */
   function save(): void {
     const p = quickCommentMode.pending;
@@ -63,10 +62,8 @@
     const text = draft.trim();
     if (text.length > 0) {
       backendState.inspector.updateComment(p.pickId, text);
-      quickCommentMode.commitInput(true);
-    } else {
-      quickCommentMode.commitInput(false);
     }
+    quickCommentMode.commitInput();
     draft = '';
   }
 
@@ -144,15 +141,23 @@
 
   <div class="qc-box" role="status" aria-label="quick-comment mode active">
     <span class="qc-box__dot"></span>
-    <div class="qc-box__text">
-      <span class="qc-box__title">⚡ quick-comment</span>
-      <span class="qc-box__count">{commentedCount} commented</span>
-    </div>
+    <span class="qc-box__title">⚡ quick-comment</span>
+    <!-- Done + ✕ are the same action: deactivate the tool (picks are already saved
+         on click; a half-typed note is flushed by the input's blur). -->
+    <button
+      type="button"
+      class="qc-box__done"
+      onclick={exit}
+      title="Done — exit quick-comment mode (Esc)"
+      aria-label="done, exit quick-comment mode"
+    >
+      Done
+    </button>
     <button
       type="button"
       class="qc-box__exit"
       onclick={exit}
-      title="Exit quick-comment mode (Esc)"
+      title="Done — exit quick-comment mode (Esc)"
       aria-label="exit quick-comment mode"
     >
       ✕
@@ -200,21 +205,29 @@
     }
   }
 
-  .qc-box__text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-  }
-
   .qc-box__title {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.02em;
+    margin-right: 6px;
   }
 
-  .qc-box__count {
-    font-size: 10px;
-    color: var(--fp-color-text-secondary);
+  .qc-box__done {
+    background: var(--fp-color-accent);
+    border: 1px solid var(--fp-color-accent);
+    color: var(--fp-color-accent-text);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: filter 120ms ease;
+  }
+
+  .qc-box__done:hover {
+    filter: brightness(1.08);
   }
 
   .qc-box__exit {

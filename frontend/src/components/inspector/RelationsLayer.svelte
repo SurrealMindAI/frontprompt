@@ -11,10 +11,16 @@
 <script lang="ts">
   import { backendState } from '../../backend-state/backend-state.svelte';
   import { uiPrefs } from '../../local-state/ui-prefs.svelte';
+  import { quickCommentMode } from '../../local-state/quick-comment-mode.svelte';
   import { planPaths, positionService, positionTracker } from '../../services/relations';
   import SvgRenderer from '../../services/relations/renderer/svg-renderer.svelte';
 
   const inspector = backendState.inspector;
+
+  // Effective picks-visibility: quick-comment mode forces picks ON regardless of
+  // the user's "show picks overlay" toggle, so a freshly created pick shows up
+  // instantly while rapid-commenting. State-driven + derived (overrides the toggle).
+  const picksVisible = $derived(uiPrefs.picksVisible || quickCommentMode.active);
   // Relations brauchen für die heterogeneous-endpoint-resolution beide Listen
   // (positionService.centerForNode dispatcht auf pick/region) — auch wenn regions
   // nicht visuell gerendert werden, dürfen sie nicht aus dem planPaths-pool fallen.
@@ -30,7 +36,7 @@
   const hasContent = $derived(
     (uiPrefs.relationsVisible && commands.length > 0) ||
       (uiPrefs.regionsVisible && inspector.regions.length > 0) ||
-      (uiPrefs.picksVisible && inspector.picks.length > 0)
+      (picksVisible && inspector.picks.length > 0)
   );
 </script>
 
@@ -42,6 +48,6 @@
     regions={visibleRegions}
     activePickId={inspector.activePickId}
     activeRegionId={inspector.activeRegionId}
-    showPicks={uiPrefs.picksVisible}
+    showPicks={picksVisible}
   />
 {/if}

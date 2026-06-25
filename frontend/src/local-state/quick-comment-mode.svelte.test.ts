@@ -1,6 +1,6 @@
 /**
- * QuickCommentMode store tests — enter/exit lifecycle, pending-input
- * open/commit/cancel, and the live commented-counter.
+ * QuickCommentMode store tests — enter/exit lifecycle + pending-input
+ * open/commit/cancel.
  *
  * The store is a $state singleton; each test resets it via exit() + a fresh
  * enter() where needed so cases don't leak state into each other.
@@ -11,25 +11,21 @@ import { quickCommentMode } from './quick-comment-mode.svelte';
 beforeEach(() => {
   // Hard reset to a known-off state between tests.
   quickCommentMode.exit();
-  quickCommentMode.commentedCount = 0;
 });
 
 describe('QuickCommentMode enter/exit', () => {
-  test('starts inactive with no pending and a zero counter', () => {
+  test('starts inactive with no pending', () => {
     expect(quickCommentMode.active).toBe(false);
     expect(quickCommentMode.pending).toBeNull();
-    expect(quickCommentMode.commentedCount).toBe(0);
   });
 
-  test('enter() activates the mode and resets pending + counter', () => {
-    quickCommentMode.commentedCount = 5;
+  test('enter() activates the mode and resets pending', () => {
     quickCommentMode.pending = { pickId: 'stale', rect: null };
 
     quickCommentMode.enter();
 
     expect(quickCommentMode.active).toBe(true);
     expect(quickCommentMode.pending).toBeNull();
-    expect(quickCommentMode.commentedCount).toBe(0);
   });
 
   test('exit() deactivates and clears pending', () => {
@@ -40,16 +36,6 @@ describe('QuickCommentMode enter/exit', () => {
 
     expect(quickCommentMode.active).toBe(false);
     expect(quickCommentMode.pending).toBeNull();
-  });
-
-  test('exit() leaves the counter intact (a session summary survives until re-enter)', () => {
-    quickCommentMode.enter();
-    quickCommentMode.openInput('p1', null);
-    quickCommentMode.commitInput(true);
-
-    quickCommentMode.exit();
-
-    expect(quickCommentMode.commentedCount).toBe(1);
   });
 });
 
@@ -80,47 +66,21 @@ describe('QuickCommentMode pending input', () => {
 });
 
 describe('QuickCommentMode commit / cancel', () => {
-  test('commitInput(true) bumps the counter and clears pending', () => {
+  test('commitInput() clears pending so the next pick is ready', () => {
     quickCommentMode.enter();
     quickCommentMode.openInput('p1', null);
 
-    quickCommentMode.commitInput(true);
+    quickCommentMode.commitInput();
 
-    expect(quickCommentMode.commentedCount).toBe(1);
     expect(quickCommentMode.pending).toBeNull();
   });
 
-  test('commitInput(false) clears pending without bumping the counter', () => {
-    quickCommentMode.enter();
-    quickCommentMode.openInput('p1', null);
-
-    quickCommentMode.commitInput(false);
-
-    expect(quickCommentMode.commentedCount).toBe(0);
-    expect(quickCommentMode.pending).toBeNull();
-  });
-
-  test('multiple commits accumulate the counter across the rapid loop', () => {
-    quickCommentMode.enter();
-
-    quickCommentMode.openInput('p1', null);
-    quickCommentMode.commitInput(true);
-    quickCommentMode.openInput('p2', null);
-    quickCommentMode.commitInput(true);
-    quickCommentMode.openInput('p3', null);
-    quickCommentMode.commitInput(false); // empty — no bump
-
-    expect(quickCommentMode.commentedCount).toBe(2);
-    expect(quickCommentMode.pending).toBeNull();
-  });
-
-  test('cancelInput() clears pending and never touches the counter', () => {
+  test('cancelInput() clears pending', () => {
     quickCommentMode.enter();
     quickCommentMode.openInput('p1', null);
 
     quickCommentMode.cancelInput();
 
     expect(quickCommentMode.pending).toBeNull();
-    expect(quickCommentMode.commentedCount).toBe(0);
   });
 });

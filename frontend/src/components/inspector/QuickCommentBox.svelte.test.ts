@@ -33,7 +33,6 @@ import { quickCommentMode } from '../../local-state/quick-comment-mode.svelte';
 beforeEach(() => {
   updateComment.mockClear();
   quickCommentMode.exit();
-  quickCommentMode.commentedCount = 0;
 });
 
 afterEach(() => {
@@ -47,14 +46,16 @@ describe('QuickCommentBox rendering', () => {
     expect(container.querySelector('.qc-input')).toBeNull();
   });
 
-  test('renders the hovering box with the live counter when active', async () => {
+  test('renders the hovering box (title + Done + exit, no counter) when active', async () => {
     quickCommentMode.enter();
-    quickCommentMode.commentedCount = 3;
     const { container } = render(QuickCommentBox);
 
     const box = container.querySelector('.qc-box');
     expect(box).not.toBeNull();
-    expect(box?.textContent).toContain('3 commented');
+    expect(box?.textContent).toContain('quick-comment');
+    expect(box?.textContent).not.toContain('commented'); // counter removed
+    expect(container.querySelector('.qc-box__done')).not.toBeNull();
+    expect(container.querySelector('.qc-box__exit')).not.toBeNull();
     // No pick pending yet → no inline input.
     expect(container.querySelector('.qc-input')).toBeNull();
   });
@@ -74,7 +75,7 @@ describe('QuickCommentBox rendering', () => {
 });
 
 describe('QuickCommentBox save loop', () => {
-  test('Enter with text saves the comment, bumps the counter, clears the input', async () => {
+  test('Enter with text saves the comment and clears the input', async () => {
     quickCommentMode.enter();
     const { container } = render(QuickCommentBox);
     quickCommentMode.openInput('pick-42', null);
@@ -85,12 +86,11 @@ describe('QuickCommentBox save loop', () => {
     await fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(updateComment).toHaveBeenCalledWith('pick-42', 'too small');
-    expect(quickCommentMode.commentedCount).toBe(1);
     // pending cleared → next pick ready
     expect(quickCommentMode.pending).toBeNull();
   });
 
-  test('Enter with empty text does not save and does not bump the counter', async () => {
+  test('Enter with empty text does not save', async () => {
     quickCommentMode.enter();
     const { container } = render(QuickCommentBox);
     quickCommentMode.openInput('pick-9', null);
@@ -101,7 +101,6 @@ describe('QuickCommentBox save loop', () => {
     await fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(updateComment).not.toHaveBeenCalled();
-    expect(quickCommentMode.commentedCount).toBe(0);
     expect(quickCommentMode.pending).toBeNull();
   });
 
@@ -116,18 +115,27 @@ describe('QuickCommentBox save loop', () => {
     await fireEvent.keyDown(input, { key: 'Escape' });
 
     expect(updateComment).not.toHaveBeenCalled();
-    expect(quickCommentMode.commentedCount).toBe(0);
     expect(quickCommentMode.pending).toBeNull();
   });
 });
 
 describe('QuickCommentBox exit', () => {
-  test('exit button turns the mode off', async () => {
+  test('exit (✕) button turns the mode off', async () => {
     quickCommentMode.enter();
     const { container } = render(QuickCommentBox);
 
     const exitBtn = container.querySelector<HTMLButtonElement>('.qc-box__exit')!;
     await fireEvent.click(exitBtn);
+
+    expect(quickCommentMode.active).toBe(false);
+  });
+
+  test('Done button turns the mode off (same action as ✕)', async () => {
+    quickCommentMode.enter();
+    const { container } = render(QuickCommentBox);
+
+    const doneBtn = container.querySelector<HTMLButtonElement>('.qc-box__done')!;
+    await fireEvent.click(doneBtn);
 
     expect(quickCommentMode.active).toBe(false);
   });
