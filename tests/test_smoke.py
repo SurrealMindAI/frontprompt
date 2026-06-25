@@ -2,9 +2,15 @@
 
 
 def test_version_exposed() -> None:
+    import re
+
     import frontprompt
 
-    assert frontprompt.__version__ == "0.0.5"
+    # Smoke: __version__ is exposed as a semver string. We deliberately do NOT hardcode
+    # the number — the SSoT is pyproject.toml and scripts/check_versions.py enforces that
+    # __version__ equals it, so asserting a literal here only broke CI on every bump.
+    assert isinstance(frontprompt.__version__, str)
+    assert re.fullmatch(r"\d+\.\d+\.\d+", frontprompt.__version__), frontprompt.__version__
 
 
 def test_cli_main_runs() -> None:
