@@ -25,6 +25,9 @@ jobs:
       - name: Install frontend deps
         run: cd frontend && bun install --frozen-lockfile
 
+      - name: Version consistency (all 6 version strings + uvx pin must match)
+        run: uv run python scripts/check_versions.py
+
       - name: Lint + type-check
         run: |
           uv run ruff check src tests

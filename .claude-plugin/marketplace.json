@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "frontprompt",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "source": "./plugin",
       "description": "Browser automation MCP server with in-page Svelte overlay — spawns its own private `frontprompt show` browser child and exposes browser-automation, inspector, and page-query tools.",
       "category": "development"

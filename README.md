@@ -33,6 +33,13 @@ claude plugin install frontprompt@frontprompt
 The `frontprompt` MCP server is wired automatically: it launches via `uvx` from
 PyPI and the Chromium browser self-installs on first use — zero manual setup.
 
+After a CLI install, restart Claude Code or run `/reload-plugins` to activate the
+server. Each plugin version pins an exact PyPI release, so updating is just:
+
+```bash
+claude plugin update frontprompt@frontprompt
+```
+
 ### As a standalone CLI / MCP tool
 
 frontprompt ships as a self-contained wheel — the Svelte overlay is embedded in

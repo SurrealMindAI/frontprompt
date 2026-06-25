@@ -15,6 +15,12 @@ bash setup.sh        # one-shot: uv deps + chromium + bun + frontend + overlay b
 Or manually with `uv sync` plus `uv run python -m playwright install chromium`
 and `uv run python -m frontprompt.build`. Details in [DEVELOPMENT.md](DEVELOPMENT.md#setup).
 
+Install the git hooks once — the pre-push hook enforces version consistency:
+
+```bash
+bash scripts/install-hooks.sh
+```
+
 ## Run the checks
 
 Before opening a PR, run the same gates CI runs:
@@ -49,6 +55,31 @@ Never hand-edit a generated type to satisfy the gate.
 `frontend/src/_generated/` and `src/frontprompt/_overlay/` are gitignored build
 artifacts. They are rebuilt by `python -m frontprompt.build` and shipped inside
 the wheel — do not commit them.
+
+## Releasing & version consistency
+
+frontprompt is released as **one version** across six places — they must always
+match, or a Claude Code plugin update stops mapping cleanly to a PyPI release:
+
+- `pyproject.toml` `version`
+- `src/frontprompt/__init__.py` `__version__`
+- `.claude-plugin/plugin.json` + `plugin/.claude-plugin/plugin.json` `version`
+- `.claude-plugin/marketplace.json` plugin `version`
+- the pinned `uvx --from frontprompt==X.Y.Z` in `plugin/.mcp.json`
+
+`scripts/check_versions.py` enforces this and runs in three places: the
+**pre-push git hook** (`.githooks/pre-push`, installed via
+`bash scripts/install-hooks.sh`) — which blocks a push on drift and, on a
+`vX.Y.Z` tag push, also asserts the tag matches; **CI** (quality job); and the
+**release workflow**, which refuses to publish a tag unless every version equals it.
+
+To cut a release:
+
+1. Bump all six versions to the new `X.Y.Z` (run `python scripts/check_versions.py`
+   until it prints `OK`).
+2. Commit and push to `main` — CI verifies consistency + the full suite.
+3. Tag `vX.Y.Z` and push the tag — the release workflow re-checks the tag, builds
+   the self-contained wheel, and publishes to PyPI.
 
 ## Branch and PR flow
 

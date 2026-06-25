@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Version-consistency gate (frontprompt).
+#
+# Blocks a push if the repo's six version strings drift (pyproject, __init__,
+# both plugin.json bundles, marketplace.json, and the .mcp.json uvx pin). When a
+# `vX.Y.Z` tag is among the pushed refs, also asserts the tag matches.
+#
+# Install: bash scripts/install-hooks.sh   (sets core.hooksPath = .githooks)
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+PY="$(command -v python3 || command -v python)"
+
+tag_arg=()
+while read -r local_ref _local_sha _remote_ref _remote_sha; do
+  case "$local_ref" in
+    refs/tags/v*) tag_arg=(--tag "${local_ref#refs/tags/}") ;;
+  esac
+done
+
+# ${arr[@]+...} keeps an empty array safe under `set -u` on bash 3.2 (macOS default).
+"$PY" "$ROOT/scripts/check_versions.py" ${tag_arg[@]+"${tag_arg[@]}"}

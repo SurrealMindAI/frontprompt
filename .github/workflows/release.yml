@@ -28,11 +28,8 @@ jobs:
       - name: Install frontend deps
         run: cd frontend && bun install --frozen-lockfile
 
-      - name: Stamp version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "Building version $VERSION"
-          sed -i "0,/^version = .*/s//version = \"$VERSION\"/" pyproject.toml
+      - name: Version consistency — the tag may only ship if every version equals it
+        run: uv run python scripts/check_versions.py --tag "$GITHUB_REF_NAME"
 
       - name: Build self-contained wheel (codegen + vite + embed)
         run: uv run python -m frontprompt.build --wheel
