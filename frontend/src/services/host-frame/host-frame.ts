@@ -70,3 +70,25 @@ export function removeHostFrameInset(): void {
     el.style.removeProperty(prop);
   }
 }
+
+/**
+ * about:blank-Backdrop. Auf about:blank rendert das Overlay sein Dashboard im
+ * Center-Slot; die echte (leere) Seite hat den weißen Browser-Default-Background,
+ * der durch den transparenten Center-Slot durchscheint und das dunkle Dashboard-
+ * Design kontrastarm wirken lässt. Wir setzen daher einen schwarzen Backdrop auf
+ * ``<html>``, sodass die ganze Fläche dunkel ist und das HUD-Design sauber sitzt.
+ *
+ * Nur auf about:blank aktivieren — auf echten Seiten NIE den Page-Background
+ * übermalen. Reaktiv via App.svelte gesteuert (``overlayContext.isAboutBlank``).
+ */
+const ABOUT_BLANK_BACKDROP = '#000';
+
+export function setAboutBlankBackdrop(on: boolean): void {
+  const el = document.documentElement;
+  if (!el) return;
+  if (on) {
+    el.style.setProperty('background-color', ABOUT_BLANK_BACKDROP, 'important');
+  } else {
+    el.style.removeProperty('background-color');
+  }
+}

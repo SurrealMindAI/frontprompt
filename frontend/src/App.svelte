@@ -52,6 +52,7 @@
   import { resize } from './managers/resize-manager.svelte';
   import { setupPositionTracker } from './services/relations';
   import { overlayContext } from './services/context/overlay-context.svelte';
+  import { setAboutBlankBackdrop } from './services/host-frame';
 
   // Während aktivem Drag disablen wir die grid-template-Transition,
   // sonst rendert jeder pointermove einen 220ms-Tween statt instant zu folgen.
@@ -67,6 +68,13 @@
   // nav). Steuert das Dashboard-gate im center slot UND die forceClosed-OR für
   // panel-collapse.
   const isAboutBlank = $derived(overlayContext.isAboutBlank);
+
+  // about:blank-Backdrop: schwarzer Page-Hintergrund nur auf about:blank, damit
+  // das dunkle Dashboard im Center-Slot sauber kontrastiert (statt auf dem weißen
+  // Browser-Default durchzuscheinen). Auf echten Seiten NIE den Background anfassen.
+  $effect(() => {
+    setAboutBlankBackdrop(isAboutBlank);
+  });
 
   // PageTool-cross-derive: alle panels rendern als Lasche solange ein
   // full-viewport-tool (Inspector ODER Region-Draw) ODER about:blank aktiv ist.

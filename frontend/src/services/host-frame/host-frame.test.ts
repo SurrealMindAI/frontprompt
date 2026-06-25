@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PANEL_CONFIGS } from '../../backend-state/panel-state.svelte';
-import { FRAME_INSETS, applyHostFrameInset, removeHostFrameInset } from './host-frame';
+import {
+  FRAME_INSETS,
+  applyHostFrameInset,
+  removeHostFrameInset,
+  setAboutBlankBackdrop,
+} from './host-frame';
 
 afterEach(() => {
   removeHostFrameInset();
+  setAboutBlankBackdrop(false);
   document.documentElement.removeAttribute('style');
 });
 
@@ -68,5 +74,21 @@ describe('removeHostFrameInset', () => {
     expect(s.getPropertyValue('padding-right')).toBe('');
     expect(s.getPropertyValue('padding-bottom')).toBe('');
     expect(s.getPropertyValue('padding-left')).toBe('');
+  });
+});
+
+describe('setAboutBlankBackdrop', () => {
+  it('paints a black !important backdrop on <html> when enabled', () => {
+    setAboutBlankBackdrop(true);
+    const s = document.documentElement.style;
+    // jsdom normalises the #000 shorthand to rgb() on read-back.
+    expect(s.getPropertyValue('background-color')).toBe('rgb(0, 0, 0)');
+    expect(s.getPropertyPriority('background-color')).toBe('important');
+  });
+
+  it('clears the backdrop when disabled', () => {
+    setAboutBlankBackdrop(true);
+    setAboutBlankBackdrop(false);
+    expect(document.documentElement.style.getPropertyValue('background-color')).toBe('');
   });
 });
