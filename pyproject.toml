@@ -1,6 +1,6 @@
 [project]
 name = "frontprompt"
-version = "0.0.1"
+version = "0.0.2"
 description = "MCP server for browser automation — an in-page inspector overlay plus programmatic page control via Playwright."
 readme = "README.md"
 authors = [

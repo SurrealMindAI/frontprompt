@@ -18,15 +18,22 @@ def test_cli_help_exits_zero() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
-    assert "daemon" in result.output
+    assert "mcp" in result.output
 
 
-def test_daemon_help_exits_zero() -> None:
-    """``frontprompt daemon --help`` zeigt den daemon-Subcommand-Hilfetext."""
+def test_mcp_help_exits_zero() -> None:
+    """``frontprompt mcp --help`` zeigt den mcp-Subcommand-Hilfetext."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["mcp", "--help"])
+    assert result.exit_code == 0
+    assert "mcp" in result.output.lower()
+
+
+def test_daemon_alias_still_works() -> None:
+    """``daemon`` bleibt als hidden Backward-Compat-Alias für ``mcp`` aufrufbar."""
     runner = CliRunner()
     result = runner.invoke(main, ["daemon", "--help"])
     assert result.exit_code == 0
-    assert "daemon" in result.output.lower()
 
 
 def test_unknown_subcommand_exits_nonzero() -> None:
@@ -125,7 +132,7 @@ def _bootstrap_with_mcp(tmp_path: object, monkeypatch: object, *, write_mcp_json
 
     # Place a fake run-mcp.sh in the tmp root so the path is resolvable.
     fake_run_mcp = tmp_path / "run-mcp.sh"  # type: ignore[operator]
-    fake_run_mcp.write_text("#!/bin/sh\nexec uv run frontprompt daemon\n")
+    fake_run_mcp.write_text("#!/bin/sh\nexec uv run frontprompt mcp\n")
 
     monkeypatch.setattr(pathlib.Path, "home", staticmethod(lambda: tmp_path))  # type: ignore[arg-type]
 

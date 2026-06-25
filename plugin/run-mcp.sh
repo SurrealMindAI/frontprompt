@@ -86,5 +86,5 @@ log "setup --check passed"
 
 # Strip leaked VIRTUAL_ENV before exec so `uv run --directory` resolves to
 # this project's .venv instead of whatever cache env the parent shell points at.
-log "exec: env -u VIRTUAL_ENV uv run --directory $DIR frontprompt daemon $*"
-exec env -u VIRTUAL_ENV uv run --directory "$DIR" frontprompt daemon "$@" 2>> "$LOG"
+log "exec: env -u VIRTUAL_ENV uv run --directory $DIR frontprompt mcp $*"
+exec env -u VIRTUAL_ENV uv run --directory "$DIR" frontprompt mcp "$@" 2>> "$LOG"

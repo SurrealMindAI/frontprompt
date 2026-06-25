@@ -1010,7 +1010,7 @@ async def serve_mcp_stdio(
         except ShowSpawnError as exc:
             _LOG.warning("mcp.tool.spawn_failed", tool=name, error=str(exc))
             # Surface spawn failures as MCP-tool errors so Claude sees the diagnosis.
-            raise RuntimeError(f"frontprompt daemon failed to spawn browser session: {exc}") from exc
+            raise RuntimeError(f"frontprompt mcp failed to spawn browser session: {exc}") from exc
 
         if name == "frontprompt_get_session_info":
             return _as_text_content(session_info.model_dump(mode="json"))

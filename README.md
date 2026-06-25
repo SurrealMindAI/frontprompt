@@ -43,12 +43,13 @@ frontprompt bootstrap
 frontprompt show https://example.com
 
 # run as an MCP stdio server for an AI agent
-frontprompt daemon
+frontprompt mcp
 ```
 
-Point your MCP client at `frontprompt daemon`. Each daemon owns its own private
+Point your MCP client at `frontprompt mcp`. Each invocation owns its own private
 browser session and spawns Chromium lazily on the first tool call, so startup
-is instant.
+is instant. The server is ephemeral — one process per client session, it dies
+when the client disconnects.
 
 ## Dependencies & risk
 

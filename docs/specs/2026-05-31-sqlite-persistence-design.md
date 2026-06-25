@@ -22,7 +22,6 @@
 - **Live cross-process state sync** — the daemon-singleton model stays deferred. Two simultaneous `frontprompt show` processes do not see each other's writes live.
 - **A migration framework** — only a forward-looking schema-version seam (`schema_meta`).
 - **The breaking unified single/group Pick schema** (the existing deferred "Pick-Schema-Evolution v0.7.0" backlog item) — it is renumbered to **0.8.0**, because this design claims 0.7.0 for the *additive* `origin_session` field.
-- Any Two-BC / HTTP / WebSocket changes.
 
 ## Ownership model
 

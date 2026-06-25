@@ -222,13 +222,14 @@ endpoints, with a typed kind (`relates_to` / `triggers` / `part_of`). Edges can
 be drawn manually or derived automatically after a region scan via
 lowest-common-ancestor plus a tree-distance threshold.
 
-## MCP daemon
+## MCP server
 
-`frontprompt daemon` is the MCP stdio server entry point. Each invocation spawns
-an independent daemon process that owns exactly one private browser session.
-There is no daemon singleton and no lockfile — multiple client sessions each get
-their own process and their own Chromium. A crashed browser session therefore
-cannot corrupt another agent's pick state.
+`frontprompt mcp` is the MCP stdio server entry point. Each invocation spawns an
+independent, ephemeral server process that owns exactly one private browser
+session. There is no singleton and no lockfile — multiple client sessions each
+get their own process and their own Chromium, and the process dies on stdio-EOF
+(client disconnect). A crashed browser session therefore cannot corrupt another
+agent's pick state.
 
 **Lazy browser spawn.** A lazy session provider defers the `frontprompt show`
 child-spawn until the first actual tool call. Daemon startup is instant; the

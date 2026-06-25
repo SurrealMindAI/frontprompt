@@ -3,21 +3,13 @@
 Entry-point: ``frontprompt`` (via [project.scripts] in pyproject.toml).
 
 Subcommands:
-    frontprompt daemon    — Startet den Daemon mit MCP stdio-Server.
+    frontprompt mcp        — Startet den MCP-stdio-Server (per-Prozess Browser-Isolation).
     frontprompt show <url> — Öffnet headful Chromium mit Overlay.
-    frontprompt bootstrap — Installiert Laufzeit-Prereqs (Chromium) für ein installiertes Tool.
-    frontprompt --help    — Zeigt alle Subcommands.
+    frontprompt bootstrap  — Installiert Laufzeit-Prereqs (Chromium) für ein installiertes Tool.
+    frontprompt --help     — Zeigt alle Subcommands.
 
-Signal-Handling (SIGINT/SIGTERM):
-    ``anyio.open_signal_receiver`` in ``_daemon_async_main`` empfängt Signale.
-    Bei Signal: TaskGroup-CancelScope canceln → sauberer Exit 0.
-    Buffered IntentRequests in der Queue werden silently dropped (Skeleton-Policy:
-    Drain-Logik kommt mit erstem echten Aggregate-Mutations-Bundle).
-
-Design notes:
-    - ``anyio.run()`` statt ``asyncio.run()`` am Entry-Point.
-    - DaemonClock wird in ``_daemon_async_main`` mit ``SystemDaemonClock``
-      instanziiert und an ``Daemon`` übergeben.
+Signal-Handling (SIGINT/SIGTERM): der MCP-Server fängt die Signale ab, cancelt
+seinen TaskGroup-CancelScope und exitet sauber (Exit 0).
 """
 
 from __future__ import annotations
@@ -71,23 +63,33 @@ def main() -> None:
     _LOG.info("daemon.cli.startup")
 
 
-@main.command("daemon")
-def run_daemon_command() -> None:
-    """Startet den frontprompt MCP-Daemon (per-daemon browser-session isolation).
-
-    Spawnt eine eigene private Browser-Session als Child-Prozess (``python -m
-    frontprompt show <url>``) und exponiert 5 read-only MCP-Tools über stdio
-    JSON-RPC. Default-Start-URL: ``about:blank`` (override via env
-    ``FRONTPROMPT_MCP_START_URL``).
-
-    Lifecycle: daemon-exit (stdin EOF, SIGINT, SIGTERM) ⇒ SIGTERM an die
-    Child-Process-Group ⇒ Browser tear down. Keine Cross-Daemon-Sichtbarkeit:
-    jeder ``frontprompt daemon``-Aufruf besitzt seine eigene Session.
-    """
+def _run_mcp() -> None:
     import os as _os
 
     start_url = _os.environ.get("FRONTPROMPT_MCP_START_URL", "about:blank")
     anyio.run(_mcp_daemon_async_main, start_url)
+
+
+@main.command("mcp")
+def run_mcp_command() -> None:
+    """Startet den frontprompt MCP-stdio-Server (per-Prozess Browser-Session-Isolation).
+
+    Spawnt eine eigene private Browser-Session als Child-Prozess (``python -m
+    frontprompt show <url>``) und exponiert die frontprompt-MCP-Tools über stdio
+    JSON-RPC. Default-Start-URL: ``about:blank`` (override via env
+    ``FRONTPROMPT_MCP_START_URL``).
+
+    Lifecycle: stdin-EOF / SIGINT / SIGTERM ⇒ SIGTERM an die Child-Process-Group
+    ⇒ Browser tear-down. Keine Cross-Prozess-Sichtbarkeit: jeder ``frontprompt
+    mcp``-Aufruf besitzt seine eigene Session.
+    """
+    _run_mcp()
+
+
+@main.command("daemon", hidden=True)
+def run_daemon_alias() -> None:
+    """Deprecated-Alias für ``mcp`` — aus Backward-Compat-Gründen erhalten."""
+    _run_mcp()
 
 
 @main.command("show")
@@ -475,9 +477,9 @@ async def _mcp_daemon_async_main(start_url: str) -> None:
     from frontprompt.logging import configure_logging
     from frontprompt.mcp_server import LazyBrowserSessionProvider, serve_mcp_stdio
 
-    # MCP-daemon has no session-id at boot (the show-child is spawned lazily on
-    # the first tool-call), so log to the pid-fallback ``logs/<pid>-daemon.log``.
-    log_path = configure_logging(role="daemon", session_id=None)
+    # MCP server has no session-id at boot (the show-child is spawned lazily on
+    # the first tool-call), so log to the pid-fallback ``logs/<pid>-mcp.log``.
+    log_path = configure_logging(role="mcp", session_id=None)
     _LOG.info("mcp_daemon.startup", start_url=start_url, log_file=str(log_path))
 
     provider = LazyBrowserSessionProvider(start_url)
@@ -493,32 +495,3 @@ async def _mcp_daemon_async_main(start_url: str) -> None:
 
         tg.start_soon(_signal_watcher)
         tg.start_soon(serve_mcp_stdio, provider)
-
-
-async def _daemon_async_main() -> None:
-    """Async-Root des historischen Two-BC + HTTP/WS-Daemons (NICHT vom daemon-Command aufgerufen).
-
-    Dormant code — die Two-BC-Nursery + HTTP-Mutation-Endpoint + WS-Push
-    bleiben im Repo erhalten als Phase-2-Reaktivierungs-Pfad, werden vom aktuellen
-    ``frontprompt daemon``-Command aber nicht mehr referenziert.
-    """
-    from frontprompt.clock import SystemDaemonClock
-    from frontprompt.daemon import Daemon, run_daemon
-
-    clock = SystemDaemonClock()
-    daemon = Daemon(clock=clock)
-
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(run_daemon, daemon)
-
-        async def _signal_watcher() -> None:
-            with anyio.open_signal_receiver(_signal.Signals.SIGINT, _signal.Signals.SIGTERM) as signals:
-                async for sig in signals:
-                    _LOG.info(
-                        "daemon.shutdown.signal",
-                        signal=sig.name,
-                    )
-                    tg.cancel_scope.cancel()
-                    return
-
-        tg.start_soon(_signal_watcher)
