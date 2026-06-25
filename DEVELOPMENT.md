@@ -27,7 +27,7 @@ Or manually:
 
 ```bash
 uv sync                                          # python deps incl. playwright + mcp
-uv run python -m playwright install chromium     # if chromium isn't already installed
+uv run python -m playwright install chromium     # optional — frontprompt auto-installs it on first run
 uv run python -m frontprompt.build               # build + embed the overlay (see below)
 ```
 
@@ -91,6 +91,37 @@ uv run frontprompt show https://example.com     # open a page with the overlay
 uv run frontprompt mcp                           # MCP stdio server (spawns the browser lazily)
 ```
 
+## Using the MCP server: published vs local dev
+
+The published **plugin** launches the MCP server from PyPI — zero setup for users:
+
+```json
+// plugin/.mcp.json
+{ "command": "uvx", "args": ["--from", "frontprompt", "frontprompt", "mcp"] }
+```
+
+Chromium is **self-healing**: the first `frontprompt show` spawn installs the
+Playwright Chromium binary if it is missing, so `uvx frontprompt mcp` works with
+no manual bootstrap step.
+
+To develop against your **local clone** instead of the published package,
+register a local-scoped MCP server — it shadows the plugin's server of the same
+name (Claude Code scope precedence is `local > project > user > plugin`):
+
+```bash
+claude mcp add --scope local --transport stdio frontprompt \
+  -- uv run --directory /abs/path/to/frontprompt frontprompt mcp
+```
+
+This lives in `~/.claude.json` (not committed), so you iterate on local source
+without uninstalling the plugin. To iterate on the **plugin bundle itself**
+(`plugin/`), load it directly for a session:
+
+```bash
+claude --plugin-dir ./frontprompt      # ${CLAUDE_PLUGIN_ROOT} points at this clone
+/reload-plugins                         # pick up changes without restarting
+```
+
 ## Tests, types, lint
 
 ```bash
@@ -109,7 +140,7 @@ Real-Chromium integration tests live under `tests/browser/`.
 The persisted state DB at `~/.local/state/frontprompt/state.db` (picks, regions,
 relations) is throwaway dev data while you are developing frontprompt itself.
 Clearing it — backing up and emptying the tables, or deleting the file and
-restarting the daemon — is fine and expected, e.g. to get a clean slate.
+restarting the server — is fine and expected, e.g. to get a clean slate.
 
 > This applies only while developing frontprompt. For real end-user use these
 > are user-authored annotations and must not be deleted without consent.

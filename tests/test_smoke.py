@@ -4,7 +4,7 @@
 def test_version_exposed() -> None:
     import frontprompt
 
-    assert frontprompt.__version__ == "0.0.2"
+    assert frontprompt.__version__ == "0.0.3"
 
 
 def test_cli_main_runs() -> None:

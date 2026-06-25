@@ -23,17 +23,25 @@ Some capabilities are intentionally deferred — see
 
 ## Install
 
-frontprompt ships as a self-contained wheel: the Svelte overlay is built and
-embedded into the package, so the installed tool needs no Bun or Node at
-runtime. The one thing a wheel can't carry is the Chromium binary —
-`frontprompt bootstrap` installs it.
+### As a Claude Code plugin (recommended)
 
 ```bash
-# install the tool
-uv tool install frontprompt
+claude plugin marketplace add SurrealMindAI/frontprompt
+claude plugin install frontprompt@frontprompt
+```
 
-# install the Chromium driver (run once)
-frontprompt bootstrap
+The `frontprompt` MCP server is wired automatically: it launches via `uvx` from
+PyPI and the Chromium browser self-installs on first use — zero manual setup.
+
+### As a standalone CLI / MCP tool
+
+frontprompt ships as a self-contained wheel — the Svelte overlay is embedded in
+the package, so the installed tool needs no Bun or Node at runtime, and Chromium
+auto-installs on first run.
+
+```bash
+uv tool install frontprompt
+frontprompt bootstrap          # optional — eagerly pre-installs the Chromium driver
 ```
 
 ## Usage

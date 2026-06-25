@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "frontprompt": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/run-mcp.sh",
-      "args": []
+      "command": "uvx",
+      "args": ["--from", "frontprompt", "frontprompt", "mcp"]
     }
   }
 }

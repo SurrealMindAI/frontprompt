@@ -58,6 +58,42 @@ LoadState = Literal["load", "domcontentloaded", "networkidle"]
 _LOG = structlog.get_logger(__name__)
 
 
+def _chromium_present() -> bool:
+    """Probe the known Playwright browser-cache locations for a chromium build."""
+    import glob
+    import os
+
+    bases = [
+        os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "",
+        os.path.expanduser("~/Library/Caches/ms-playwright"),  # macOS
+        os.path.expanduser("~/.cache/ms-playwright"),  # Linux
+    ]
+    return any(base and glob.glob(os.path.join(base, "chromium-*")) for base in bases)
+
+
+async def ensure_chromium() -> None:
+    """Self-heal: install the Playwright Chromium binary if it is missing.
+
+    A wheel cannot bundle the browser binary, so the first run after a fresh
+    ``uvx`` / ``uv tool install`` may lack it. Instead of failing, install it
+    once (idempotent — subsequent runs find it in the cache and skip). This is
+    what lets ``uvx frontprompt mcp`` work with zero manual ``bootstrap`` step.
+    """
+    if _chromium_present():
+        return
+
+    import sys
+
+    _LOG.info("chromium.autoinstall.start")
+    result = await anyio.run_process(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        check=False,
+    )
+    if result.returncode != 0:
+        raise BrowserLaunchError("Chromium auto-install failed — run `frontprompt bootstrap` manually.")
+    _LOG.info("chromium.autoinstall.done")
+
+
 class BrowserSessionManager:
     """Headful Chromium-Lifecycle — single browser, single context, single page.
 
@@ -105,6 +141,10 @@ class BrowserSessionManager:
         Bei Failure jeden Schritt rollback (Playwright-stop, partial-cleanup).
         Wrapped alle Exceptions in ``BrowserLaunchError``.
         """
+        # Self-heal the Chromium binary before first launch (no-op if present).
+        # This is what makes a zero-setup ``uvx frontprompt mcp`` install work.
+        await ensure_chromium()
+
         # Local import: playwright-import ist lazy weil import-time costly
         # (lädt Native-Library) und manche Test-Pfade ohne installation laufen
         from playwright.async_api import async_playwright
