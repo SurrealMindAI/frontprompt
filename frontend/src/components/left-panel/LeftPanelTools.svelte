@@ -1,14 +1,20 @@
 <!--
   LeftPanelTools — Tool-Button-Strip im oberen Bereich des linken Panels.
 
-  Phase 1: Pick-Button + Region-Button. Pick triggert pickClaim (single-pick-
-  at-a-time). Region triggert regionDraft (drag-rect-to-region UX). Beide tools
-  sind mutex — wenn pick aktiv, region disabled; wenn region drafting, pick
-  disabled (das pick-overlay würde sonst pointer-events fangen).
+  DIE zentrale Tool-Heimat: pick · region · quick · hide-all. Pick triggert
+  pickClaim (single-pick-at-a-time). Region triggert regionDraft (drag-rect-to-
+  region UX). Pick/Region sind mutex — wenn pick aktiv, region disabled; wenn
+  region drafting, pick disabled (das pick-overlay würde sonst pointer-events
+  fangen). Quick togglet den quick-comment-Modus (HUD kollabiert zur Hover-Box,
+  schnelles Pick+Kommentar-Loop). Hide-all togglet alle Panels.
+
+  (quick + hide-all lebten früher in der Toolbar des Top-Panels — konsolidiert
+  hierher, damit ALLE Tools an einem Ort sind.)
 -->
 <script lang="ts">
   import { GLOBAL_PICK_ID, pickClaim } from '../../local-state/pick-claim.svelte';
   import { backendState } from '../../backend-state/backend-state.svelte';
+  import { quickCommentMode } from '../../local-state/quick-comment-mode.svelte';
   import { regionDraft } from '../../services/regions';
   import PickButton from '../primitives/PickButton.svelte';
 
@@ -16,6 +22,8 @@
   const isRegionActive = $derived(regionDraft.drafting);
   const isPickDisabled = $derived(isRegionActive || (pickClaim.current !== null && !isPickActive));
   const isRegionDisabled = $derived(pickClaim.current !== null && !isPickActive);
+  const quickActive = $derived(quickCommentMode.active);
+  const allHidden = $derived(backendState.panel.allHidden);
 
   function togglePick(): void {
     if (isPickActive) {
@@ -37,6 +45,19 @@
     // Region-mode kollidiert mit pickClaim, release first.
     pickClaim.release();
     regionDraft.start();
+  }
+
+  /** Toggle quick-comment mode: collapse the HUD to a hovering box + rapid-comment loop. */
+  function toggleQuickComment(): void {
+    if (quickCommentMode.active) {
+      quickCommentMode.exit();
+    } else {
+      quickCommentMode.enter();
+    }
+  }
+
+  function toggleHideAll(): void {
+    backendState.panel.toggleHideAll();
   }
 </script>
 
@@ -60,6 +81,28 @@
   >
     <span class="tool-btn__icon" aria-hidden="true">▭</span>
     <span class="tool-btn__label">region</span>
+  </button>
+  <button
+    type="button"
+    class="tool-btn"
+    class:tool-btn--active={quickActive}
+    onclick={toggleQuickComment}
+    aria-pressed={quickActive}
+    aria-label={quickActive ? 'exit quick-comment mode' : 'enter quick-comment mode'}
+    title="quick pick and comment"
+  >
+    <span class="tool-btn__icon" aria-hidden="true">⚡</span>
+    <span class="tool-btn__label">quick</span>
+  </button>
+  <button
+    type="button"
+    class="tool-btn"
+    onclick={toggleHideAll}
+    aria-label={allHidden ? 'show all panels' : 'hide all panels'}
+    title={allHidden ? 'Show all panels' : 'Hide all panels'}
+  >
+    <span class="tool-btn__icon" aria-hidden="true">{allHidden ? '▣' : '▢'}</span>
+    <span class="tool-btn__label">{allHidden ? 'show all' : 'hide all'}</span>
   </button>
 </div>
 

@@ -16,12 +16,9 @@
 <script lang="ts">
   import { backendState } from '../backend-state/backend-state.svelte';
   import { uiPrefs } from '../local-state/ui-prefs.svelte';
-  import { quickCommentMode } from '../local-state/quick-comment-mode.svelte';
   import { eventInterceptor, isHudChrome } from '../services/event-interceptor';
   import StatMetric from './primitives/StatMetric.svelte';
   import StatPill from './primitives/StatPill.svelte';
-
-  const allHidden = $derived(backendState.panel.allHidden);
 
   // -------- Events stat --------
   const interceptorEnabled = $derived(eventInterceptor.enabled);
@@ -79,22 +76,7 @@
     uiPrefs.regionsVisible && regionsCount > 0 ? 'active' : regionsCount > 0 ? 'paused' : 'neutral'
   );
 
-  // -------- Quick-comment mode --------
-  const quickActive = $derived(quickCommentMode.active);
-
-  /** Toggle quick-comment mode: collapse the HUD to a hovering box + rapid-comment loop. */
-  function toggleQuickComment(): void {
-    if (quickCommentMode.active) {
-      quickCommentMode.exit();
-    } else {
-      quickCommentMode.enter();
-    }
-  }
-
   // -------- Handlers --------
-  function toggleHideAll(): void {
-    backendState.panel.toggleHideAll();
-  }
 
   /** Ensure left panel open. Idempotent. */
   function ensureLeftPanelOpen(): void {
@@ -249,33 +231,6 @@
       {/snippet}
     </StatPill>
   </div>
-
-  <div class="actions">
-    <button
-      type="button"
-      class="btn"
-      class:btn--active={quickActive}
-      onclick={toggleQuickComment}
-      aria-label={quickActive ? 'exit quick-comment mode' : 'enter quick-comment mode'}
-      aria-pressed={quickActive}
-      title={quickActive
-        ? 'Exit quick-comment mode'
-        : 'Quick-comment: collapse HUD, comment many elements fast'}
-    >
-      <span class="btn__icon">⚡</span>
-      <span class="btn__label">quick</span>
-    </button>
-    <button
-      type="button"
-      class="btn"
-      onclick={toggleHideAll}
-      aria-label={allHidden ? 'show all panels' : 'hide all panels'}
-      title={allHidden ? 'Show all panels' : 'Hide all panels'}
-    >
-      <span class="btn__icon">{allHidden ? '▣' : '▢'}</span>
-      <span class="btn__label">{allHidden ? 'show all' : 'hide all'}</span>
-    </button>
-  </div>
 </div>
 
 <style>
@@ -338,62 +293,5 @@
 
   .pill-toggle--off {
     color: var(--fp-color-text-muted);
-  }
-
-  /* ---- actions ---- */
-
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .btn {
-    background: var(--fp-color-surface-secondary);
-    border: 1px solid var(--fp-color-border);
-    color: var(--fp-color-text-secondary);
-    font: inherit;
-    font-size: 11px;
-    padding: 3px 9px;
-    border-radius: 4px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    transition:
-      background 120ms ease,
-      border-color 120ms ease,
-      color 120ms ease;
-    white-space: nowrap;
-  }
-
-  .btn:hover {
-    background: var(--fp-color-hover-bg);
-    border-color: var(--fp-color-accent);
-    color: var(--fp-color-text-primary);
-  }
-
-  /* Active toggle (quick-comment mode on) — accent-tinted so the mode is obvious. */
-  .btn--active {
-    background: color-mix(in srgb, var(--fp-color-accent) 22%, transparent);
-    border-color: var(--fp-color-accent);
-    color: var(--fp-color-text-primary);
-  }
-
-  .btn:focus-visible {
-    outline: 1px solid var(--fp-color-accent);
-    outline-offset: 1px;
-  }
-
-  .btn__icon {
-    font-size: 11px;
-    line-height: 1;
-    opacity: 0.85;
-  }
-
-  .btn__label {
-    font-size: 10px;
-    letter-spacing: 0.02em;
   }
 </style>
