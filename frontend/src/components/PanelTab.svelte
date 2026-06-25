@@ -55,7 +55,7 @@
     left: '⚒',
     right: 'ⓘ',
     top: '▤',
-    bottom: '⌬',
+    bottom: 'Debug',
   };
   const icon = $derived(ICONS[id]);
 
@@ -116,15 +116,12 @@
        fixe height/width im :not(.tab--open) garantiert dass die Lasche ihre
        volle Größe behält. */
     flex-shrink: 0;
-    /* Animate alles was sich zwischen open/collapsed ändert: width, height,
-       border-radius, margin — die "morph"-bewegung der Lasche. */
+    /* Nur Farb-Transitions — die "morph"-Animation (width/height/border-radius/
+       margin tweens beim open↔collapsed) wurde bewusst entfernt: die Laschen
+       sollen instant ihre Form annehmen, nicht herumwandern. */
     transition:
       background 160ms ease,
-      color 160ms ease,
-      width 220ms cubic-bezier(0.4, 0, 0.2, 1),
-      height 220ms cubic-bezier(0.4, 0, 0.2, 1),
-      border-radius 220ms cubic-bezier(0.4, 0, 0.2, 1),
-      margin 220ms cubic-bezier(0.4, 0, 0.2, 1);
+      color 160ms ease;
     pointer-events: auto;
   }
 
@@ -158,10 +155,12 @@
   }
 
   .tab--horizontal:not(.tab--open) {
-    /* 20×50 kompakte Lasche, vertikal-zentriert. */
+    /* Full-height-Bar über die ganze Mittelzeile — nutzt den geclaimten Rand-
+       platz ("buttons gross machen") und zentriert das Icon sauber vertikal
+       (vorher: 50px-Kompakt-Lasche mit margin:auto, Icon wirkte nicht mittig). */
     width: 100%;
-    height: 50px;
-    margin: auto 0;
+    height: 100%;
+    margin: 0;
     flex-direction: column;
     writing-mode: vertical-rl;
   }
@@ -205,7 +204,7 @@
   /* top/bottom collapsed: kein border-radius — full-width streifen bleibt flat. */
 
   .tab__arrow {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1;
     opacity: 0.7;
     transition: opacity 120ms ease;
@@ -216,7 +215,7 @@
   }
 
   .tab__icon {
-    font-size: 13px;
+    font-size: 16px;
     line-height: 1;
     opacity: 0.85;
   }
