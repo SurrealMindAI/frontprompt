@@ -146,23 +146,22 @@
         zentriert in der 20px grid-cell. Echte schmale Lasche.
   */
 
-  /* Horizontal-axis panels (left/right). */
+  /* Horizontal-axis panels (left/right): vertical bars.
+     NO writing-mode/column — that combination forced both tabs into the same
+     visual order (icon-left/arrow-right) and skewed centring. Instead the icon
+     + arrow sit in a plain horizontal row, centred on both axes via the base
+     align-items/justify-content:center, and the per-side flex-direction below
+     pins the arrow to the INNER edge (toward the page) for each side. */
   .tab--horizontal {
     width: 18px;
     height: 100%;
-    flex-direction: column;
-    writing-mode: vertical-rl;
   }
 
   .tab--horizontal:not(.tab--open) {
-    /* Full-height-Bar über die ganze Mittelzeile — nutzt den geclaimten Rand-
-       platz ("buttons gross machen") und zentriert das Icon sauber vertikal
-       (vorher: 50px-Kompakt-Lasche mit margin:auto, Icon wirkte nicht mittig). */
+    /* Full-height-Bar über die ganze Mittelzeile — nutzt den geclaimten Randplatz. */
     width: 100%;
     height: 100%;
     margin: 0;
-    flex-direction: column;
-    writing-mode: vertical-rl;
   }
 
   /* Vertical-axis panels (top/bottom). */
@@ -193,12 +192,17 @@
     eine softe Kante an der inner-edge würde komisch aussehen weil die Lasche
     sich quer durchs viewport zieht.
   */
+  /* DOM order is [arrow][icon]. Left tab's inner edge is the RIGHT, so we want
+     icon (outer) left + arrow (inner) right → row-reverse. Right tab's inner
+     edge is the LEFT, so arrow (inner) left + icon (outer) right → row. */
   .tab--left:not(.tab--open) {
     /* inner edge = right */
+    flex-direction: row-reverse;
     border-radius: 0 6px 6px 0;
   }
   .tab--right:not(.tab--open) {
     /* inner edge = left */
+    flex-direction: row;
     border-radius: 6px 0 0 6px;
   }
   /* top/bottom collapsed: kein border-radius — full-width streifen bleibt flat. */
