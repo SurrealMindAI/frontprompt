@@ -3,10 +3,21 @@
 Entry-point: ``frontprompt`` (via [project.scripts] in pyproject.toml).
 
 Subcommands:
-    frontprompt mcp        — Startet den MCP-stdio-Server (per-Prozess Browser-Isolation).
-    frontprompt show <url> — Öffnet headful Chromium mit Overlay.
-    frontprompt bootstrap  — Installiert Laufzeit-Prereqs (Chromium) für ein installiertes Tool.
-    frontprompt --help     — Zeigt alle Subcommands.
+    frontprompt mcp             — Startet den MCP-stdio-Server (per-Prozess Browser-Isolation).
+    frontprompt show <url>      — Öffnet headful Chromium mit Overlay (exposed unix-socket).
+    frontprompt bootstrap       — Installiert Laufzeit-Prereqs (Chromium) für ein installiertes Tool.
+    frontprompt sessions list   — Listet laufende show-Sessions (+ prune).
+    frontprompt ping|state      — Liveness / vollen StateSnapshot einer Session lesen.
+    frontprompt picks list|get  — Pick-flow-state lesen.
+    frontprompt navigate <url>  — Session zu URL navigieren.
+    frontprompt eval <js>       — JavaScript in der Session ausführen (Debug).
+    frontprompt page-info       — Page-Metadaten der Session.
+    frontprompt screenshot      — PNG-Screenshot der Session.
+    frontprompt pick selector|text — Picks per CSS / sichtbarem Text erstellen.
+    frontprompt --help          — Zeigt alle Subcommands.
+
+    Die session/debug-Subcommands sprechen den IPC-unix-socket einer laufenden
+    ``frontprompt show``-Instanz an (``--session`` wählt eine, sonst die neueste).
 
 Signal-Handling (SIGINT/SIGTERM): der MCP-Server fängt die Signale ab, cancelt
 seinen TaskGroup-CancelScope und exitet sauber (Exit 0).
@@ -142,6 +153,35 @@ def _resolve_session(session_id: str | None) -> SessionMetadata:
     return latest
 
 
+def _query_session(session_id: str | None, request: object) -> object:
+    """Resolve the target session, send ``request`` over its IPC socket, return ``response.data``.
+
+    Shared plumbing for every socket-backed subcommand (DRY): resolves the session
+    (explicit ``--session`` else latest via :func:`_resolve_session`), opens the unix
+    socket and validates the response. A connection failure or an ``ok=False`` response
+    prints the error to stderr and exits 3. The throwaway ``query``-boilerplate that was
+    copy-pasted across every socket subcommand now lives here once.
+    """
+    from pathlib import Path as _Path
+
+    from frontprompt.ipc import IpcConnectError, query
+
+    target = _resolve_session(session_id)
+
+    async def _run() -> object:
+        try:
+            response = await query(_Path(target.socket_path), request)  # type: ignore[arg-type]
+        except IpcConnectError as exc:
+            click.echo(f"ERR: {exc}", err=True)
+            raise SystemExit(3) from exc
+        if not response.ok:
+            click.echo(f"ERR: {response.error}", err=True)
+            raise SystemExit(3)
+        return response.data
+
+    return anyio.run(_run)
+
+
 @main.group("sessions")
 def sessions_group() -> None:
     """Discover + manage running `frontprompt show` instances."""
@@ -169,24 +209,9 @@ def sessions_prune_command() -> None:
 @click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
 def state_command(session_id: str | None) -> None:
     """Drucke vollen StateSnapshot der ausgewählten session (oder latest)."""
-    from pathlib import Path as _Path
+    from frontprompt.ipc import GetSnapshotRequest
 
-    from frontprompt.ipc import GetSnapshotRequest, IpcConnectError, query
-
-    target = _resolve_session(session_id)
-
-    async def _run() -> None:
-        try:
-            response = await query(_Path(target.socket_path), GetSnapshotRequest())
-        except IpcConnectError as exc:
-            click.echo(f"ERR: {exc}", err=True)
-            raise SystemExit(3) from exc
-        if not response.ok:
-            click.echo(f"ERR: {response.error}", err=True)
-            raise SystemExit(3)
-        _emit_json(response.data)
-
-    anyio.run(_run)
+    _emit_json(_query_session(session_id, GetSnapshotRequest()))
 
 
 @main.group("picks")
@@ -198,24 +223,9 @@ def picks_group() -> None:
 @click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
 def picks_list_command(session_id: str | None) -> None:
     """Liste alle Picks der ausgewählten session als JSON-array."""
-    from pathlib import Path as _Path
+    from frontprompt.ipc import GetPicksRequest
 
-    from frontprompt.ipc import GetPicksRequest, IpcConnectError, query
-
-    target = _resolve_session(session_id)
-
-    async def _run() -> None:
-        try:
-            response = await query(_Path(target.socket_path), GetPicksRequest())
-        except IpcConnectError as exc:
-            click.echo(f"ERR: {exc}", err=True)
-            raise SystemExit(3) from exc
-        if not response.ok:
-            click.echo(f"ERR: {response.error}", err=True)
-            raise SystemExit(3)
-        _emit_json(response.data)
-
-    anyio.run(_run)
+    _emit_json(_query_session(session_id, GetPicksRequest()))
 
 
 @picks_group.command("get")
@@ -265,6 +275,123 @@ def ping_command(session_id: str | None) -> None:
         _emit_json({"session_id": target.session_id, "data": response.data})
 
     anyio.run(_run)
+
+
+# ----------------------------------------------------------------------------
+# Debug / write subcommands — drive a running `frontprompt show` session over the
+# same IPC socket the MCP daemon uses. First-class replacement for ad-hoc socket
+# scripts: navigate / eval / page-info / screenshot / pick mirror the MCP tools.
+# ----------------------------------------------------------------------------
+
+
+@main.command("navigate")
+@click.argument("url")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def navigate_command(url: str, session_id: str | None) -> None:
+    """Navigiere die ausgewählte session zu URL (latest wenn --session fehlt)."""
+    from frontprompt.ipc import NavigateRequest
+
+    _emit_json(_query_session(session_id, NavigateRequest(url=url)))
+
+
+@main.command("eval")
+@click.argument("expression")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+@click.option("--pick", "pick_id", default=None, help="Bind live ElementHandle als `el` im JS-Kontext.")
+@click.option("--mutating", is_flag=True, default=False, help="Invalidate snapshot nach Ausführung.")
+def eval_command(expression: str, session_id: str | None, pick_id: str | None, mutating: bool) -> None:
+    """Führe beliebiges JavaScript in der ausgewählten session aus (Debug-Tool)."""
+    from frontprompt.ipc import EvalJsRequest
+
+    _emit_json(
+        _query_session(
+            session_id,
+            EvalJsRequest(expression=expression, pick_id_arg=pick_id, mutating=mutating),
+        )
+    )
+
+
+@main.command("page-info")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def page_info_command(session_id: str | None) -> None:
+    """Page-Metadaten (url, title, viewport, scroll, ready_state) der session."""
+    from frontprompt.ipc import GetPageInfoRequest
+
+    _emit_json(_query_session(session_id, GetPageInfoRequest()))
+
+
+@main.command("screenshot")
+@click.argument("path", required=False, type=click.Path(dir_okay=False))
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+@click.option("--full-page", is_flag=True, default=False, help="Ganze scrollbare Seite statt nur Viewport.")
+def screenshot_command(path: str | None, session_id: str | None, full_page: bool) -> None:
+    """PNG-Screenshot der session über den IPC-socket.
+
+    Der show-Server schreibt das PNG und liefert seinen Pfad zurück. Ohne PATH wird
+    die Server-Antwort als JSON ausgegeben; mit PATH wird das PNG dorthin kopiert.
+    """
+    import shutil as _shutil
+    from pathlib import Path as _Path
+
+    from frontprompt.ipc import ScreenshotPageRequest
+
+    data = _query_session(session_id, ScreenshotPageRequest(full_page=full_page))
+    if path and isinstance(data, dict) and data.get("path"):
+        _shutil.copyfile(data["path"], path)
+        _emit_json({**data, "path": str(_Path(path).resolve())})
+    else:
+        _emit_json(data)
+
+
+@main.group("pick")
+def pick_group() -> None:
+    """Create picks in a running `frontprompt show` (selector / text)."""
+
+
+@pick_group.command("selector")
+@click.argument("selector")
+@click.option("--comment", required=True, help="Base-Kommentar (auto-suffix '[match i/N]').")
+@click.option("--limit", default=10, show_default=True, help="Max picks (1-50).")
+@click.option("--parent", "parent_pick_id", default=None, help="Scope-query in einem parent-pick.")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def pick_selector_command(
+    selector: str, comment: str, limit: int, parent_pick_id: str | None, session_id: str | None
+) -> None:
+    """Pick N Elemente per CSS-Selektor (mit Pflicht-Kommentar)."""
+    from frontprompt.ipc import PickBySelectorRequest
+
+    _emit_json(
+        _query_session(
+            session_id,
+            PickBySelectorRequest(selector=selector, comment=comment, limit=limit, parent_pick_id=parent_pick_id),
+        )
+    )
+
+
+@pick_group.command("text")
+@click.argument("text")
+@click.option("--comment", required=True, help="Base-Kommentar.")
+@click.option("--role", default=None, help="Optionaler ARIA-role-Filter.")
+@click.option("--limit", default=10, show_default=True, help="Max picks (1-50).")
+@click.option("--parent", "parent_pick_id", default=None, help="Scope-query in einem parent-pick.")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def pick_text_command(
+    text: str,
+    comment: str,
+    role: str | None,
+    limit: int,
+    parent_pick_id: str | None,
+    session_id: str | None,
+) -> None:
+    """Pick N Elemente per sichtbarem Text (optional role-gefiltert)."""
+    from frontprompt.ipc import PickByTextRequest
+
+    _emit_json(
+        _query_session(
+            session_id,
+            PickByTextRequest(text=text, comment=comment, role=role, limit=limit, parent_pick_id=parent_pick_id),
+        )
+    )
 
 
 @main.command("bootstrap")

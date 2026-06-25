@@ -91,6 +91,38 @@ uv run frontprompt show https://example.com     # open a page with the overlay
 uv run frontprompt mcp                           # MCP stdio server (spawns the browser lazily)
 ```
 
+## Driving a live session — debug subcommands (restart-free dev loop)
+
+`frontprompt show` exposes a per-session unix socket (`~/.cache/frontprompt/sessions/<id>/show.sock`).
+The CLI drives the latest running session over that socket — the same IPC the MCP
+daemon uses — so you can iterate on the overlay **without** the MCP server or any
+plugin reinstall. Each command targets the newest session, or `--session <id>`:
+
+```bash
+uv run frontprompt sessions list                 # running show instances (newest first)
+uv run frontprompt navigate https://example.com  # drive the session to a URL
+uv run frontprompt page-info                      # url, title, viewport, scroll, ready_state
+uv run frontprompt eval "document.title"          # run JS in the page (debug)
+uv run frontprompt screenshot out.png             # PNG screenshot (omit path → server path as JSON)
+uv run frontprompt pick selector "h1" --comment "heading"
+uv run frontprompt state                          # full authoritative StateSnapshot
+uv run frontprompt picks list                     # pick-flow state
+```
+
+The dev loop for an overlay change is therefore:
+
+```bash
+uv run python -m frontprompt.build               # rebuild + embed the overlay bundle
+pkill -f "frontprompt show"; uv run frontprompt show https://example.com &   # restart the session
+uv run frontprompt eval "…"   /   uv run frontprompt screenshot out.png      # inspect over the socket
+```
+
+> A running session captures the bundle once at startup (Playwright `add_init_script`
+> is append-only), so a rebuild needs a **session restart** to take effect — there is
+> no in-page hot-swap. See [docs/specs/2026-06-25-first-class-dev-loop.md](docs/specs/2026-06-25-first-class-dev-loop.md)
+> for the full design, the hot-reload verdict, and the planned `--session-id dev` /
+> `scripts/dev-session.sh --watch` ergonomics.
+
 ## Using the MCP server: published vs local dev
 
 The published **plugin** launches the MCP server from PyPI — zero setup for users:

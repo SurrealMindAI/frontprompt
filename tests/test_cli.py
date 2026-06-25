@@ -108,3 +108,164 @@ def test_bootstrap_help_exits_zero() -> None:
     result = runner.invoke(main, ["bootstrap", "--help"])
     assert result.exit_code == 0
     assert "chromium" in result.output.lower()
+
+
+# ── Debug / write subcommands over the IPC socket ───────────────────────────
+#
+# These mock the two seams: `frontprompt.cli._resolve_session` (session lookup)
+# and `frontprompt.ipc.query` (the socket round-trip). No real socket / browser.
+
+from frontprompt.ipc.protocol import IpcResponse  # noqa: E402
+
+
+def _fake_session() -> MagicMock:
+    return MagicMock(socket_path="/tmp/fp-test.sock", session_id="dev")
+
+
+def _capture(response: IpcResponse) -> tuple[dict, object]:
+    """Return (captured, fake_query) — fake_query records the request and returns `response`."""
+    captured: dict = {}
+
+    async def fake_query(socket_path: object, request: object, **_kw: object) -> IpcResponse:
+        captured["socket_path"] = socket_path
+        captured["request"] = request
+        return response
+
+    return captured, fake_query
+
+
+def test_navigate_sends_navigate_request() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"navigated_to": "https://x", "title": "X"}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["navigate", "https://x"])
+    assert result.exit_code == 0, result.output
+    assert captured["request"].kind == "navigate"
+    assert captured["request"].url == "https://x"
+    assert "navigated_to" in result.output
+
+
+def test_eval_sends_eval_request_with_pick_and_mutating() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"result": "42", "ok": True}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["eval", "6*7", "--pick", "p1", "--mutating"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.kind == "eval_js"
+    assert req.expression == "6*7"
+    assert req.pick_id_arg == "p1"
+    assert req.mutating is True
+
+
+def test_page_info_sends_request() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"url": "https://x", "title": "X"}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["page-info"])
+    assert result.exit_code == 0, result.output
+    assert captured["request"].kind == "get_page_info"
+
+
+def test_screenshot_without_path_emits_server_path() -> None:
+    _captured, fake_query = _capture(IpcResponse(ok=True, data={"path": "/tmp/server.png", "width": 1}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["screenshot"])
+    assert result.exit_code == 0, result.output
+    assert "/tmp/server.png" in result.output
+
+
+def test_screenshot_with_path_copies_png(tmp_path: object) -> None:
+    src = tmp_path / "server.png"  # type: ignore[operator]
+    src.write_bytes(b"\x89PNG-data")
+    dest = tmp_path / "out.png"  # type: ignore[operator]
+    _captured, fake_query = _capture(IpcResponse(ok=True, data={"path": str(src), "width": 1}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["screenshot", str(dest)])
+    assert result.exit_code == 0, result.output
+    assert dest.read_bytes() == b"\x89PNG-data"
+    assert str(dest) in result.output
+
+
+def test_pick_selector_sends_request() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data=[]))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["pick", "selector", "h1", "--comment", "heading", "--limit", "3"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.kind == "pick_by_selector"
+    assert req.selector == "h1"
+    assert req.comment == "heading"
+    assert req.limit == 3
+
+
+def test_pick_text_sends_request() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data=[]))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["pick", "text", "Read", "--comment", "c", "--role", "link"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.kind == "pick_by_text"
+    assert req.text == "Read"
+    assert req.role == "link"
+
+
+def test_socket_command_exits_3_on_error_response() -> None:
+    _captured, fake_query = _capture(IpcResponse(ok=False, error="boom"))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["page-info"])
+    assert result.exit_code == 3
+    assert "boom" in result.output
+
+
+def test_socket_command_exits_3_on_connection_error() -> None:
+    from frontprompt.ipc import IpcConnectError
+
+    async def boom_query(socket_path: object, request: object, **_kw: object) -> object:
+        raise IpcConnectError("no socket")
+
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=boom_query),
+    ):
+        result = runner.invoke(main, ["navigate", "https://x"])
+    assert result.exit_code == 3
+    assert "no socket" in result.output
+
+
+def test_new_debug_subcommands_appear_in_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    for cmd in ("navigate", "eval", "page-info", "screenshot", "pick"):
+        assert cmd in result.output
