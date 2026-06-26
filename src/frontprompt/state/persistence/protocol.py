@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         Relation,
         ReplayReport,
         ReplayReportMeta,
+        SettingsState,
         TimelineEntry,
     )
 
@@ -123,6 +124,31 @@ class StatePersistence(Protocol):
 
     def mark_recording_stopped(self, recording_id: str, ended_at_ms: int) -> None:
         """Set status='stopped' and ended_at_ms. Idempotent."""
+        ...
+
+    # ----- Voice-over settings persistence (sub-plan 01) -------------------------
+
+    def save_settings(self, settings: "SettingsState") -> None:
+        """Persist durable voice-over settings (voice_over_enabled + selected_transcription_backend_id).
+
+        Uses a key-value ``settings`` table. Idempotent — overwrites existing keys.
+        """
+        ...
+
+    def load_settings(self) -> "SettingsState | None":
+        """Load persisted voice-over settings. Returns None when no settings row exists yet."""
+        ...
+
+    def save_mic_device_id(self, device_id: int | None) -> None:
+        """Persist selected microphone device id to the settings key-value table.
+
+        ``None`` = system default. Idempotent. Separate from :meth:`save_settings`
+        because the mic preference co-locates with MicrophoneState (not SettingsState).
+        """
+        ...
+
+    def load_mic_device_id(self) -> int | None:
+        """Load the persisted microphone device id. Returns None when not set."""
         ...
 
     # ----- Replay-report write-through (sub-plan 01) -------------------------

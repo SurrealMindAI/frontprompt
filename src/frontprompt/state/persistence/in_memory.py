@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         Relation,
         ReplayReport,
         ReplayReportMeta,
+        SettingsState,
         TimelineEntry,
     )
 
@@ -135,6 +136,28 @@ class InMemoryPersistence:
         rec.status = "stopped"
         rec.ended_at_ms = ended_at_ms
         self._log.debug("state.persistence.mark_recording_stopped.in_memory", recording_id=recording_id)
+
+    # ----- Voice-over settings persistence (sub-plan 01) --- no-op stubs -----
+
+    def save_settings(self, settings: "SettingsState") -> None:
+        """No-op — InMemoryPersistence does not persist settings across restarts."""
+        del settings
+        self._log.debug("state.persistence.save_settings.in_memory_no_op")
+
+    def load_settings(self) -> "SettingsState | None":
+        """Returns None — no persistent settings in InMemoryPersistence."""
+        self._log.debug("state.persistence.load_settings.in_memory_no_op")
+        return None
+
+    def save_mic_device_id(self, device_id: int | None) -> None:
+        """No-op — InMemoryPersistence does not persist mic device id."""
+        del device_id
+        self._log.debug("state.persistence.save_mic_device_id.in_memory_no_op")
+
+    def load_mic_device_id(self) -> int | None:
+        """Returns None — no persistent mic device id in InMemoryPersistence."""
+        self._log.debug("state.persistence.load_mic_device_id.in_memory_no_op")
+        return None
 
     # ----- Replay-report write-through (sub-plan 01) --- in-memory dict store -----
 

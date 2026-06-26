@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         Relation,
         ReplayReport,
         ReplayReportMeta,
+        SettingsState,
         TimelineEntry,
     )
 
@@ -110,7 +111,22 @@ CREATE TABLE IF NOT EXISTS replay_reports (
     origin_session   TEXT,
     updated_at       TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
+
+# Voice-over columns added to recordings table (migration guard — ALTER TABLE
+# silently fails if the column already exists, as SQLite does not support
+# IF NOT EXISTS for ALTER TABLE before 3.37.0).
+_RECORDINGS_VOICE_OVER_MIGRATIONS = [
+    "ALTER TABLE recordings ADD COLUMN has_voice_over INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recordings ADD COLUMN audio_path TEXT",
+    "ALTER TABLE recordings ADD COLUMN transcription_status TEXT NOT NULL DEFAULT 'none'",
+    "ALTER TABLE recordings ADD COLUMN transcription_error TEXT",
+]
 
 _SEED_SCHEMA_VERSION = "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)"
 
@@ -141,6 +157,15 @@ class SqlitePersistence:
         self._conn.executescript(_DDL)
         self._conn.execute(_SEED_SCHEMA_VERSION, ("db_schema_version", "1"))
         self._conn.commit()
+
+        # Run voice-over column migrations (idempotent — guard against "duplicate column" error)
+        for migration_sql in _RECORDINGS_VOICE_OVER_MIGRATIONS:
+            try:
+                self._conn.execute(migration_sql)
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists — normal for existing databases
+                pass
 
         self._log.debug("state.persistence.sqlite.init_ok")
 
@@ -415,22 +440,30 @@ class SqlitePersistence:
     # ------------------------------------------------------------------
 
     _UPSERT_RECORDING = """
-        INSERT INTO recordings (recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO recordings (
+            recording_id, origin_session, payload_json, status,
+            started_at_ms, ended_at_ms, updated_at,
+            has_voice_over, audio_path, transcription_status, transcription_error
+        )
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
         ON CONFLICT (recording_id) DO UPDATE SET
-            origin_session = excluded.origin_session,
-            payload_json   = excluded.payload_json,
-            status         = excluded.status,
-            started_at_ms  = excluded.started_at_ms,
-            ended_at_ms    = excluded.ended_at_ms,
-            updated_at     = excluded.updated_at
+            origin_session       = excluded.origin_session,
+            payload_json         = excluded.payload_json,
+            status               = excluded.status,
+            started_at_ms        = excluded.started_at_ms,
+            ended_at_ms          = excluded.ended_at_ms,
+            updated_at           = excluded.updated_at,
+            has_voice_over       = excluded.has_voice_over,
+            audio_path           = excluded.audio_path,
+            transcription_status = excluded.transcription_status,
+            transcription_error  = excluded.transcription_error
     """
 
     def upsert_recording(self, recording: "Recording") -> None:
         """Insert-or-replace one recording keyed on ``recording_id``. Idempotent.
 
-        Stores the recording metadata; timeline entries are NOT written by this
-        method — use ``append_timeline_entry`` for runtime event appends.
+        Stores recording metadata + voice-over fields; timeline entries are NOT
+        written by this method — use ``append_timeline_entry`` for runtime event appends.
         """
         # Store only the meta fields (no entries) so that a bulk re-seed does
         # not accidentally resurrect or duplicate timeline_entries.
@@ -455,6 +488,10 @@ class SqlitePersistence:
                         recording.status,
                         recording.started_at_ms,
                         recording.ended_at_ms,
+                        1 if recording.has_voice_over else 0,
+                        recording.audio_path,
+                        recording.transcription_status,
+                        recording.transcription_error,
                     ),
                 )
         except sqlite3.Error as exc:
@@ -475,7 +512,12 @@ class SqlitePersistence:
         self._log.debug("state.persistence.sqlite.delete_recording.ok", recording_id=recording_id)
 
     def load_recordings(self) -> "list[Recording]":
-        """Return all recordings with their timeline entries, ordered by started_at_ms."""
+        """Return all recordings with their timeline entries, ordered by started_at_ms.
+
+        Reads voice-over columns (has_voice_over, audio_path, transcription_status,
+        transcription_error) via COALESCE to remain forward-compatible with rows that
+        predate the voice-over migration (columns default to 0 / NULL / 'none').
+        """
         import json
 
         from pydantic import TypeAdapter
@@ -485,13 +527,25 @@ class SqlitePersistence:
         ta: TypeAdapter[TimelineEntry] = TypeAdapter(TimelineEntry)
 
         rec_rows = self._conn.execute(
-            "SELECT recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms "
+            "SELECT recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms, "
+            "COALESCE(has_voice_over, 0), audio_path, COALESCE(transcription_status, 'none'), transcription_error "
             "FROM recordings ORDER BY started_at_ms ASC"
         ).fetchall()
 
         results: list[Recording] = []
         for row in rec_rows:
-            recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms = row
+            (
+                recording_id,
+                origin_session,
+                payload_json,
+                status,
+                started_at_ms,
+                ended_at_ms,
+                has_voice_over_int,
+                audio_path,
+                transcription_status,
+                transcription_error,
+            ) = row
             try:
                 meta = json.loads(payload_json)
             except (json.JSONDecodeError, ValueError) as exc:
@@ -527,6 +581,10 @@ class SqlitePersistence:
                     ended_at_ms=ended_at_ms,
                     entries=entries,
                     origin_session=origin_session,
+                    has_voice_over=bool(has_voice_over_int),
+                    audio_path=audio_path,
+                    transcription_status=transcription_status,
+                    transcription_error=transcription_error,
                 )
             )
 
@@ -600,6 +658,96 @@ class SqlitePersistence:
             self._log.warning("state.persistence.save.failed", method="mark_recording_stopped", error=str(exc))
             return
         self._log.debug("state.persistence.sqlite.mark_recording_stopped.ok", recording_id=recording_id)
+
+    # ------------------------------------------------------------------
+    # Voice-over settings (sub-plan 01)
+    # ------------------------------------------------------------------
+
+    _UPSERT_SETTING = """
+        INSERT INTO settings (key, value) VALUES (?, ?)
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value
+    """
+
+    def save_settings(self, settings: "SettingsState") -> None:
+        """Persist durable voice-over settings to the settings key-value table.
+
+        Writes two rows: ``voice_over_enabled`` and ``selected_transcription_backend_id``.
+        Idempotent (ON CONFLICT DO UPDATE). Write failures are swallowed with a warning.
+        """
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_SETTING,
+                    ("voice_over_enabled", "1" if settings.voice_over_enabled else "0"),
+                )
+                self._conn.execute(
+                    self._UPSERT_SETTING,
+                    (
+                        "selected_transcription_backend_id",
+                        settings.selected_transcription_backend_id or "",
+                    ),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_settings", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.save_settings.ok")
+
+    def load_settings(self) -> "SettingsState | None":
+        """Load voice-over settings from the settings key-value table.
+
+        Returns ``None`` when neither ``voice_over_enabled`` nor
+        ``selected_transcription_backend_id`` rows exist yet.
+        """
+        from frontprompt.state.state import SettingsState
+
+        rows = {
+            row[0]: row[1]
+            for row in self._conn.execute(
+                "SELECT key, value FROM settings WHERE key IN (?, ?)",
+                ("voice_over_enabled", "selected_transcription_backend_id"),
+            ).fetchall()
+        }
+        if not rows:
+            self._log.debug("state.persistence.sqlite.load_settings.empty")
+            return None
+
+        voice_over_enabled = rows.get("voice_over_enabled", "0") == "1"
+        raw_backend = rows.get("selected_transcription_backend_id", "")
+        selected_transcription_backend_id: str | None = raw_backend if raw_backend else None
+
+        self._log.debug("state.persistence.sqlite.load_settings.hit")
+        return SettingsState(
+            voice_over_enabled=voice_over_enabled,
+            selected_transcription_backend_id=selected_transcription_backend_id,
+        )
+
+    def save_mic_device_id(self, device_id: int | None) -> None:
+        """Persist selected microphone device id to the settings key-value table.
+
+        ``None`` clears the preference (reverts to system default).
+        Idempotent. Write failures are swallowed with a warning.
+        """
+        value = str(device_id) if device_id is not None else ""
+        try:
+            with self._conn:
+                self._conn.execute(self._UPSERT_SETTING, ("selected_mic_device_id", value))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_mic_device_id", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.save_mic_device_id.ok", device_id=device_id)
+
+    def load_mic_device_id(self) -> int | None:
+        """Load persisted microphone device id. Returns None when not set."""
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = 'selected_mic_device_id'"
+        ).fetchone()
+        if row is None or not row[0]:
+            return None
+        try:
+            return int(row[0])
+        except (ValueError, TypeError):
+            self._log.warning("state.persistence.sqlite.load_mic_device_id.invalid_value", raw=row[0])
+            return None
 
     # ------------------------------------------------------------------
     # Replay-report domain (sub-plan 01)

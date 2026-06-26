@@ -401,7 +401,9 @@ def test_state_snapshot_schema_version_is_current() -> None:
     """StateSnapshot default schema_version muss dem aktuellen Wert entsprechen.
 
     History: 0.8.0 (recorder sub-plan 01) → 0.9.0 (replay sub-plan 01, AssertionEntry +
-    ParameterDeclaration + RecordingsState.active_replay_progress).
+    ParameterDeclaration + RecordingsState.active_replay_progress) →
+    0.10.0 (voice-over sub-plan 01, TranscriptSegmentEntry + MicrophoneState +
+    SettingsState + TranscriptionState).
     """
     from frontprompt.state.state import PanelStateView, PanelView, StateSnapshot
 
@@ -412,7 +414,7 @@ def test_state_snapshot_schema_version_is_current() -> None:
         right=PanelView(open=True, size=340),
     )
     snap = StateSnapshot(panel_state=panel)
-    assert snap.schema_version == "0.9.0"
+    assert snap.schema_version == "0.10.0"
 
 
 def test_state_snapshot_includes_recordings_state_field() -> None:

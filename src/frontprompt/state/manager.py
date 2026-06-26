@@ -26,6 +26,8 @@ from frontprompt.state.state import (
     AssertionEntry,
     HostnameGroup,
     InspectorState,
+    MicrophoneDevice,
+    MicrophoneState,
     NavigationEntry,
     OriginSessionGroup,
     OwnedVsForeign,
@@ -47,10 +49,14 @@ from frontprompt.state.state import (
     ReplayProgress,
     ReplayReport,
     ReplayReportMeta,
+    SettingsState,
     StateSnapshot,
     StateSummary,
     SummaryCounts,
     TimelineEntry,
+    TranscriptSegmentEntry,
+    TranscriptionBackendStatus,
+    TranscriptionState,
     hostname_for_url,
 )
 
@@ -162,6 +168,7 @@ class StateManager:
         *,
         session_id: str,
         persistence: StatePersistence | None = None,
+        transcription_state: TranscriptionState | None = None,
     ) -> None:
         self._session_id = session_id
         self._persistence = persistence or InMemoryPersistence()
@@ -176,6 +183,16 @@ class StateManager:
         # COL-2: snapshot() MUST include _recordings_state; see snapshot() implementation.
         self._full_recordings: dict[str, Recording] = {}
         self._recordings_state: RecordingsState = self._load_recordings_or_default()
+        # Voice-over domain (voice-over sub-plan 01)
+        # _microphone_state: in-process device list + selection, populated by MicWatcher.
+        # _settings_state: durable user prefs (voice_over_enabled, backend selection).
+        # _transcription_state: backend availability + download progress; injected by caller
+        #   (StateManager is infrastructure-agnostic — it never probes hardware directly).
+        # _microphone_topology_hash: snapshot of device IDs to skip no-op broadcasts.
+        self._microphone_state: MicrophoneState = self._load_microphone_or_default()
+        self._settings_state: SettingsState = self._load_settings_or_default()
+        self._transcription_state: TranscriptionState = transcription_state or TranscriptionState()
+        self._microphone_topology_hash: frozenset[int] = frozenset()
 
     def _load_panel_or_default(self) -> PanelStateView:
         loaded = self._persistence.load_panel_state()
@@ -214,6 +231,30 @@ class StateManager:
         metas = [self._recording_to_meta(r) for r in recordings]
         return RecordingsState(recordings=metas)
 
+    def _load_microphone_or_default(self) -> MicrophoneState:
+        """Load persisted microphone device selection. Device list is always empty on init —
+        it is populated by the MicWatcher background task after startup.
+
+        selected_device_id is restored from the settings key-value store so the user's
+        preferred mic is remembered across restarts.
+        """
+        selected_device_id = self._persistence.load_mic_device_id()
+        if selected_device_id is not None:
+            self._log.info("state.manager.init.microphone.loaded_device_id", device_id=selected_device_id)
+        return MicrophoneState(selected_device_id=selected_device_id)
+
+    def _load_settings_or_default(self) -> SettingsState:
+        """Load persisted durable voice-over settings from persistence.
+
+        Returns defaults when no settings have been saved yet.
+        """
+        loaded = self._persistence.load_settings()
+        if loaded is not None:
+            self._log.info("state.manager.init.settings.loaded_from_persistence")
+            return loaded
+        self._log.info("state.manager.init.settings.default")
+        return SettingsState()
+
     @staticmethod
     def _recording_to_meta(recording: Recording) -> RecordingMeta:
         """Build a lightweight RecordingMeta from a full Recording."""
@@ -225,6 +266,9 @@ class StateManager:
             started_at_ms=recording.started_at_ms,
             ended_at_ms=recording.ended_at_ms,
             entry_count=len(recording.entries),
+            has_voice_over=recording.has_voice_over,
+            audio_path=recording.audio_path,
+            transcription_status=recording.transcription_status,
         )
 
     # ----- Read API ----------------------------------------------------------
@@ -260,10 +304,14 @@ class StateManager:
         # Without this, StateSnapshot uses default_factory=RecordingsState() and
         # silently emits an empty RecordingsState on every broadcast, making
         # the overlay completely blind to all recording state changes.
+        # Voice-over sub-plan 01: three new state subtrees added.
         return StateSnapshot(
             panel_state=self._panel_state.model_copy(deep=True),
             inspector_state=self._inspector_state.model_copy(deep=True),
             recordings_state=self._recordings_state.model_copy(deep=True),
+            microphone_state=self._microphone_state.model_copy(deep=True),
+            settings_state=self._settings_state.model_copy(deep=True),
+            transcription_state=self._transcription_state.model_copy(deep=True),
         )
 
     def state_summary(self) -> StateSummary:
@@ -1231,6 +1279,215 @@ class StateManager:
                 replay_id=progress.replay_id if progress is not None else None,
             )
             snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: Voice-over recording meta (single-writer) ----------
+
+    async def set_audio_path(self, recording_id: str, audio_path: str) -> StateSnapshot:
+        """Set the audio file path on a recording after capture completes.
+
+        No-op (with warning) if recording_id is unknown. Broadcasts snapshot.
+        Persists via upsert_recording (full row overwrite for voice-over meta changes).
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning("state.manager.set_audio_path.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                recording.audio_path = audio_path
+                recording.has_voice_over = True
+                # Sync RecordingMeta in _recordings_state
+                for meta in self._recordings_state.recordings:
+                    if meta.recording_id == recording_id:
+                        meta.audio_path = audio_path
+                        meta.has_voice_over = True
+                        break
+                self._log.info("state.manager.set_audio_path", recording_id=recording_id, audio_path=audio_path)
+                snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
+        return await self._notify_and_return(snap)
+
+    async def set_transcription_status(
+        self,
+        recording_id: str,
+        status: str,
+        error: str | None,
+    ) -> StateSnapshot:
+        """Set transcription_status (and optional error) on a recording atomically.
+
+        No-op (with warning) if recording_id is unknown. Broadcasts snapshot.
+        Persists via upsert_recording.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning("state.manager.set_transcription_status.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                recording.transcription_status = status  # type: ignore[assignment]
+                recording.transcription_error = error
+                # Sync RecordingMeta in _recordings_state
+                for meta in self._recordings_state.recordings:
+                    if meta.recording_id == recording_id:
+                        meta.transcription_status = status  # type: ignore[assignment]
+                        break
+                self._log.info(
+                    "state.manager.set_transcription_status",
+                    recording_id=recording_id,
+                    status=status,
+                    has_error=error is not None,
+                )
+                snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
+        return await self._notify_and_return(snap)
+
+    async def append_transcript_segments(
+        self,
+        recording_id: str,
+        segments: list[TranscriptSegmentEntry],
+        backend_id: str,
+    ) -> StateSnapshot:
+        """Append all TranscriptSegmentEntry items and set transcription_status='done'.
+
+        PIT-105 pattern: hold lock once for all appends, single broadcast at the end.
+        ``timestamp_ms`` is stamped as ``recording.started_at_ms + segment.start_ms``
+        (voice-over semantics differ from real-time event timestamps).
+        ``seq`` is assigned by Python (len(entries) at the time of each append).
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning("state.manager.append_transcript_segments.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                for segment in segments:
+                    segment.seq = len(recording.entries)
+                    segment.timestamp_ms = recording.started_at_ms + segment.start_ms
+                    segment.backend_id = backend_id
+                    recording.entries.append(segment)
+                    self._persistence.append_timeline_entry(recording_id, segment)
+
+                # Set status=done atomically in the same lock hold
+                recording.transcription_status = "done"
+                recording.transcription_error = None
+                for meta in self._recordings_state.recordings:
+                    if meta.recording_id == recording_id:
+                        meta.transcription_status = "done"
+                        break
+
+                self._log.info(
+                    "state.manager.append_transcript_segments",
+                    recording_id=recording_id,
+                    count=len(segments),
+                )
+                # Single broadcast for all appends (PIT-105 pattern)
+                snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: MicrophoneState (single-writer) --------------------
+
+    async def update_microphone_state(
+        self,
+        devices: list[MicrophoneDevice],
+        system_default_device_id: int | None = None,
+    ) -> StateSnapshot:
+        """Replace the microphone device list when topology changed.
+
+        Topology hash is computed outside the lock (pure compute over device_ids).
+        The lock is acquired ONLY if the hash changed — devices list change is
+        the guard. Preserves ``selected_device_id`` across topology changes.
+
+        ``system_default_device_id`` is updated whenever watcher re-scans.
+        """
+        new_hash = frozenset(d.device_id for d in devices)
+        # Check topology hash outside lock (read-only access to current hash)
+        if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
+            # No change — skip broadcast
+            self._log.debug("state.manager.update_microphone_state.no_change")
+            return self.snapshot()
+
+        async with self._lock:
+            # Re-check inside lock (double-checked locking — benign if same watcher)
+            if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
+                snap = self._post_mutate_locked()
+            else:
+                # Preserve selected_device_id
+                selected = self._microphone_state.selected_device_id
+                self._microphone_state.devices = list(devices)
+                self._microphone_state.system_default_device_id = system_default_device_id
+                self._microphone_state.selected_device_id = selected
+                self._microphone_topology_hash = new_hash
+                self._log.info(
+                    "state.manager.update_microphone_state",
+                    device_count=len(devices),
+                    system_default=system_default_device_id,
+                )
+                snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    async def set_mic_device(self, device_id: int | None) -> StateSnapshot:
+        """Set the selected microphone device. Persists to settings key-value table.
+
+        ``None`` = revert to system default. Broadcasts snapshot.
+        """
+        async with self._lock:
+            self._microphone_state.selected_device_id = device_id
+            self._log.info("state.manager.set_mic_device", device_id=device_id)
+            snap = self._post_mutate_locked(lambda: self._persistence.save_mic_device_id(device_id))
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: SettingsState (single-writer) ----------------------
+
+    async def set_settings(self, settings: SettingsState) -> StateSnapshot:
+        """Replace durable voice-over settings. Persists to settings key-value table.
+
+        Broadcasts snapshot. Uses full replacement (no partial patch) — the UI
+        always sends the complete settings object.
+        """
+        async with self._lock:
+            self._settings_state = settings
+            self._log.info(
+                "state.manager.set_settings",
+                voice_over_enabled=settings.voice_over_enabled,
+                backend=settings.selected_transcription_backend_id,
+            )
+            snap = self._post_mutate_locked(lambda: self._persistence.save_settings(settings))
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: TranscriptionState (single-writer) -----------------
+
+    async def update_transcription_backend_status(
+        self,
+        backend_id: str,
+        status: TranscriptionBackendStatus,
+        download_progress: float | None,
+    ) -> StateSnapshot:
+        """Update status + download_progress for a backend in TranscriptionState.
+
+        No-op (with warning) if backend_id is not found. Broadcasts snapshot.
+        TranscriptionState is in-process only (ADR-018: ephemeral backend probing
+        state is NOT persisted to SQLite).
+        """
+        async with self._lock:
+            backend = next(
+                (b for b in self._transcription_state.backends if b.backend_id == backend_id),
+                None,
+            )
+            if backend is None:
+                self._log.warning(
+                    "state.manager.update_transcription_backend_status.unknown",
+                    backend_id=backend_id,
+                )
+                snap = self._post_mutate_locked()
+            else:
+                backend.status = status
+                backend.download_progress = download_progress
+                self._log.info(
+                    "state.manager.update_transcription_backend_status",
+                    backend_id=backend_id,
+                    status=status,
+                    download_progress=download_progress,
+                )
+                snap = self._post_mutate_locked()
         return await self._notify_and_return(snap)
 
     # ----- Post-mutation hook ------------------------------------------------

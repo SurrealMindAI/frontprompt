@@ -503,7 +503,11 @@ def test_recordings_state_active_replay_progress_populated() -> None:
 
 
 def test_state_snapshot_schema_version_is_0_9_0() -> None:
-    """Nach Schema-Bump 0.9.0 muss StateSnapshot default schema_version '0.9.0' liefern."""
+    """Nach Schema-Bump 0.10.0 (voice-over) muss StateSnapshot default schema_version '0.10.0' liefern.
+
+    Updated: 0.9.0 → 0.10.0 (voice-over sub-plan 01: TranscriptSegmentEntry +
+    MicrophoneState + SettingsState + TranscriptionState).
+    """
     from frontprompt.state.state import PanelStateView, PanelView, StateSnapshot
 
     panel = PanelStateView(
@@ -513,7 +517,7 @@ def test_state_snapshot_schema_version_is_0_9_0() -> None:
         right=PanelView(open=True, size=340),
     )
     snap = StateSnapshot(panel_state=panel)
-    assert snap.schema_version == "0.9.0"
+    assert snap.schema_version == "0.10.0"
 
 
 def test_state_snapshot_0_8_0_without_active_replay_progress_forward_compat() -> None:

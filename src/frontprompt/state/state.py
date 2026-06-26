@@ -433,7 +433,22 @@ class InspectorState(BaseModel):
 RecordingStatus = Literal["active", "stopped"]
 """Recording lifecycle status. 'active' während der Aufnahme, 'stopped' nach dem Stopp."""
 
-TimelineEntryKind = Literal["page_event", "pick_ref", "region_ref", "relation_ref", "navigation", "assertion"]
+TranscriptionStatus = Literal["none", "pending", "transcribing", "done", "failed"]
+"""Transcription lifecycle status für eine Aufnahme mit Voice-Over.
+
+- ``none``: Keine Voice-Over-Aufnahme, oder noch nicht gestartet.
+- ``pending``: Audio-Datei fertig, Transkription noch nicht gestartet.
+- ``transcribing``: Transkription läuft.
+- ``done``: Segmente in Timeline injiziert.
+- ``failed``: Transkription fehlgeschlagen; ``transcription_error`` enthält Details.
+
+One-directional: none → pending → transcribing → done/failed.
+"""
+
+TimelineEntryKind = Literal[
+    "page_event", "pick_ref", "region_ref", "relation_ref", "navigation", "assertion",
+    "transcript_segment",
+]
 """Discriminator für die TimelineEntry-Union. Eine pro Variant-Klasse."""
 
 # ----------------------------------------------------------------------------
@@ -577,16 +592,42 @@ class AssertionEntry(BaseModel):
     )
 
 
+class TranscriptSegmentEntry(BaseModel):
+    """Ein transkribiertes Sprachsegment in der Recording-Timeline (voice-over — sub-plan 01).
+
+    Wird nach der Transkription durch den Post-Processor via
+    ``StateManager.append_transcript_segments`` in Batches injiziert.
+    Ein einziger Broadcast am Ende des Batches (nicht pro-Segment — wire-economy).
+
+    ``timestamp_ms = recording.started_at_ms + start_ms`` — sortiert korrekt
+    im chronologischen Timeline-Merge. ``seq`` ist Python-seitig gestempelt
+    (monotoner Zähler, gleiche Invariante wie alle anderen Varianten).
+    ``backend_id`` dokumentiert welches Backend das Segment erzeugt hat.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["transcript_segment"] = "transcript_segment"
+    seq: int = Field(description="Monotoner Sequence-Counter, Python-seitig gestempelt.")
+    timestamp_ms: int = Field(description="Epoch ms = recording.started_at_ms + start_ms.")
+    start_ms: int = Field(description="Segmentbeginn relativ zum Aufnahmestart in ms.")
+    end_ms: int = Field(description="Segmentende relativ zum Aufnahmestart in ms.")
+    text: str = Field(description="Transkribierter Text dieses Segments.")
+    backend_id: str = Field(description="Backend-ID das dieses Segment erzeugt hat (z.B. 'mlx_whisper').")
+
+
 TimelineEntry = Annotated[
-    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry | AssertionEntry,
+    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry | AssertionEntry
+    | TranscriptSegmentEntry,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Timeline-Einträge. Discriminator-Feld: ``kind``.
 
 ``seq`` ist global monoton über ALLE Entry-Arten einer Aufnahme — ein Zähler
-für alle (page_event, pick_ref, region_ref, relation_ref, navigation). Python-
-seitig gestempelt als ``len(recording.entries)`` in ``append_timeline_entry``
-atomisch innerhalb des Locks — nie durch das Frontend vergeben.
+für alle (page_event, pick_ref, region_ref, relation_ref, navigation, assertion,
+transcript_segment). Python-seitig gestempelt als ``len(recording.entries)`` in
+``append_timeline_entry`` atomisch innerhalb des Locks — nie durch das Frontend
+vergeben. Voice-over-Segmente werden in Batches injiziert (append_transcript_segments).
 """
 
 
@@ -628,6 +669,19 @@ class RecordingMeta(BaseModel):
     started_at_ms: int = Field(description="Client-clock epoch ms zum Start.")
     ended_at_ms: int | None = Field(default=None, description="None solange aktiv.")
     entry_count: int = Field(ge=0, description="Anzahl Timeline-Einträge (≥0).")
+    # Voice-over fields (Schema 0.10.0 — additive, backward-compat via defaults)
+    has_voice_over: bool = Field(
+        default=False,
+        description="True wenn eine Voice-Over-Aufnahme für dieses Recording vorliegt.",
+    )
+    audio_path: str | None = Field(
+        default=None,
+        description="Absoluter Pfad zur WAV-Datei. None bis Datei finalisiert.",
+    )
+    transcription_status: TranscriptionStatus = Field(
+        default="none",
+        description="Transkriptions-Status der Voice-Over-Aufnahme.",
+    )
 
 
 class Recording(BaseModel):
@@ -668,6 +722,27 @@ class Recording(BaseModel):
             "(steal-on-mutate provenance via sqlite-persistence). "
             "None until first persisted."
         ),
+    )
+    # Voice-over fields (Schema 0.10.0 — additive, backward-compat via defaults)
+    has_voice_over: bool = Field(
+        default=False,
+        description="True wenn eine Voice-Over-Aufnahme für dieses Recording vorliegt.",
+    )
+    audio_path: str | None = Field(
+        default=None,
+        description=(
+            "Absoluter Pfad zur WAV-Datei im Session-Verzeichnis "
+            "(~/.cache/frontprompt/sessions/<session_id>/recording-<recording_id>.wav). "
+            "None bis Datei finalisiert."
+        ),
+    )
+    transcription_status: TranscriptionStatus = Field(
+        default="none",
+        description="Transkriptions-Status — one-directional: none→pending→transcribing→done/failed.",
+    )
+    transcription_error: str | None = Field(
+        default=None,
+        description="Fehlermeldung wenn transcription_status='failed'. Nur auf Recording (nicht RecordingMeta).",
     )
 
 
@@ -822,6 +897,124 @@ class RecordingsState(BaseModel):
 
 
 # ----------------------------------------------------------------------------
+# Voice-over state models (Schema 0.10.0 — sub-plan 01)
+# ----------------------------------------------------------------------------
+
+
+class MicrophoneDevice(BaseModel):
+    """Ein einzelnes Eingabegerät aus dem sounddevice-Katalog.
+
+    ``device_id`` ist der sounddevice-Index — stabil innerhalb einer laufenden
+    Sitzung, kann aber nach einem Geräte-Reconnect anders sein.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    device_id: int = Field(description="sounddevice-Index des Mikrofons.")
+    name: str = Field(description="Anzeigename des Geräts.")
+    channels: int = Field(description="Maximale Anzahl der Eingangskanäle.")
+    default_sample_rate: float = Field(description="Standard-Samplerate in Hz.")
+
+
+class MicrophoneState(BaseModel):
+    """Aktueller Zustand der Mikrofon-Enumeration.
+
+    ``devices`` und ``system_default_device_id`` sind In-Process-State —
+    re-enumeriert durch den Mic-Watcher-Task bei Topologie-Änderungen.
+    ``selected_device_id`` ist die dauerhafte User-Präferenz — persistiert
+    via ``StateManager.set_mic_device(device_id)`` in der ``settings``-Tabelle.
+
+    Initial (vor dem ersten Watcher-Cycle): devices=[] ist valid.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    devices: list[MicrophoneDevice] = Field(
+        default_factory=list,
+        description="Alle verfügbaren Eingangsgeräte (leer bis erster Watcher-Cycle).",
+    )
+    selected_device_id: int | None = Field(
+        default=None,
+        description="User-gewähltes Gerät (None = System-Default). Durable — Settings-Tabelle.",
+    )
+    system_default_device_id: int | None = Field(
+        default=None,
+        description="Aktuelles System-Default-Gerät von sounddevice. Nicht durable.",
+    )
+
+
+class SettingsState(BaseModel):
+    """Dauerhafte User-Einstellungen für das Voice-Over-Feature.
+
+    Alle Felder sind durable — persistiert in der ``settings``-Key-Value-Tabelle.
+    ``selected_mic_device_id`` lebt NICHT hier sondern in
+    :class:`MicrophoneState`.selected_device_id (co-location von Mic-Concerns).
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    voice_over_enabled: bool = Field(
+        default=False,
+        description="Voice-Over-Feature aktiviert (User-Opt-In).",
+    )
+    selected_transcription_backend_id: str | None = Field(
+        default=None,
+        description="Gewähltes Backend (None = Auto — erstes 'ready'-Backend).",
+    )
+
+
+TranscriptionBackendStatus = Literal[
+    "unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"
+]
+"""Verfügbarkeitsstatus eines Transkriptions-Backends.
+
+- ``unavailable``: Plattform nicht unterstützt (z.B. non-Apple-Silicon für mlx_whisper).
+- ``missing_dep``: Optional-Extra nicht installiert (``uv pip install frontprompt[voice]``).
+- ``needs_download``: Dep installiert, Modell noch nicht heruntergeladen.
+- ``downloading``: Modell-Download läuft.
+- ``ready``: Bereit für Transkription.
+- ``error``: Initialisierungsfehler (siehe ``error_message``).
+"""
+
+
+class TranscriptionBackendInfo(BaseModel):
+    """Status-Info für ein Transkriptions-Backend (z.B. mlx_whisper).
+
+    ``download_progress`` ist ephemer (In-Process, nicht in SQLite).
+    Das Overlay rendert eine Fortschrittsanzeige während des Downloads.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    backend_id: str = Field(description="Backend-Bezeichner (z.B. 'mlx_whisper').")
+    display_name: str = Field(description="Lesbares Label (z.B. 'mlx-whisper (Apple Silicon)').")
+    status: TranscriptionBackendStatus = Field(description="Aktueller Verfügbarkeitsstatus.")
+    download_progress: float | None = Field(
+        default=None,
+        description="0.0–1.0 während Download; None sonst. Ephemer (nicht persistiert).",
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Fehlermeldung bei status='error'.",
+    )
+
+
+class TranscriptionState(BaseModel):
+    """Aggregierter Status aller bekannten Transkriptions-Backends.
+
+    Python-authoritative — Backend bestimmt Verfügbarkeit via probe_status().
+    Nicht in SQLite persistiert (Neustart → erneutes Probing korrekt).
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    backends: list[TranscriptionBackendInfo] = Field(
+        default_factory=list,
+        description="Liste aller bekannten Backends mit ihrem Status.",
+    )
+
+
+# ----------------------------------------------------------------------------
 # StateSnapshot — top-level wire-payload
 # ----------------------------------------------------------------------------
 
@@ -854,6 +1047,12 @@ class StateSnapshot(BaseModel):
         - 0.9.0: + ``AssertionEntry`` TimelineEntry-Variante, + ``Recording.parameters``
           (ParameterDeclaration list), + ``RecordingsState.active_replay_progress``
           (ReplayProgress | None, additive — None-default macht es forward-compat).
+        - 0.10.0: + Voice-Over-Domain (sub-plan 01). ``TranscriptSegmentEntry`` als
+          7. TimelineEntry-Variante. Voice-over-Felder auf Recording/RecordingMeta
+          (has_voice_over, audio_path, transcription_status, transcription_error).
+          Neue StateSnapshot-Felder: ``microphone_state``, ``settings_state``,
+          ``transcription_state`` (alle additive mit default_factory — backward-compat
+          mit alten Overlays die unbekannte Felder ignorieren).
     """
 
     # Read-only wire-payload — constructed by snapshot(), never mutated after construction.
@@ -861,7 +1060,7 @@ class StateSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     schema_version: str = Field(
-        default="0.9.0",
+        default="0.10.0",
         description="Forward-compat tag — bump bei breaking changes.",
     )
     panel_state: PanelStateView = Field(description="Aktueller authoritative panel-state.")
@@ -872,6 +1071,27 @@ class StateSnapshot(BaseModel):
     recordings_state: RecordingsState = Field(
         default_factory=RecordingsState,
         description="Recording-feature state — active recording + list + detail (Schema 0.8.0+).",
+    )
+    microphone_state: MicrophoneState = Field(
+        default_factory=MicrophoneState,
+        description=(
+            "Mikrofon-Enumeration — verfügbare Geräte + User-Präferenz (Schema 0.10.0+). "
+            "Additive field — alte Overlays ignorieren unbekannte Felder."
+        ),
+    )
+    settings_state: SettingsState = Field(
+        default_factory=SettingsState,
+        description=(
+            "Dauerhafte Voice-Over-Einstellungen (Schema 0.10.0+). "
+            "Additive field — alte Overlays ignorieren unbekannte Felder."
+        ),
+    )
+    transcription_state: TranscriptionState = Field(
+        default_factory=TranscriptionState,
+        description=(
+            "Transkriptions-Backend-Status (Schema 0.10.0+). "
+            "Additive field — alte Overlays ignorieren unbekannte Felder."
+        ),
     )
 
 
@@ -1018,6 +1238,15 @@ __codegen_roots__ = [
     "ReplayReport",
     "ReplayReportMeta",
     "ReplayProgress",
+    # Voice-over domain (Schema 0.10.0, sub-plan 01)
+    "TranscriptionStatus",
+    "TranscriptSegmentEntry",
+    "MicrophoneDevice",
+    "MicrophoneState",
+    "SettingsState",
+    "TranscriptionBackendStatus",
+    "TranscriptionBackendInfo",
+    "TranscriptionState",
 ]
 
 __all__ = [
@@ -1034,6 +1263,8 @@ __all__ = [
     "ElementRect",
     "HostnameGroup",
     "InspectorState",
+    "MicrophoneDevice",
+    "MicrophoneState",
     "NavigationEntry",
     "OriginSessionGroup",
     "OwnedVsForeign",
@@ -1060,11 +1291,17 @@ __all__ = [
     "ReplayReportMeta",
     "ReplayStatus",
     "ReplayStepResult",
+    "SettingsState",
     "StateSnapshot",
     "StateSummary",
     "SummaryCounts",
     "TimelineEntry",
     "TimelineEntryKind",
+    "TranscriptSegmentEntry",
+    "TranscriptionBackendInfo",
+    "TranscriptionBackendStatus",
+    "TranscriptionState",
+    "TranscriptionStatus",
     "Viewport",
     "hostname_for_url",
 ]
