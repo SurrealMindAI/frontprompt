@@ -1,0 +1,27 @@
+<!--
+  recorder-playground-2.html — Second page for recorder navigation tests.
+  Consumed by: tests/browser/test_recorder_playground_e2e.py (Scenario C)
+
+  Stable DOM hooks:
+    h1#page2-title   — "Recorder Playground 2"
+    p#page2-info     — informational paragraph
+    button#page2-btn — action button on second page
+
+  NOTE: This page intentionally has a distinct title and layout from
+  recorder-playground.html to make NavigationEntry from_url/to_url assertions
+  unambiguous.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Recorder Playground 2</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1 id="page2-title">Recorder Playground 2</h1>
+  <p id="page2-info">This is the second page. Navigation events land here.</p>
+  <button id="page2-btn">Page 2 Button</button>
+</body>
+</html>

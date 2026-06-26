@@ -1,0 +1,35 @@
+<!--
+  scout-refinement.html — Primary test page for MCP scout-refinement tool tests.
+  Consumed by: tests/browser/test_mcp_scout_refinement.py
+
+  Stable DOM hooks:
+    h1                 — "Example Domain"
+    p (×2)             — body paragraphs
+    a[href]            — "More information..." link to iana.org
+    form#test-form     — search form
+    input[name=search] — aria-label="Search input"
+    button.submit-btn  — "Search"
+    div.container      — container of items
+    div.item (×3)      — data-value: alpha/beta/gamma
+    input#agree        — checkbox, checked, aria-label="I agree"
+-->
+<!DOCTYPE html>
+<html>
+<head><title>Scout Refinement Test</title></head>
+<body>
+<h1>Example Domain</h1>
+<p>This domain is for use in illustrative examples in documents.</p>
+<p>You may use this domain in literature without prior coordination or asking for permission.</p>
+<a href="https://www.iana.org/domains/example">More information...</a>
+<form id="test-form">
+  <input type="text" name="search" placeholder="Search" aria-label="Search input">
+  <button type="submit" class="submit-btn">Search</button>
+</form>
+<div class="container">
+  <div class="item" data-value="alpha">Alpha</div>
+  <div class="item" data-value="beta">Beta item content</div>
+  <div class="item" data-value="gamma">Gamma</div>
+</div>
+<input type="checkbox" id="agree" checked aria-label="I agree">
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!--
+  recorder-playground.html — Recorder e2e playground: click, type, drag interactions.
+  Consumed by: tests/browser/test_recorder_playground_e2e.py (Scenarios A, B, C, D)
+
+  Stable DOM hooks:
+    button#btn-primary     — primary action button (click target)
+    button#btn-secondary   — secondary action button (click target)
+    input#input-text       — text input (keydown/type target)
+    input#input-number     — number input (keydown/type target)
+    div#drag-source        — HTML5 drag source (draggable=true)
+    div#drop-zone          — HTML5 drop target (visible state-change on drop)
+
+  Drop state-change: #drop-zone gets background=lightgreen + data-dropped="true"
+  when something is dropped, making before/after screenshots non-identical.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Recorder Playground</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { margin: 4px; padding: 8px 16px; cursor: pointer; }
+    input { display: block; margin: 4px 0; padding: 6px; }
+    #drag-source {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #4a90e2;
+      color: white;
+      cursor: grab;
+      border-radius: 4px;
+      margin: 8px;
+    }
+    #drop-zone {
+      display: inline-block;
+      padding: 10px 20px;
+      border: 2px dashed #999;
+      border-radius: 4px;
+      margin: 8px;
+      min-width: 100px;
+      text-align: center;
+    }
+    #drop-zone.drag-over {
+      border-color: #4a90e2;
+      background: #e8f0fe;
+    }
+  </style>
+</head>
+<body>
+  <h1>Recorder Playground</h1>
+
+  <section id="buttons-section">
+    <button id="btn-primary">Primary Action</button>
+    <button id="btn-secondary">Secondary Action</button>
+  </section>
+
+  <section id="inputs-section">
+    <input id="input-text" type="text" placeholder="Text input" />
+    <input id="input-number" type="number" placeholder="Number input" />
+  </section>
+
+  <section id="drag-section">
+    <div id="drag-source" draggable="true">Drag me</div>
+    <div id="drop-zone">Drop here</div>
+  </section>
+
+  <script>
+    const dragSrc = document.getElementById('drag-source');
+    const dropZone = document.getElementById('drop-zone');
+
+    dragSrc.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', 'drag-payload');
+      dragSrc.style.opacity = '0.5';
+    });
+    dragSrc.addEventListener('dragend', () => {
+      dragSrc.style.opacity = '1';
+    });
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      dropZone.textContent = 'Dropped!';
+      dropZone.setAttribute('data-dropped', 'true');
+      dropZone.style.background = 'lightgreen';
+      dropZone.style.border = '2px solid green';
+    });
+  </script>
+</body>
+</html>

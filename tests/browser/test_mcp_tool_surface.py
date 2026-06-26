@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import urllib.parse
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -36,24 +35,9 @@ from frontprompt.ipc.protocol import (
 )
 from frontprompt.mcp_server import LazyBrowserSessionProvider
 
-_TEST_HTML = """<!DOCTYPE html>
-<html>
-<head><title>Scout Test Page</title></head>
-<body>
-<h1 id="title">Hello Scout</h1>
-<button class="btn" aria-label="Click me">Click</button>
-<p class="content">Some paragraph text</p>
-<div class="outer"><div class="inner">nested</div></div>
-<input type="checkbox" checked id="cb">
-<div style="margin-top:2000px;" id="far">Far element</div>
-</body>
-</html>"""
-
-_DATA_URI = "data:text/html;charset=utf-8," + urllib.parse.quote(_TEST_HTML)
-
-_TEST_HTML_2 = """<!DOCTYPE html><html><head><title>Page 2</title></head>
-<body><p>Different content — no h1#title here</p></body></html>"""
-_DATA_URI_2 = "data:text/html;charset=utf-8," + urllib.parse.quote(_TEST_HTML_2)
+# Module-level URL vars — set by _setup_provider once playground_server is available.
+_page1_url: str = ""  # scout-elements.html
+_page2_url: str = ""  # simple-paragraph.html
 
 
 def _chromium_binary_available() -> bool:
@@ -78,10 +62,12 @@ _tmp_dir: Path | None = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup_provider() -> Iterator[None]:
-    global _provider, _tmp_dir
+def _setup_provider(playground_server: str) -> Iterator[None]:
+    global _provider, _tmp_dir, _page1_url, _page2_url
     _tmp_dir = Path(tempfile.mkdtemp(prefix="fp-e2e-", dir="/tmp"))
-    _provider = LazyBrowserSessionProvider(_DATA_URI)
+    _page1_url = playground_server + "/scout-elements.html"
+    _page2_url = playground_server + "/simple-paragraph.html"
+    _provider = LazyBrowserSessionProvider(_page1_url)
     yield
     # Teardown: close the browser child process.
     # anyio.run() is unavailable here (event-loop attached to test run differs).
@@ -314,7 +300,7 @@ async def test_get_text_stale_pick_after_navigate(anyio_backend: str) -> None:
     # Navigate away (page 2 has no h1#title)
     from frontprompt.ipc.protocol import NavigateRequest
 
-    nav_resp = await query(sock, NavigateRequest(url=_DATA_URI_2))
+    nav_resp = await query(sock, NavigateRequest(url=_page2_url))
     assert nav_resp.ok
 
     # Now get_text on the stale pick
@@ -325,7 +311,7 @@ async def test_get_text_stale_pick_after_navigate(anyio_backend: str) -> None:
     assert r.get("pick_id") == pick_id
 
     # Navigate back to restore state for subsequent tests
-    await query(sock, NavigateRequest(url=_DATA_URI))
+    await query(sock, NavigateRequest(url=_page1_url))
 
 
 # ---- Page-Level ------------------------------------------------------------

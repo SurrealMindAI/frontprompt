@@ -1,0 +1,34 @@
+{
+  "_comment": "Normalized expected timeline for the canonical scripted interaction: click #btn-primary → type 'a' into #input-text → type '7' into #input-text → pointerdown on #drag-source. Volatile fields (timestamp_ms, absolute seq values) are NOT stored — only structural fields are compared. target_path uses the EventInterceptor's root→deepest tag sequence (stops at fp-overlay boundary).",
+  "entry_count": 4,
+  "entries": [
+    {
+      "kind": "page_event",
+      "event_type": "click",
+      "target": "button#btn-primary",
+      "target_path": ["html", "body", "section", "button"],
+      "key": null
+    },
+    {
+      "kind": "page_event",
+      "event_type": "keydown",
+      "target": "input#input-text",
+      "target_path": ["html", "body", "section", "input"],
+      "key": "a"
+    },
+    {
+      "kind": "page_event",
+      "event_type": "keydown",
+      "target": "input#input-text",
+      "target_path": ["html", "body", "section", "input"],
+      "key": "7"
+    },
+    {
+      "kind": "page_event",
+      "event_type": "pointerdown",
+      "target": "div#drag-source",
+      "target_path": ["html", "body", "section", "div"],
+      "key": null
+    }
+  ]
+}

@@ -42,9 +42,6 @@ _INJECT_OVERLAY_JS = f"""() => {{
     document.body.appendChild(host);
 }}"""
 
-_PAGE_HTML = "<!DOCTYPE html><html><body><h1 id='hdr'>Page Content</h1><button id='btn'>Click</button></body></html>"
-
-
 def _chromium_binary_available() -> bool:
     candidates = [
         Path.home() / "Library" / "Caches" / "ms-playwright",
@@ -76,13 +73,13 @@ async def _display_of_overlay(page: Page) -> str:
 
 
 @pytest.fixture
-async def page_with_overlay() -> AsyncIterator[Page]:
+async def page_with_overlay(playground_server: str) -> AsyncIterator[Page]:
     async with async_playwright() as pw:
         browser: Browser = await pw.chromium.launch(headless=True)
         try:
             ctx = await browser.new_context(viewport={"width": 400, "height": 300})
             page = await ctx.new_page()
-            await page.set_content(_PAGE_HTML)
+            await page.goto(playground_server + "/overlay-test.html")
             # Inject overlay-host directly via evaluate — avoids init-script lifecycle
             # timing race with set_content (DOMContentLoaded does not always fire).
             await page.evaluate(_INJECT_OVERLAY_JS)
@@ -93,13 +90,13 @@ async def page_with_overlay() -> AsyncIterator[Page]:
 
 
 @pytest.fixture
-async def page_without_overlay() -> AsyncIterator[Page]:
+async def page_without_overlay(playground_server: str) -> AsyncIterator[Page]:
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
         try:
             ctx = await browser.new_context()
             page = await ctx.new_page()
-            await page.set_content(_PAGE_HTML)
+            await page.goto(playground_server + "/overlay-test.html")
             yield page
         finally:
             await browser.close()

@@ -1,0 +1,25 @@
+<!--
+  scout-elements.html — Primary test page for MCP scout-tool surface tests.
+  Consumed by: tests/browser/test_mcp_tool_surface.py
+
+  Stable DOM hooks (guaranteed by this file):
+    h1#title          — heading "Hello Scout"
+    button.btn        — aria-label="Click me", text "Click"
+    p.content         — paragraph "Some paragraph text"
+    div.outer         — container
+    div.inner         — nested inside .outer, text "nested"
+    input#cb          — checkbox, checked
+    div#far           — element pushed 2000px down (scroll test)
+-->
+<!DOCTYPE html>
+<html>
+<head><title>Scout Test Page</title></head>
+<body>
+<h1 id="title">Hello Scout</h1>
+<button class="btn" aria-label="Click me">Click</button>
+<p class="content">Some paragraph text</p>
+<div class="outer"><div class="inner">nested</div></div>
+<input type="checkbox" checked id="cb">
+<div style="margin-top:2000px;" id="far">Far element</div>
+</body>
+</html>

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import urllib.parse
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -42,39 +41,8 @@ from frontprompt.ipc.protocol import (
 )
 from frontprompt.mcp_server import LazyBrowserSessionProvider, _build_tool_list
 
-_TEST_HTML = """<!DOCTYPE html>
-<html>
-<head><title>Scout Refinement Test</title></head>
-<body>
-<h1>Example Domain</h1>
-<p>This domain is for use in illustrative examples in documents.</p>
-<p>You may use this domain in literature without prior coordination or asking for permission.</p>
-<a href="https://www.iana.org/domains/example">More information...</a>
-<form id="test-form">
-  <input type="text" name="search" placeholder="Search" aria-label="Search input">
-  <button type="submit" class="submit-btn">Search</button>
-</form>
-<div class="container">
-  <div class="item" data-value="alpha">Alpha</div>
-  <div class="item" data-value="beta">Beta item content</div>
-  <div class="item" data-value="gamma">Gamma</div>
-</div>
-<input type="checkbox" id="agree" checked aria-label="I agree">
-</body>
-</html>"""
-
-_DATA_URI = "data:text/html;charset=utf-8," + urllib.parse.quote(_TEST_HTML)
-
-_TEST_HTML_REMOVE = """<!DOCTYPE html>
-<html>
-<head><title>Remove Test</title></head>
-<body>
-<div class="item">A</div>
-<div class="item">B</div>
-<div class="item">C</div>
-</body>
-</html>"""
-_DATA_URI_REMOVE = "data:text/html;charset=utf-8," + urllib.parse.quote(_TEST_HTML_REMOVE)
+# Module-level URL var — set by _setup_provider once playground_server is available.
+_main_url: str = ""  # scout-refinement.html
 
 
 def _chromium_binary_available() -> bool:
@@ -99,10 +67,11 @@ _tmp_dir: Path | None = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _setup_provider() -> Iterator[None]:
-    global _provider, _tmp_dir
+def _setup_provider(playground_server: str) -> Iterator[None]:
+    global _provider, _tmp_dir, _main_url
     _tmp_dir = Path(tempfile.mkdtemp(prefix="fp-e2e-rfmt-", dir="/tmp"))
-    _provider = LazyBrowserSessionProvider(_DATA_URI)
+    _main_url = playground_server + "/scout-refinement.html"
+    _provider = LazyBrowserSessionProvider(_main_url)
     yield
     import asyncio as _asyncio
 
