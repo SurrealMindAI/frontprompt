@@ -359,3 +359,202 @@ def test_recordings_get_exits_3_on_error_response() -> None:
         result = runner.invoke(main, ["recordings", "get", "unknown-id"])
     assert result.exit_code == 3
     assert "recording not found" in result.output
+
+
+# ── recordings write-side subcommands (sub-plan 05) ──────────────────────────
+
+
+def test_recordings_start_sends_start_recording_request() -> None:
+    """recordings start sends StartRecordingRequest and emits JSON."""
+    from frontprompt.ipc import StartRecordingRequest
+
+    captured, fake_query = _capture(
+        IpcResponse(ok=True, data={"recording_id": "r1", "name": "New Recording", "started_at_ms": 1000})
+    )
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "start"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, StartRecordingRequest)
+    assert req.kind == "start_recording"
+    assert "r1" in result.output
+
+
+def test_recordings_start_with_name() -> None:
+    """recordings start --name passes name to StartRecordingRequest."""
+    from frontprompt.ipc import StartRecordingRequest
+
+    captured, fake_query = _capture(
+        IpcResponse(ok=True, data={"recording_id": "r2", "name": "My Rec", "started_at_ms": 1000})
+    )
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "start", "--name", "My Rec"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, StartRecordingRequest)
+    assert req.name == "My Rec"
+
+
+def test_recordings_stop_sends_stop_recording_request() -> None:
+    """recordings stop <id> sends StopRecordingRequest."""
+    from frontprompt.ipc import StopRecordingRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"ok": True}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "stop", "rec-123"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, StopRecordingRequest)
+    assert req.recording_id == "rec-123"
+
+
+def test_recordings_replay_sends_run_replay_request() -> None:
+    """recordings replay <id> sends RunReplayRequest."""
+    from frontprompt.ipc import RunReplayRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"replay_id": "rp1", "status": "passed"}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "replay", "rec-123"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, RunReplayRequest)
+    assert req.recording_id == "rec-123"
+    assert req.dry_run is False
+
+
+def test_recordings_replay_with_parameters() -> None:
+    """recordings replay --parameters '{"key":"val"}' passes parameters as dict."""
+    from frontprompt.ipc import RunReplayRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"replay_id": "rp1", "status": "passed"}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "replay", "rec-123", "--parameters", '{"key": "val"}'])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, RunReplayRequest)
+    assert req.parameters == {"key": "val"}
+
+
+def test_recordings_replay_with_dry_run() -> None:
+    """recordings replay --dry-run sets dry_run=True."""
+    from frontprompt.ipc import RunReplayRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"replay_id": "rp1", "status": "dry_run"}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "replay", "rec-123", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, RunReplayRequest)
+    assert req.dry_run is True
+
+
+def test_recordings_report_sends_get_replay_report_request() -> None:
+    """recordings report <replay_id> sends GetReplayReportRequest."""
+    from frontprompt.ipc import GetReplayReportRequest
+
+    captured, fake_query = _capture(
+        IpcResponse(ok=True, data={"replay_id": "rp1", "status": "passed", "step_results": []})
+    )
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "report", "rp1"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, GetReplayReportRequest)
+    assert req.replay_id == "rp1"
+
+
+def test_recordings_start_exits_2_when_no_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """recordings start exits 2 when no running session is found."""
+    monkeypatch.setattr("frontprompt.ipc.pick_latest_session", lambda: None)
+    monkeypatch.setattr("frontprompt.ipc.discover_sessions", lambda: [])
+    runner = CliRunner()
+    result = runner.invoke(main, ["recordings", "start"])
+    assert result.exit_code == 2
+
+
+# ── assertions subcommand group (sub-plan 05) ─────────────────────────────────
+
+
+def test_assertions_group_appears_in_help() -> None:
+    """assertions group is registered and appears in frontprompt --help."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "assertions" in result.output
+
+
+def test_assertions_add_sends_add_assertion_request() -> None:
+    """assertions add <recording_id> selector_exists h1 sends AddAssertionRequest."""
+    from frontprompt.ipc import AddAssertionRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"assertion_id": "a1", "seq": 5}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["assertions", "add", "rec-123", "selector_exists", "h1"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, AddAssertionRequest)
+    assert req.recording_id == "rec-123"
+    assert req.assertion_type == "selector_exists"
+    assert req.target == "h1"
+
+
+def test_assertions_add_with_expected() -> None:
+    """assertions add --expected passes expected value to AddAssertionRequest."""
+    from frontprompt.ipc import AddAssertionRequest
+
+    captured, fake_query = _capture(IpcResponse(ok=True, data={"assertion_id": "a2", "seq": 6}))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(
+            main,
+            ["assertions", "add", "rec-123", "text_equals", "h1", "--expected", "Hello World"],
+        )
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert isinstance(req, AddAssertionRequest)
+    assert req.expected == "Hello World"
+    assert req.assertion_type == "text_equals"
+
+
+def test_assertions_add_exits_2_when_no_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """assertions add exits 2 when no running session is found."""
+    monkeypatch.setattr("frontprompt.ipc.pick_latest_session", lambda: None)
+    monkeypatch.setattr("frontprompt.ipc.discover_sessions", lambda: [])
+    runner = CliRunner()
+    result = runner.invoke(main, ["assertions", "add", "rec-123", "selector_exists", "h1"])
+    assert result.exit_code == 2

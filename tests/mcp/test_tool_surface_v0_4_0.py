@@ -54,14 +54,14 @@ _REMOVED_TOOL_NAMES = [
 ]
 
 
-def test_tool_list_has_31_tools() -> None:
-    # 31 = 29 (v0.6.0 after deprecated removal) + 2 recording tools (v0.7.0).
+def test_tool_list_has_36_tools() -> None:
+    # 36 = 31 (v0.7.0 with 2 recording-read tools) + 5 recording-write+replay tools (v0.8.0).
     # Breakdown: 1 diagnostic + 7 read-only (v0.1+0.2+0.6) + 6 scout v0.3.0
     # (pick_by_selector, pick_by_text, screenshot_element, get_page_info,
     #  screenshot_page, scroll_to) + 14 refinement v0.4.0 + 1 state-summary v0.5.0
-    # + 2 recording v0.7.0 (list_recordings, get_recording).
+    # + 2 recording-read v0.7.0 + 5 recording-write+replay v0.8.0.
     tools = _build_tool_list()
-    assert len(tools) == 31
+    assert len(tools) == 36
     names = {t.name for t in tools}
     assert "fp_status" in names
     assert "frontprompt_get_state_summary" in names

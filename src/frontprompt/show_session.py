@@ -34,6 +34,9 @@ import structlog
 
 from frontprompt.bridge import BridgeManager
 from frontprompt.bridge.messages import (
+    AssertionAddedToRecordingRequested,
+    AssertionDeletedRequested,
+    AssertionUpdatedRequested,
     Heartbeat,
     HideAllPanelsRequested,
     InspectorActivateRequested,
@@ -120,16 +123,18 @@ class ShowSession:
 
     def handler_count(self) -> int:
         """Return the number of bridge handler types this session registers."""
-        # 22 handler types:
+        # 25 handler types:
         # OverlayReady, PanelToggleRequested, PanelResizeRequested, HideAllPanelsRequested,
         # InspectorActivateRequested, InspectorCanceledRequested, InspectorPickMadeRequested,
         # PickSelectedRequested, PickCommentUpdatedRequested, PickDeletedRequested,
         # RelationCreatedRequested, RelationDeletedRequested, RelationUpdatedRequested,
         # RegionCreatedRequested, RegionDeletedRequested, RegionUpdatedRequested, RegionSelectedRequested
-        # + 5 recording handlers (sub-plan 04):
+        # + 5 recording handlers (recorder sub-plan 04):
         # RecordingStartRequested, RecordingStopRequested, RecordingRenameRequested,
         # RecordingSelectedRequested, RecordedEventCapturedRequested
-        return 22
+        # + 3 assertion-authoring handlers (replay sub-plan 04):
+        # AssertionAddedToRecordingRequested, AssertionDeletedRequested, AssertionUpdatedRequested
+        return 25
 
     @property
     def _sm(self) -> StateManager:
@@ -273,6 +278,33 @@ class ShowSession:
         No snapshot broadcast — ~10 Hz keydown events must not flood the wire.
         """
         await self._sm.append_timeline_entry(msg.recording_id, msg.entry)
+
+    # ----- Assertion-authoring handlers (replay sub-plan 04) -----
+
+    async def _on_assertion_added(self, msg: AssertionAddedToRecordingRequested) -> None:
+        """AssertionAddedToRecordingRequested → append/insert AssertionEntry. Broadcasts snapshot."""
+        await self._sm.add_assertion_to_timeline(msg.recording_id, msg.assertion, msg.insert_after_seq)
+
+    async def _on_assertion_deleted(self, msg: AssertionDeletedRequested) -> None:
+        """AssertionDeletedRequested → remove AssertionEntry from recording. Broadcasts snapshot."""
+        await self._sm.delete_assertion(msg.recording_id, msg.assertion_id)
+
+    async def _on_assertion_updated(self, msg: AssertionUpdatedRequested) -> None:
+        """AssertionUpdatedRequested → partial patch of AssertionEntry fields. Broadcasts snapshot.
+
+        None-valued fields in the message are sentinel for "don't change this field".
+        Only non-None fields are included in the patch dict.
+        """
+        patch: dict = {}
+        if msg.assertion_type is not None:
+            patch["assertion_type"] = msg.assertion_type
+        if msg.target is not None:
+            patch["target"] = msg.target
+        if msg.expected is not None:
+            patch["expected"] = msg.expected
+        if msg.description is not None:
+            patch["description"] = msg.description
+        await self._sm.update_assertion(msg.recording_id, msg.assertion_id, patch)
 
     async def _heartbeat_sender(self, bridge: BridgeManager) -> None:
         """Periodic healthcheck — sends every 5s to overlay.
@@ -433,6 +465,10 @@ class ShowSession:
                             bridge.on(RecordingRenameRequested, self._on_recording_rename)
                             bridge.on(RecordingSelectedRequested, self._on_recording_selected)
                             bridge.on(RecordedEventCapturedRequested, self._on_recorded_event_captured)
+                            # Assertion-authoring handlers (replay sub-plan 04, COL-1 — inline in _run_browser)
+                            bridge.on(AssertionAddedToRecordingRequested, self._on_assertion_added)
+                            bridge.on(AssertionDeletedRequested, self._on_assertion_deleted)
+                            bridge.on(AssertionUpdatedRequested, self._on_assertion_updated)
 
                             # Broadcast after every authoritative mutation (include token)
                             self._sm.add_snapshot_listener(

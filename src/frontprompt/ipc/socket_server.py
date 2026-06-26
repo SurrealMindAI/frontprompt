@@ -41,6 +41,7 @@ from frontprompt.ipc.page_controller import NullPageController, PageController
 from frontprompt.ipc.playwright_controller.element_resolver import StalePickError
 from frontprompt.ipc.playwright_controller.timeouts import PageOpTimeoutError
 from frontprompt.ipc.protocol import (
+    AddAssertionRequest,
     AnnotationEntry,
     DomPatchRequest,
     EvalJsRequest,
@@ -60,6 +61,7 @@ from frontprompt.ipc.protocol import (
     GetPicksRequest,
     GetRecordingRequest,
     GetRecordingsRequest,
+    GetReplayReportRequest,
     GetSnapshotRequest,
     GetStateRequest,
     GetStateSummaryRequest,
@@ -67,6 +69,7 @@ from frontprompt.ipc.protocol import (
     InspectElementsRequest,
     IpcRequest,
     IpcResponse,
+    ListReplayReportsRequest,
     NavigateRequest,
     PickBySelectorRequest,
     PickByTextRequest,
@@ -75,9 +78,12 @@ from frontprompt.ipc.protocol import (
     PickPathRequest,
     PingRequest,
     RelocatePicksRequest,
+    RunReplayRequest,
     ScreenshotElementRequest,
     ScreenshotPageRequest,
     ScrollToRequest,
+    StartRecordingRequest,
+    StopRecordingRequest,
 )
 from frontprompt.state import StateManager
 from frontprompt.state.state import Pick as _Pick
@@ -165,6 +171,86 @@ async def _dispatch(
         if recording is None:
             return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
         return IpcResponse(ok=True, data=recording.model_dump(mode="json"))
+
+    # ── Write-side recording routes (Schema 0.8.0) ─────────────────────────
+
+    if isinstance(request, StartRecordingRequest):
+        snap = await state_manager.start_recording(name=request.name, description=request.description)
+        recording_id = snap.recordings_state.active_recording_id
+        recording = state_manager.get_recording(recording_id)  # type: ignore[arg-type]
+        return IpcResponse(
+            ok=True,
+            data={
+                "recording_id": recording_id,
+                "name": recording.name if recording is not None else request.name,  # type: ignore[union-attr]
+                "started_at_ms": recording.started_at_ms if recording is not None else 0,  # type: ignore[union-attr]
+            },
+        )
+
+    if isinstance(request, StopRecordingRequest):
+        existing = state_manager.get_recording(request.recording_id)
+        if existing is None:
+            return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
+        await state_manager.stop_recording(request.recording_id)
+        return IpcResponse(ok=True)
+
+    if isinstance(request, AddAssertionRequest):
+        existing = state_manager.get_recording(request.recording_id)
+        if existing is None:
+            return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
+        from uuid import uuid4 as _uuid4
+        assertion_id = str(_uuid4())
+        entry_payload: dict[str, Any] = {
+            "assertion_id": assertion_id,
+            "assertion_type": request.assertion_type,
+            "target": request.target,
+            "target_kind": request.target_kind,
+            "expected": request.expected,
+            "comparator": request.comparator,
+            "description": request.description,
+        }
+        await state_manager.add_assertion_to_timeline(
+            request.recording_id, entry_payload, request.insert_after_seq
+        )
+        updated = state_manager.get_recording(request.recording_id)
+        seq = 0
+        if updated is not None:
+            seq = next(
+                (getattr(e, "seq", 0) for e in updated.entries if getattr(e, "assertion_id", None) == assertion_id),
+                0,
+            )
+        return IpcResponse(ok=True, data={"assertion_id": assertion_id, "seq": seq})
+
+    # ── Replay routes (Schema 0.8.0) ────────────────────────────────────────
+
+    if isinstance(request, RunReplayRequest):
+        # COL-6 guard: NullPageController cannot execute real browser actions.
+        if isinstance(page_controller, NullPageController) and not request.dry_run:
+            return IpcResponse(ok=False, error="replay_unavailable: no active browser session")
+        recording = state_manager.get_recording(request.recording_id)
+        if recording is None:
+            return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
+        from frontprompt.ipc.replay_player import ReplayPlayer as _ReplayPlayer
+        player = _ReplayPlayer(
+            recording=recording,
+            parameters=request.parameters,
+            page_controller=page_controller,
+            state_manager=state_manager,
+            dry_run=request.dry_run,
+            real_time=request.real_time,
+        )
+        report = await player.run()
+        return IpcResponse(ok=True, data=report.model_dump(mode="json"))
+
+    if isinstance(request, GetReplayReportRequest):
+        report = await state_manager.get_replay_report(request.replay_id)
+        if report is None:
+            return IpcResponse(ok=False, error=f"replay report not found: {request.replay_id}")
+        return IpcResponse(ok=True, data=report.model_dump(mode="json"))
+
+    if isinstance(request, ListReplayReportsRequest):
+        metas = await state_manager.list_replay_reports_meta(request.recording_id)
+        return IpcResponse(ok=True, data=[m.model_dump(mode="json") for m in metas])
 
     snap = state_manager.snapshot()
 

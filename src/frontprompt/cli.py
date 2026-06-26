@@ -10,6 +10,8 @@ Subcommands:
     frontprompt ping|state      — Liveness / vollen StateSnapshot einer Session lesen.
     frontprompt picks list|get  — Pick-flow-state lesen.
     frontprompt recordings list|get — Recording-state lesen.
+    frontprompt recordings start|stop|replay|report — Recording write-control + Replay.
+    frontprompt assertions add  — Assertion-Checkpoint zu einer Aufnahme hinzufügen.
     frontprompt navigate <url>  — Session zu URL navigieren.
     frontprompt eval <js>       — JavaScript in der Session ausführen (Debug).
     frontprompt page-info       — Page-Metadaten der Session.
@@ -276,6 +278,132 @@ def recordings_get_command(recording_id: str, session_id: str | None) -> None:
     from frontprompt.ipc import GetRecordingRequest
 
     _emit_json(_query_session(session_id, GetRecordingRequest(recording_id=recording_id)))
+
+
+@recordings_group.command("start")
+@click.option("--name", default="New Recording", show_default=True, help="Name der Aufnahme.")
+@click.option("--description", default="", help="Optionale Beschreibung.")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_start_command(name: str, description: str, session_id: str | None) -> None:
+    """Starte eine neue Aufnahme in der aktiven Browser-Session."""
+    from frontprompt.ipc import StartRecordingRequest
+
+    _emit_json(_query_session(session_id, StartRecordingRequest(name=name, description=description)))
+
+
+@recordings_group.command("stop")
+@click.argument("recording_id")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_stop_command(recording_id: str, session_id: str | None) -> None:
+    """Stoppe eine laufende Aufnahme."""
+    from frontprompt.ipc import StopRecordingRequest
+
+    _emit_json(_query_session(session_id, StopRecordingRequest(recording_id=recording_id)))
+
+
+@recordings_group.command("replay")
+@click.argument("recording_id")
+@click.option("--parameters", "parameters_json", default=None, help="JSON-Objekt mit Parameter-Bindings.")
+@click.option("--real-time", is_flag=True, default=False, help="Original-Zeitabstände einhalten.")
+@click.option("--dry-run", is_flag=True, default=False, help="Aktionen loggen ohne Ausführung.")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_replay_command(
+    recording_id: str,
+    parameters_json: str | None,
+    real_time: bool,
+    dry_run: bool,
+    session_id: str | None,
+) -> None:
+    """Führe eine Aufnahme als Replay aus und gib den ReplayReport aus."""
+    import json as _json
+
+    from frontprompt.ipc import RunReplayRequest
+
+    parameters: dict[str, str] = {}
+    if parameters_json:
+        try:
+            parameters = _json.loads(parameters_json)
+        except _json.JSONDecodeError as exc:
+            click.echo(f"ERR: --parameters ist kein gültiges JSON: {exc}", err=True)
+            raise SystemExit(2) from exc
+
+    _emit_json(
+        _query_session(
+            session_id,
+            RunReplayRequest(
+                recording_id=recording_id,
+                parameters=parameters,
+                real_time=real_time,
+                dry_run=dry_run,
+            ),
+        )
+    )
+
+
+@recordings_group.command("report")
+@click.argument("replay_id")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_report_command(replay_id: str, session_id: str | None) -> None:
+    """Rufe einen gespeicherten ReplayReport by ID ab."""
+    from frontprompt.ipc import GetReplayReportRequest
+
+    _emit_json(_query_session(session_id, GetReplayReportRequest(replay_id=replay_id)))
+
+
+@main.group("assertions")
+def assertions_group() -> None:
+    """Add assertion checkpoints to recordings in a running `frontprompt show`."""
+
+
+@assertions_group.command("add")
+@click.argument("recording_id")
+@click.argument("assertion_type")
+@click.argument("target")
+@click.option(
+    "--target-kind",
+    default="selector",
+    show_default=True,
+    help="'selector' für DOM-Assertions, 'url' für URL-Assertion.",
+)
+@click.option("--expected", default=None, help="Erwarteter Wert (leer für selector_exists/visible).")
+@click.option(
+    "--comparator",
+    default="none",
+    show_default=True,
+    help="Vergleichsoperator: equals | contains | none.",
+)
+@click.option("--description", default="", help="Human-readable Label.")
+@click.option("--after-seq", "insert_after_seq", type=int, default=None, help="Einfügen nach seq-Nr.")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def assertions_add_command(
+    recording_id: str,
+    assertion_type: str,
+    target: str,
+    target_kind: str,
+    expected: str | None,
+    comparator: str,
+    description: str,
+    insert_after_seq: int | None,
+    session_id: str | None,
+) -> None:
+    """Füge einen Assertion-Checkpoint zu einer Aufnahme hinzu."""
+    from frontprompt.ipc import AddAssertionRequest
+
+    _emit_json(
+        _query_session(
+            session_id,
+            AddAssertionRequest(
+                recording_id=recording_id,
+                assertion_type=assertion_type,  # type: ignore[arg-type]
+                target=target,
+                target_kind=target_kind,  # type: ignore[arg-type]
+                expected=expected,
+                comparator=comparator,  # type: ignore[arg-type]
+                description=description,
+                insert_after_seq=insert_after_seq,
+            ),
+        )
+    )
 
 
 @main.command("ping")

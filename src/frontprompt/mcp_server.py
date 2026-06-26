@@ -1,7 +1,7 @@
-"""MCP stdio server — 31 tools (1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording v0.7.0).
+"""MCP stdio server — 36 tools (1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording-read v0.7.0 + 5 recording-write+replay v0.8.0).
 
 Each MCP-daemon process owns exactly one browser-session (spawned as
-``frontprompt show`` child). This module exposes 29 MCP tools that
+``frontprompt show`` child). This module exposes 36 MCP tools that
 operate exclusively on that owned session, routing through the existing
 :func:`frontprompt.ipc.query` Unix-Socket-IPC client.
 
@@ -45,6 +45,19 @@ Refinement tools (v0.4.0, Schema 0.4.0):
 - ``frontprompt_dom_patch`` — structured DOM mutations on a picked element
 - ``frontprompt_pick_by_xpath`` — XPath-based picker (escape hatch)
 
+Recording read-side (Schema 0.7.0):
+
+- ``frontprompt_list_recordings`` — list RecordingMeta for all recordings
+- ``frontprompt_get_recording`` — full Recording with timeline by id
+
+Recording write-side + replay execution (Schema 0.8.0):
+
+- ``frontprompt_start_recording`` — agent-start a new recording session
+- ``frontprompt_stop_recording`` — stop an active recording by id
+- ``frontprompt_run_replay`` — execute a recording as replay, return ReplayReport
+- ``frontprompt_get_replay_report`` — retrieve a stored ReplayReport by replay_id
+- ``frontprompt_add_assertion`` — add assertion checkpoint to a stored recording
+
 Diagnostic tools (Phase 1):
 
 - ``fp_status`` — structured healthcheck: schema_version, phase, capabilities_available,
@@ -73,6 +86,7 @@ from mcp.shared.message import SessionMessage
 
 from frontprompt.bridge.messages import SCHEMA_VERSION
 from frontprompt.ipc import (
+    AddAssertionRequest,
     DomPatchRequest,
     EvalJsRequest,
     FindByRegexRequest,
@@ -88,6 +102,7 @@ from frontprompt.ipc import (
     GetPicksRequest,
     GetRecordingRequest,
     GetRecordingsRequest,
+    GetReplayReportRequest,
     GetSnapshotRequest,
     GetStateSummaryRequest,
     InspectElementsRequest,
@@ -100,10 +115,13 @@ from frontprompt.ipc import (
     PickPathRequest,
     PingRequest,
     RelocatePicksRequest,
+    RunReplayRequest,
     ScreenshotElementRequest,
     ScreenshotPageRequest,
     ScrollToRequest,
     SessionMetadata,
+    StartRecordingRequest,
+    StopRecordingRequest,
     query,
 )
 from frontprompt.ipc.protocol import IpcRequest
@@ -260,7 +278,7 @@ class LazyBrowserSessionProvider:
 
 
 def _build_tool_list() -> list[types.Tool]:
-    """31 tools — 1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording v0.7.0.
+    """36 tools — 1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording-read v0.7.0 + 5 recording-write+replay v0.8.0.
 
     5 deprecated v0.3.0 element-readers removed (IPC 0.6.0): get_text, get_html,
     get_attributes, get_state, get_outline. Replacement: frontprompt_inspect_elements.
@@ -858,6 +876,166 @@ def _build_tool_list() -> list[types.Tool]:
                 "additionalProperties": False,
             },
         ),
+        # ── Recording write-side + Replay execution v0.8.0 ───────────────────────
+        types.Tool(
+            name="frontprompt_start_recording",
+            description=(
+                "Start a new recording session in the active browser window. Returns the recording_id "
+                "of the new recording. All subsequent clicks, keypresses, and navigations are captured "
+                "automatically. Stop with frontprompt_stop_recording."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "User-visible name for the recording.",
+                        "default": "New Recording",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description.",
+                        "default": "",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="frontprompt_stop_recording",
+            description=(
+                "Stop an active recording. recording_id: the id returned by "
+                "frontprompt_start_recording. Returns ok:true on success."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recording_id": {
+                        "type": "string",
+                        "description": "UUID4 of the recording to stop.",
+                        "minLength": 1,
+                    },
+                },
+                "required": ["recording_id"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="frontprompt_run_replay",
+            description=(
+                "Re-play a stored recording against the live browser window and return a ReplayReport. "
+                "recording_id: the recording to replay. "
+                "parameters: optional dict of named values substituting {{param_name}} placeholders in "
+                "navigation URLs and keydown text. "
+                "real_time: if true, honor original inter-event timing; default false (fast). "
+                "dry_run: if true, log actions without executing them. "
+                "CAUTION: this tool drives a real browser — it will navigate pages and interact with "
+                "DOM elements in the live session."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recording_id": {
+                        "type": "string",
+                        "description": "UUID4 of the recording to replay.",
+                        "minLength": 1,
+                    },
+                    "parameters": {
+                        "type": "object",
+                        "description": "Parameter bindings: placeholder-key → concrete value.",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "real_time": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "True = honor original inter-event timing delays.",
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "True = log all intended actions without executing them.",
+                    },
+                },
+                "required": ["recording_id"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="frontprompt_get_replay_report",
+            description=(
+                "Retrieve a stored ReplayReport by replay_id. Returns the full report including "
+                "per-step pass/fail, assertion_actual values, and error details."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "replay_id": {
+                        "type": "string",
+                        "description": "UUID4 of the ReplayReport to retrieve.",
+                        "minLength": 1,
+                    },
+                },
+                "required": ["replay_id"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="frontprompt_add_assertion",
+            description=(
+                "Add an assertion checkpoint to a stored recording. "
+                "assertion_type: one of selector_exists | text_equals | text_contains | visible | url_equals. "
+                "target: CSS selector (for element types) or empty string (for url_equals). "
+                "target_kind: 'selector' for DOM assertions, 'url' for URL assertion. "
+                "expected: expected value (null for selector_exists/visible). "
+                "comparator: comparison operator; 'none' for selector_exists and visible. "
+                "insert_after_seq: if set, inserts after that timeline seq; default appends at end."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recording_id": {
+                        "type": "string",
+                        "description": "UUID4 of the recording.",
+                        "minLength": 1,
+                    },
+                    "assertion_type": {
+                        "type": "string",
+                        "enum": ["selector_exists", "text_equals", "text_contains", "visible", "url_equals"],
+                        "description": "Kind of assertion.",
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "CSS selector for element assertions; empty for url_equals.",
+                        "default": "",
+                    },
+                    "target_kind": {
+                        "type": "string",
+                        "enum": ["selector", "url"],
+                        "description": "Type of target — 'selector' for DOM, 'url' for URL assertion.",
+                    },
+                    "expected": {
+                        "type": ["string", "null"],
+                        "description": "Expected value; null for selector_exists and visible.",
+                    },
+                    "comparator": {
+                        "type": "string",
+                        "enum": ["equals", "contains", "none"],
+                        "description": "Comparison operator; 'none' for selector_exists and visible.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable label for report display.",
+                        "default": "",
+                    },
+                    "insert_after_seq": {
+                        "type": ["integer", "null"],
+                        "description": "Insert after timeline entry with this seq; null = append at end.",
+                    },
+                },
+                "required": ["recording_id", "assertion_type", "target", "target_kind", "comparator"],
+                "additionalProperties": False,
+            },
+        ),
     ]
 
 
@@ -1006,6 +1184,43 @@ def _build_ipc_request(name: str, arguments: dict[str, Any]) -> IpcRequest:
         if not isinstance(recording_id, str) or not recording_id:
             raise ValueError("recording_id is required and must be a non-empty string")
         return GetRecordingRequest(recording_id=recording_id)
+    # ── Recording write-side + Replay execution v0.8.0 ──────────────────────
+    if name == "frontprompt_start_recording":
+        return StartRecordingRequest(
+            name=arguments.get("name", "New Recording"),
+            description=arguments.get("description", ""),
+        )
+    if name == "frontprompt_stop_recording":
+        recording_id = arguments.get("recording_id")
+        if not isinstance(recording_id, str) or not recording_id:
+            raise ValueError("recording_id is required and must be a non-empty string")
+        return StopRecordingRequest(recording_id=recording_id)
+    if name == "frontprompt_run_replay":
+        recording_id = arguments.get("recording_id")
+        if not isinstance(recording_id, str) or not recording_id:
+            raise ValueError("recording_id is required and must be a non-empty string")
+        return RunReplayRequest(
+            recording_id=recording_id,
+            parameters=arguments.get("parameters", {}),
+            real_time=arguments.get("real_time", False),
+            dry_run=arguments.get("dry_run", False),
+        )
+    if name == "frontprompt_get_replay_report":
+        replay_id = arguments.get("replay_id")
+        if not isinstance(replay_id, str) or not replay_id:
+            raise ValueError("replay_id is required and must be a non-empty string")
+        return GetReplayReportRequest(replay_id=replay_id)
+    if name == "frontprompt_add_assertion":
+        return AddAssertionRequest(
+            recording_id=arguments["recording_id"],
+            assertion_type=arguments["assertion_type"],
+            target=arguments.get("target", ""),
+            target_kind=arguments["target_kind"],
+            expected=arguments.get("expected"),
+            comparator=arguments["comparator"],
+            description=arguments.get("description", ""),
+            insert_after_seq=arguments.get("insert_after_seq"),
+        )
     raise ValueError(f"unknown tool: {name!r}")
 
 

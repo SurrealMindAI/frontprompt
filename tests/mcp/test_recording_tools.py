@@ -64,10 +64,10 @@ def test_get_recording_description_mentions_entries() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_tool_list_has_31_tools() -> None:
-    """After adding frontprompt_list_recordings + frontprompt_get_recording, count is 31."""
+def test_tool_list_has_36_tools() -> None:
+    """After adding 5 recording-write+replay tools (sub-plan 05), count is 36."""
     tools = _build_tool_list()
-    assert len(tools) == 31
+    assert len(tools) == 36
 
 
 # ---------------------------------------------------------------------------

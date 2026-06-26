@@ -58,7 +58,7 @@ def test_show_session_accepts_injected_state_manager() -> None:
 
 
 def test_show_session_registers_handlers_count() -> None:
-    """ShowSession registers exactly 22 handler types (one per bridge message type)."""
+    """ShowSession registers exactly 25 handler types (one per bridge message type)."""
     from frontprompt.show_session import ShowSession
 
     s = ShowSession(url="https://example.com")
@@ -68,11 +68,13 @@ def test_show_session_registers_handlers_count() -> None:
     # PickDeletedRequested, RelationCreatedRequested, RelationDeletedRequested,
     # RelationUpdatedRequested, RegionCreatedRequested, RegionDeletedRequested,
     # RegionUpdatedRequested, RegionSelectedRequested
-    # + 5 recording handlers (sub-plan 04):
+    # + 5 recording handlers (recorder sub-plan 04):
     # RecordingStartRequested, RecordingStopRequested, RecordingRenameRequested,
     # RecordingSelectedRequested, RecordedEventCapturedRequested
-    # = 22 handler registrations
-    expected_count = 22
+    # + 3 assertion-authoring handlers (replay sub-plan 04):
+    # AssertionAddedToRecordingRequested, AssertionDeletedRequested, AssertionUpdatedRequested
+    # = 25 handler registrations
+    expected_count = 25
     assert s.handler_count() == expected_count, (
         f"Expected {expected_count} handlers, got {s.handler_count()}. "
         "Did you add/remove a bridge message type without updating this test?"

@@ -98,9 +98,15 @@ async def test_mcp_boot_advertises_full_tool_surface(anyio_backend: str, tmp_pat
                 "frontprompt_eval_js",
                 "frontprompt_dom_patch",
                 "frontprompt_pick_by_xpath",
-                # Recording tools v0.8.0
+                # Recording read-side v0.7.0
                 "frontprompt_list_recordings",
                 "frontprompt_get_recording",
+                # Recording write-side + replay v0.8.0
+                "frontprompt_start_recording",
+                "frontprompt_stop_recording",
+                "frontprompt_run_replay",
+                "frontprompt_get_replay_report",
+                "frontprompt_add_assertion",
             }, f"unexpected tool surface: {names}"
 
         tg.cancel_scope.cancel()

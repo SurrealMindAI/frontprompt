@@ -34,10 +34,10 @@ def test_get_comments_description_mentions_comment() -> None:
     assert "comment" in tools["frontprompt_get_comments"].description.lower()
 
 
-def test_tool_list_has_31_tools() -> None:
-    """After sub-plan 06 (add list_recordings + get_recording) count is 31."""
+def test_tool_list_has_36_tools() -> None:
+    """After sub-plan 05 (add 5 recording-write+replay tools) count is 36."""
     tools = _build_tool_list()
-    assert len(tools) == 31
+    assert len(tools) == 36
     names = {t.name for t in tools}
     assert "fp_status" in names
     assert "frontprompt_get_state_summary" in names

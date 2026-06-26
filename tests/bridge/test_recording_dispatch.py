@@ -21,17 +21,17 @@ from frontprompt.state.state import PageEventEntry
 
 
 # ---------------------------------------------------------------------------
-# Test 7 — handler_count updated to 22
+# Test 7 — handler_count updated to 25
 # ---------------------------------------------------------------------------
 
 
-def test_handler_count_is_22() -> None:
-    """ShowSession.handler_count() must return 22 after adding 5 recording handlers."""
+def test_handler_count_is_25() -> None:
+    """ShowSession.handler_count() must return 25 (17 base + 5 recording + 3 assertion-authoring)."""
     from frontprompt.show_session import ShowSession
 
     s = ShowSession(url="https://example.com")
-    assert s.handler_count() == 22, (
-        f"Expected 22 handlers (17 existing + 5 recording), got {s.handler_count()}. "
+    assert s.handler_count() == 25, (
+        f"Expected 25 handlers (17 base + 5 recording + 3 assertion-authoring), got {s.handler_count()}. "
         "Update handler_count() and its comment when adding/removing bridge message handlers."
     )
 
