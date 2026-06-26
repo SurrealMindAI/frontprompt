@@ -47,7 +47,9 @@
   import { pageTool } from './local-state/page-tool.svelte';
   import { pickClaim } from './local-state/pick-claim.svelte';
   import { quickCommentMode } from './local-state/quick-comment-mode.svelte';
+  import { recorder } from './local-state/recorder.svelte';
   import QuickCommentBox from './components/inspector/QuickCommentBox.svelte';
+  import FloatingRecorderToolbar from './components/FloatingRecorderToolbar.svelte';
   import type { Pick } from './_generated/state';
   import { resize } from './managers/resize-manager.svelte';
   import { setupPositionTracker } from './services/relations';
@@ -259,6 +261,17 @@
   weil InspectorLayer pointer-events-on ist und RelationsLayer pointer-events-none.
 -->
 <RelationsLayer />
+
+<!--
+  FloatingRecorderToolbar: HUD-chrome rendered inside the <fp-overlay> shadow root.
+  Nur wenn recorder.isActive === true. Position aus recorder.floatingToolbarPosition
+  (localState, ephemere Drag-Position). isHudChrome-Prädikat schließt alle Toolbar-
+  Clicks korrekt von durable Capture aus — kein Code-Change nötig (sub-plan 03).
+  pageTool wird NICHT erweitert — floating toolbar nimmt keinen full-viewport ein.
+-->
+{#if recorder.isActive}
+  <FloatingRecorderToolbar />
+{/if}
 
 <style>
   /* ── HUD theme tokens ──────────────────────────────────────────────────

@@ -22,6 +22,10 @@
  * "was war vorhin" debugging.
  */
 
+import { backendState } from '../../backend-state/backend-state.svelte';
+import { bridge } from '../../bridge/bridge.svelte';
+import type { PageEventEntry } from '../../_generated/state';
+
 const EVENT_TYPES = ['wheel', 'scroll', 'click', 'pointerdown', 'keydown'] as const;
 export type InterceptedEventType = (typeof EVENT_TYPES)[number];
 
@@ -96,6 +100,26 @@ export function eventMatchesPickPath(
   if (pickPath.length === 0 || event.target_path.length === 0) return false;
   if (pickPath.length > event.target_path.length) return false;
   return pickPath.every((tag, i) => event.target_path[i] === tag);
+}
+
+const SCHEMA_VERSION = '0.8.0';
+
+/**
+ * Build a PageEventEntry payload from an InterceptedEvent for bridge forwarding.
+ * seq is intentionally 0 — Python stamps seq atomically at append time (reviewer Q1).
+ * Only called for click/pointerdown/keydown events (wheel/scroll are excluded by caller).
+ */
+function buildPageEventEntry(record: InterceptedEvent): PageEventEntry {
+  return {
+    kind: 'page_event',
+    seq: 0, // Python-stamped
+    timestamp_ms: record.timestamp_ms,
+    event_type: record.type as 'click' | 'pointerdown' | 'keydown',
+    target: record.target,
+    target_path: record.target_path,
+    default_prevented: record.default_prevented,
+    key: record.key ?? null,
+  };
 }
 
 const MAX_EVENTS = 500;
@@ -260,6 +284,24 @@ class EventInterceptor {
     }
     if (e instanceof KeyboardEvent) {
       record.key = e.key;
+    }
+
+    // Recording forwarding (sub-plan 04): fire-and-forget bridge.send for qualifying events.
+    // Guard: recording active + non-HUD-chrome + not wheel/scroll.
+    // passive:true listener contract — void the send, no await (non-blocking).
+    const activeRecordingId = backendState.recordings.activeRecordingId;
+    if (
+      activeRecordingId !== null &&
+      !isHudChrome(record) &&
+      type !== 'wheel' &&
+      type !== 'scroll'
+    ) {
+      void bridge.send({
+        kind: 'recorded_event_captured_requested',
+        schema_version: SCHEMA_VERSION,
+        recording_id: activeRecordingId,
+        entry: buildPageEventEntry(record),
+      });
     }
 
     // FIFO push mit cap

@@ -1,21 +1,29 @@
 <!--
   LeftPanelTools — Tool-Button-Strip im oberen Bereich des linken Panels.
 
-  DIE zentrale Tool-Heimat: pick · region · quick · hide-all. Pick triggert
+  DIE zentrale Tool-Heimat: pick · region · quick · hide-all · rec. Pick triggert
   pickClaim (single-pick-at-a-time). Region triggert regionDraft (drag-rect-to-
   region UX). Pick/Region sind mutex — wenn pick aktiv, region disabled; wenn
   region drafting, pick disabled (das pick-overlay würde sonst pointer-events
   fangen). Quick togglet den quick-comment-Modus (HUD kollabiert zur Hover-Box,
-  schnelles Pick+Kommentar-Loop). Hide-all togglet alle Panels.
+  schnelles Pick+Kommentar-Loop). Hide-all togglet alle Panels. Rec startet/stoppt
+  eine Recorder-Session via recorder singleton (localState delegate → backendState).
+
+  Keyboard-Shortcut: Uppercase ``R`` (kein Modifier, kein text-input focused)
+  togglet recording. Listener auf window (Shadow-DOM-kompatibel, events bubble
+  durch Shadow-Root auf window). lowercase ``r`` und Modifier-Kombinationen
+  werden NICHT abgefangen.
 
   (quick + hide-all lebten früher in der Toolbar des Top-Panels — konsolidiert
   hierher, damit ALLE Tools an einem Ort sind.)
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { GLOBAL_PICK_ID, pickClaim } from '../../local-state/pick-claim.svelte';
   import { backendState } from '../../backend-state/backend-state.svelte';
   import { quickCommentMode } from '../../local-state/quick-comment-mode.svelte';
   import { regionDraft } from '../../services/regions';
+  import { recorder } from '../../local-state/recorder.svelte';
   import PickButton from '../primitives/PickButton.svelte';
 
   const isPickActive = $derived(pickClaim.isClaimedBy(GLOBAL_PICK_ID));
@@ -24,6 +32,7 @@
   const isRegionDisabled = $derived(pickClaim.current !== null && !isPickActive);
   const quickActive = $derived(quickCommentMode.active);
   const allHidden = $derived(backendState.panel.allHidden);
+  const recorderActive = $derived(recorder.isActive);
 
   function togglePick(): void {
     if (isPickActive) {
@@ -59,6 +68,41 @@
   function toggleHideAll(): void {
     backendState.panel.toggleHideAll();
   }
+
+  function toggleRecorder(): void {
+    if (recorderActive) {
+      recorder.stop();
+    } else {
+      recorder.start();
+    }
+  }
+
+  /**
+   * Keyboard shortcut: uppercase R toggles recording.
+   * Guard: skip when any text-input (input/textarea/[contenteditable]) is focused
+   * so typing in a comment field doesn't accidentally start/stop recording.
+   * Listener on window so it works across Shadow-DOM boundaries.
+   */
+  function handleKeyDown(e: KeyboardEvent): void {
+    if (e.key !== 'R') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const focused = document.activeElement;
+    if (
+      focused instanceof HTMLInputElement ||
+      focused instanceof HTMLTextAreaElement ||
+      (focused instanceof HTMLElement && focused.isContentEditable)
+    ) {
+      return;
+    }
+    toggleRecorder();
+  }
+
+  onMount(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  });
 </script>
 
 <div class="tools">
@@ -103,6 +147,18 @@
   >
     <span class="tool-btn__icon" aria-hidden="true">{allHidden ? '⊞' : '⊟'}</span>
     <span class="tool-btn__label">{allHidden ? 'show all' : 'hide all'}</span>
+  </button>
+  <button
+    type="button"
+    class="tool-btn tool-btn--rec"
+    class:tool-btn--active={recorderActive}
+    onclick={toggleRecorder}
+    aria-pressed={recorderActive}
+    aria-label={recorderActive ? 'Stop recording' : 'Start recording'}
+    title={recorderActive ? 'Recording — click to stop (R)' : 'Start recording (R)'}
+  >
+    <span class="tool-btn__icon" aria-hidden="true">{recorderActive ? '⏹' : '⏺'}</span>
+    <span class="tool-btn__label">rec</span>
   </button>
 </div>
 
@@ -167,5 +223,16 @@
     font-size: 10px;
     text-transform: lowercase;
     letter-spacing: 0.02em;
+  }
+
+  /* Recording active: pulsing red accent to signal live capture. */
+  .tool-btn--rec.tool-btn--active {
+    background: rgba(255, 80, 80, 0.18);
+    border-color: rgba(255, 80, 80, 0.6);
+    color: #ff9f9f;
+  }
+
+  .tool-btn--rec.tool-btn--active:hover:not(:disabled) {
+    background: rgba(255, 80, 80, 0.28);
   }
 </style>

@@ -9,6 +9,7 @@
  *   - countsByType incrementiert auch wenn !enabled
  *   - elementsWithEvents excluded hud-chrome targets
  *   - toggle / clear behavior
+ *   - recording forwarding: bridge.send called when recording active + non-HUD, non-wheel/scroll
  *
  * Hinweis: das interceptor-singleton lebt module-scoped. Wir nutzen
  * ``stop() + clear() + counters-reset`` pattern für test-isolation. Single
@@ -16,6 +17,8 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { eventInterceptor, isHudChrome, type InterceptedEvent } from './index';
+import { backendState } from '../../backend-state/backend-state.svelte';
+import { bridge } from '../../bridge/bridge.svelte';
 
 beforeEach(() => {
   eventInterceptor.start();
@@ -253,5 +256,154 @@ describe('FIFO cap', () => {
     // first event sollte NICHT mehr key-0 sein
     const first = eventInterceptor.events[0]!;
     expect(first.key).not.toBe('key-0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recording forwarding — sub-plan 04
+// ---------------------------------------------------------------------------
+
+/** Install a mock window.__fp that captures outbound sends. */
+function installCapturingFp(): { calls: unknown[] } {
+  const calls: unknown[] = [];
+  const fp = Object.assign(
+    (msg: unknown): Promise<unknown> => {
+      calls.push(msg);
+      return Promise.resolve(null);
+    },
+    {}
+  ) as typeof window.__fp;
+  (window as Window & { __fp?: unknown }).__fp = fp;
+  return { calls };
+}
+
+function removeMockFp(): void {
+  delete (window as Window & { __fp?: unknown }).__fp;
+}
+
+describe('recording forwarding', () => {
+  beforeEach(() => {
+    eventInterceptor.start();
+    eventInterceptor.clear();
+    if (!eventInterceptor.enabled) eventInterceptor.toggle();
+    for (const k of Object.keys(eventInterceptor.countsByType)) {
+      eventInterceptor.countsByType[k as keyof typeof eventInterceptor.countsByType] = 0;
+    }
+    bridge.resetForTests();
+    backendState.recordings.activeRecordingId = null;
+  });
+
+  afterEach(() => {
+    eventInterceptor.stop();
+    eventInterceptor.clear();
+    document.body.innerHTML = '';
+    removeMockFp();
+    backendState.recordings.activeRecordingId = null;
+    bridge.resetForTests();
+  });
+
+  test('no bridge.send when activeRecordingId is null', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = null;
+
+    document.body.innerHTML = '<button id="b">x</button>';
+    document.getElementById('b')!.click();
+
+    expect(calls.filter((c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested')).toHaveLength(0);
+  });
+
+  test('bridge.send called for click when activeRecordingId is set and event is non-HUD', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-001';
+
+    document.body.innerHTML = '<button id="b">x</button>';
+    document.getElementById('b')!.click();
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(1);
+    const msg = capturedCalls[0] as { kind: string; recording_id: string; entry: { event_type: string } };
+    expect(msg.recording_id).toBe('rec-001');
+    expect(msg.entry.event_type).toBe('click');
+  });
+
+  test('bridge.send called for pointerdown when recording active', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-002';
+
+    document.body.innerHTML = '<button id="b">x</button>';
+    document.getElementById('b')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(1);
+    const msg = capturedCalls[0] as { kind: string; entry: { event_type: string } };
+    expect(msg.entry.event_type).toBe('pointerdown');
+  });
+
+  test('bridge.send called for keydown when recording active', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-003';
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(1);
+    const msg = capturedCalls[0] as { kind: string; entry: { event_type: string; key?: string | null } };
+    expect(msg.entry.event_type).toBe('keydown');
+    expect(msg.entry.key).toBe('a');
+  });
+
+  test('wheel events are NOT forwarded regardless of recording state', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-004';
+
+    document.body.innerHTML = '<div id="x">x</div>';
+    document.getElementById('x')!.dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 100, bubbles: true }));
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(0);
+  });
+
+  test('HudChrome events are NOT forwarded (recording active)', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-005';
+
+    document.body.innerHTML = `
+      <fp-overlay>
+        <button id="hud">x</button>
+      </fp-overlay>
+    `;
+    document.getElementById('hud')!.click();
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(0);
+  });
+
+  test('entry has correct fields: event_type, target, default_prevented, timestamp_ms', () => {
+    const { calls } = installCapturingFp();
+    backendState.recordings.activeRecordingId = 'rec-006';
+
+    document.body.innerHTML = '<button id="go">x</button>';
+    document.getElementById('go')!.click();
+
+    const capturedCalls = calls.filter(
+      (c) => (c as { kind?: string }).kind === 'recorded_event_captured_requested'
+    );
+    expect(capturedCalls).toHaveLength(1);
+    const entry = (capturedCalls[0] as { entry: Record<string, unknown> }).entry;
+    expect(entry.event_type).toBe('click');
+    expect(typeof entry.target).toBe('string');
+    expect(entry.target).toContain('button');
+    expect(typeof entry.timestamp_ms).toBe('number');
+    expect(typeof entry.default_prevented).toBe('boolean');
   });
 });

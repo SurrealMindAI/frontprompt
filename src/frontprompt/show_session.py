@@ -45,6 +45,11 @@ from frontprompt.bridge.messages import (
     PickCommentUpdatedRequested,
     PickDeletedRequested,
     PickSelectedRequested,
+    RecordedEventCapturedRequested,
+    RecordingRenameRequested,
+    RecordingSelectedRequested,
+    RecordingStartRequested,
+    RecordingStopRequested,
     RegionCreatedRequested,
     RegionDeletedRequested,
     RegionSelectedRequested,
@@ -65,6 +70,7 @@ from frontprompt.overlay import (
     load_overlay_bundle,
 )
 from frontprompt.state import StateManager, StateSnapshot
+from frontprompt.state.state import NavigationEntry
 from frontprompt.state.persistence import make_persistence
 
 if TYPE_CHECKING:
@@ -109,16 +115,21 @@ class ShowSession:
         self._log = _LOG.bind(url=url)
         # Count how many handlers will be registered (for test_show_session_registers_handlers_count)
         self._registered_handler_count = 0
+        # Nav observation: last known URL, tracked in OverlayReady handler (sub-plan 04).
+        self._last_url: str | None = None
 
     def handler_count(self) -> int:
         """Return the number of bridge handler types this session registers."""
-        # 17 handler types:
+        # 22 handler types:
         # OverlayReady, PanelToggleRequested, PanelResizeRequested, HideAllPanelsRequested,
         # InspectorActivateRequested, InspectorCanceledRequested, InspectorPickMadeRequested,
         # PickSelectedRequested, PickCommentUpdatedRequested, PickDeletedRequested,
         # RelationCreatedRequested, RelationDeletedRequested, RelationUpdatedRequested,
         # RegionCreatedRequested, RegionDeletedRequested, RegionUpdatedRequested, RegionSelectedRequested
-        return 17
+        # + 5 recording handlers (sub-plan 04):
+        # RecordingStartRequested, RecordingStopRequested, RecordingRenameRequested,
+        # RecordingSelectedRequested, RecordedEventCapturedRequested
+        return 22
 
     @property
     def _sm(self) -> StateManager:
@@ -237,6 +248,32 @@ class ShowSession:
     async def _on_region_selected(self, msg: RegionSelectedRequested) -> None:
         await self._sm.select_region(msg.region_id)
 
+    # ----- Recording handlers (sub-plan 04) -----
+
+    async def _on_recording_start(self, msg: RecordingStartRequested) -> None:
+        """RecordingStartRequested → create new recording. Broadcasts snapshot via StateManager listener."""
+        await self._sm.start_recording(msg.name, msg.description)
+
+    async def _on_recording_stop(self, msg: RecordingStopRequested) -> None:
+        """RecordingStopRequested → stop active recording. Broadcasts snapshot via StateManager listener."""
+        await self._sm.stop_recording(msg.recording_id)
+
+    async def _on_recording_rename(self, msg: RecordingRenameRequested) -> None:
+        """RecordingRenameRequested → patch name/description. Broadcasts snapshot via StateManager listener."""
+        await self._sm.rename_recording(msg.recording_id, msg.name, msg.description)
+
+    async def _on_recording_selected(self, msg: RecordingSelectedRequested) -> None:
+        """RecordingSelectedRequested → set active_detail_recording_id. Broadcasts snapshot."""
+        await self._sm.select_recording(msg.recording_id)
+
+    async def _on_recorded_event_captured(self, msg: RecordedEventCapturedRequested) -> None:
+        """RecordedEventCapturedRequested → append timeline entry. NON-broadcasting path (COL-5 / PIT-105).
+
+        seq is stamped Python-side in append_timeline_entry (reviewer Q1).
+        No snapshot broadcast — ~10 Hz keydown events must not flood the wire.
+        """
+        await self._sm.append_timeline_entry(msg.recording_id, msg.entry)
+
     async def _heartbeat_sender(self, bridge: BridgeManager) -> None:
         """Periodic healthcheck — sends every 5s to overlay.
 
@@ -350,8 +387,24 @@ class ShowSession:
                             # tg.start_soon() instead of direct await in CDP callback.
                             bridge.set_task_group(tg)
 
-                            # Re-hydration on OverlayReady (covers cross-origin nav)
+                            # Re-hydration on OverlayReady (covers cross-origin nav).
+                            # Also observes URL changes for NavigationEntry appending (sub-plan 04, COL-7).
+                            # browser.page.url is a synchronous str property — no await needed.
                             async def _on_overlay_ready_with_bridge(_msg: OverlayReady) -> None:
+                                current_url: str = browser.page.url
+                                if current_url != self._last_url:
+                                    active_recording_id = self._sm._recordings_state.active_recording_id
+                                    if active_recording_id is not None and self._last_url is not None:
+                                        await self._sm.append_timeline_entry(
+                                            active_recording_id,
+                                            NavigationEntry(
+                                                seq=0,  # Python-stamped in append_timeline_entry
+                                                timestamp_ms=0,  # Python-stamped in append_timeline_entry
+                                                from_url=self._last_url,
+                                                to_url=current_url,
+                                            ),
+                                        )
+                                self._last_url = current_url
                                 self._log.info("show.state.rehydrate_on_overlay_ready")
                                 await self._send_snapshot(bridge, integrity_token=integrity_token)
 
@@ -374,6 +427,12 @@ class ShowSession:
                             bridge.on(RegionDeletedRequested, self._on_region_deleted)
                             bridge.on(RegionUpdatedRequested, self._on_region_updated)
                             bridge.on(RegionSelectedRequested, self._on_region_selected)
+                            # Recording handlers (sub-plan 04, COL-1 — inline in _run_browser, not _register_handlers)
+                            bridge.on(RecordingStartRequested, self._on_recording_start)
+                            bridge.on(RecordingStopRequested, self._on_recording_stop)
+                            bridge.on(RecordingRenameRequested, self._on_recording_rename)
+                            bridge.on(RecordingSelectedRequested, self._on_recording_selected)
+                            bridge.on(RecordedEventCapturedRequested, self._on_recorded_event_captured)
 
                             # Broadcast after every authoritative mutation (include token)
                             self._sm.add_snapshot_listener(

@@ -63,6 +63,14 @@ vi.mock('./backend-state/backend-state.svelte', () => ({
       togglePanel: vi.fn(),
       resizePanel: vi.fn(),
     },
+    recordings: {
+      activeRecordingId: null,
+      recordings: [],
+      activeDetailRecordingId: null,
+      detailRecording: null,
+      isRecording: false,
+      activeRecording: null,
+    },
     hydrate: vi.fn(),
   },
 }));
