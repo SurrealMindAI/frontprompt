@@ -22,6 +22,7 @@
   import RecordingsTab from './tabs/RecordingsTab.svelte';
   import RegionsTab from './tabs/RegionsTab.svelte';
   import RelationsTab from './tabs/RelationsTab.svelte';
+  import SettingsTab from './tabs/SettingsTab.svelte';
 
   // Maps needed for region/relation domain resolution — same pattern as the tabs.
   const picksById = $derived(new Map(backendState.inspector.picks.map((p) => [p.pick_id, p])));
@@ -69,6 +70,7 @@
         ? `Recordings (${recordingsCount})${hasActiveRecording ? ' ●' : ''}`
         : `Recordings${hasActiveRecording ? ' ●' : ''}`,
     },
+    { id: 'settings' as const, label: 'Settings' },
   ]);
 </script>
 
@@ -93,6 +95,8 @@
           <EventsTab />
         {:else if activeId === 'recordings'}
           <RecordingsTab />
+        {:else if activeId === 'settings'}
+          <SettingsTab />
         {/if}
       {/snippet}
     </TabbedPanel>

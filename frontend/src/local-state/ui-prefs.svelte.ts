@@ -16,7 +16,7 @@
  *   - relationsVisible nach localStorage (survives reload, bleibt frontend)
  */
 
-export type LeftPanelTabId = 'picks' | 'events' | 'relations' | 'regions' | 'recordings';
+export type LeftPanelTabId = 'picks' | 'events' | 'relations' | 'regions' | 'recordings' | 'settings';
 
 class UiPrefs {
   /** Welcher tab im left panel ist aktuell selected. */
@@ -80,6 +80,11 @@ class UiPrefs {
   /** Imperative helper: open recordings-tab (recorder feature). */
   showRecordingsTab(): void {
     this.leftPanelTab = 'recordings';
+  }
+
+  /** Imperative helper: open settings-tab (voice-over settings). */
+  showSettingsTab(): void {
+    this.leftPanelTab = 'settings';
   }
 
   /** Toggle relations-overlay visibility. Bound to Toolbar-button. */

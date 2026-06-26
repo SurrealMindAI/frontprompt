@@ -13,6 +13,7 @@
  *
  * Voice-Over-Stores (Schema 0.10.0):
  * - ``voiceOver`` — mirror für recordings_state voice-over Aggregationen
+ *                   + transcription_state backend-Liste (Settings-Tab)
  * - ``mic`` — mirror für microphone_state (device-Enumeration + Selection)
  * - ``settings`` — mirror für settings_state (User-Prefs + Backend-Selection)
  */
@@ -45,6 +46,8 @@ class BackendState {
     if (snap.recordings_state) this.recordings.hydrate(snap.recordings_state);
     // Voice-Over: voiceOverState liest aus recordings_state (has_voice_over + transcription_status)
     if (snap.recordings_state) this.voiceOver.hydrate(snap.recordings_state);
+    // Voice-Over: Backend-Liste aus transcription_state (Settings-Tab Backend-Picker)
+    if (snap.transcription_state) this.voiceOver.hydrateTranscription(snap.transcription_state);
     if (snap.microphone_state) this.mic.hydrate(snap.microphone_state);
     if (snap.settings_state) this.settings.hydrate(snap.settings_state);
     // future: if (snap.annotations) this.annotations.hydrate(snap.annotations);

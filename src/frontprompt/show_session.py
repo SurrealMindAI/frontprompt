@@ -60,7 +60,10 @@ from frontprompt.bridge.messages import (
     RelationCreatedRequested,
     RelationDeletedRequested,
     RelationUpdatedRequested,
+    SetMicDeviceRequested,
+    SetTranscriptionBackendRequested,
     StateSnapshotMessage,
+    TriggerModelDownloadRequested,
 )
 from frontprompt.browser import BrowserSessionManager
 from frontprompt.ipc import run_socket_server, session_lifecycle
@@ -125,13 +128,16 @@ class ShowSession:
         # _mic_watcher: topology-hash-based anyio task for device enumeration (sub-plan 03).
         # _voice_over_recording_ids: tracks which active recordings have voice-over capture
         #   running (to coordinate stop flow without relying on has_voice_over state).
+        # _post_processor: async off-lock transcription + segment injection (sub-plan 05).
         self._audio_capture: object | None = None
         self._mic_watcher: object | None = None
         self._voice_over_recording_ids: set[str] = set()
+        from frontprompt.voice.post_processor import PostProcessor
+        self._post_processor = PostProcessor()
 
     def handler_count(self) -> int:
         """Return the number of bridge handler types this session registers."""
-        # 25 handler types:
+        # 28 handler types:
         # OverlayReady, PanelToggleRequested, PanelResizeRequested, HideAllPanelsRequested,
         # InspectorActivateRequested, InspectorCanceledRequested, InspectorPickMadeRequested,
         # PickSelectedRequested, PickCommentUpdatedRequested, PickDeletedRequested,
@@ -142,7 +148,9 @@ class ShowSession:
         # RecordingSelectedRequested, RecordedEventCapturedRequested
         # + 3 assertion-authoring handlers (replay sub-plan 04):
         # AssertionAddedToRecordingRequested, AssertionDeletedRequested, AssertionUpdatedRequested
-        return 25
+        # + 3 voice-over settings handlers (voice-over sub-plan 05):
+        # SetMicDeviceRequested, SetTranscriptionBackendRequested, TriggerModelDownloadRequested
+        return 28
 
     @property
     def _sm(self) -> StateManager:
@@ -310,8 +318,18 @@ class ShowSession:
         ``_voice_over_recording_ids``), stops the audio capture, gets the WAV path, and calls
         ``StateManager.set_audio_path()`` to persist and broadcast the durable artifact.
 
+        Sub-plan 05 extension: if voice-over WAV was captured, dispatches the PostProcessor
+        via ``tg.start_soon`` to transcribe off-lock. ``started_at_ms`` is read from the
+        full Recording object BEFORE calling stop_recording (COL-3: PostProcessor receives it
+        as a parameter, never calls get_recording() itself).
+
         Broadcasts snapshot via StateManager listener (unchanged from recorder sub-plan 04).
         """
+        # COL-3: get started_at_ms before stop_recording to pass to PostProcessor.
+        # get_recording() is a lock-free read — safe to call before the stop mutation.
+        recording = self._sm.get_recording(msg.recording_id)
+        started_at_ms = recording.started_at_ms if recording is not None else 0
+
         await self._sm.stop_recording(msg.recording_id)
 
         if self._audio_capture is None or msg.recording_id not in self._voice_over_recording_ids:
@@ -327,6 +345,33 @@ class ShowSession:
                 recording_id=msg.recording_id,
                 wav_path=str(wav_path),
             )
+
+            # Sub-plan 05: dispatch PostProcessor off-lock (COL-1: shielded finalize inside run()).
+            # Resolve the active transcription backend.
+            from frontprompt.voice.transcription import select_backend
+
+            active_backend = select_backend(
+                self._sm.snapshot().settings_state.selected_transcription_backend_id
+            )
+            if active_backend is not None and self._tg is not None:
+                self._tg.start_soon(
+                    self._post_processor.run,
+                    msg.recording_id,
+                    wav_path,
+                    started_at_ms,
+                    self._sm,
+                    active_backend,
+                )
+                self._log.info(
+                    "show.voice_over.post_processor_dispatched",
+                    recording_id=msg.recording_id,
+                    backend_id=active_backend.backend_id,
+                )
+            else:
+                self._log.warning(
+                    "show.voice_over.post_processor_skipped_no_backend",
+                    recording_id=msg.recording_id,
+                )
 
     async def _on_recording_rename(self, msg: RecordingRenameRequested) -> None:
         """RecordingRenameRequested → patch name/description. Broadcasts snapshot via StateManager listener."""
@@ -370,6 +415,52 @@ class ShowSession:
         if msg.description is not None:
             patch["description"] = msg.description
         await self._sm.update_assertion(msg.recording_id, msg.assertion_id, patch)
+
+    # ----- Voice-over settings handlers (voice-over sub-plan 05) -----
+
+    async def _on_set_mic_device(self, msg: SetMicDeviceRequested) -> None:
+        """SetMicDeviceRequested → persist selected mic device + broadcast snapshot."""
+        await self._sm.set_mic_device(msg.mic_device_id)
+
+    async def _on_set_transcription_backend(self, msg: SetTranscriptionBackendRequested) -> None:
+        """SetTranscriptionBackendRequested → persist selected transcription backend + broadcast."""
+        from frontprompt.state.state import SettingsState
+
+        current = self._sm.snapshot().settings_state
+        updated = SettingsState(
+            voice_over_enabled=current.voice_over_enabled,
+            selected_transcription_backend_id=msg.backend_id,
+        )
+        await self._sm.set_settings(updated)
+
+    async def _on_trigger_model_download(self, msg: TriggerModelDownloadRequested) -> None:
+        """TriggerModelDownloadRequested → start model download task via tg.start_soon."""
+        if self._tg is not None:
+            self._tg.start_soon(self._trigger_download_task, msg.backend_id)
+
+    async def _trigger_download_task(self, backend_id: str) -> None:
+        """Download task: calls backend.ensure(progress_cb) with status update callback."""
+        from frontprompt.voice.transcription import REGISTERED_BACKENDS
+
+        backend = next((b for b in REGISTERED_BACKENDS if b.backend_id == backend_id), None)
+        if backend is None:
+            self._log.warning("show.voice_over.trigger_download.unknown_backend", backend_id=backend_id)
+            return
+
+        async def _progress_cb(fraction: float) -> None:
+            await self._sm.update_transcription_backend_status(backend_id, "downloading", fraction)
+
+        try:
+            await backend.ensure(_progress_cb)
+            await self._sm.update_transcription_backend_status(backend_id, "ready", None)
+            self._log.info("show.voice_over.model_download_complete", backend_id=backend_id)
+        except Exception as exc:
+            await self._sm.update_transcription_backend_status(backend_id, "error", None)
+            self._log.error(
+                "show.voice_over.model_download_failed",
+                backend_id=backend_id,
+                error=str(exc),
+            )
 
     async def _heartbeat_sender(self, bridge: BridgeManager) -> None:
         """Periodic healthcheck — sends every 5s to overlay.
@@ -546,6 +637,10 @@ class ShowSession:
                             bridge.on(AssertionAddedToRecordingRequested, self._on_assertion_added)
                             bridge.on(AssertionDeletedRequested, self._on_assertion_deleted)
                             bridge.on(AssertionUpdatedRequested, self._on_assertion_updated)
+                            # Voice-over settings handlers (voice-over sub-plan 05 — inline in _run_browser)
+                            bridge.on(SetMicDeviceRequested, self._on_set_mic_device)
+                            bridge.on(SetTranscriptionBackendRequested, self._on_set_transcription_backend)
+                            bridge.on(TriggerModelDownloadRequested, self._on_trigger_model_download)
 
                             # Broadcast after every authoritative mutation (include token)
                             self._sm.add_snapshot_listener(

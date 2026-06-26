@@ -21,17 +21,23 @@ from frontprompt.state.state import PageEventEntry
 
 
 # ---------------------------------------------------------------------------
-# Test 7 — handler_count updated to 25
+# Test 7 — handler_count updated to 28 (COL-4: +3 voice-over settings handlers)
 # ---------------------------------------------------------------------------
 
 
-def test_handler_count_is_25() -> None:
-    """ShowSession.handler_count() must return 25 (17 base + 5 recording + 3 assertion-authoring)."""
+def test_handler_count_is_28() -> None:
+    """ShowSession.handler_count() must return 28 (17 base + 5 recording + 3 assertion-authoring + 3 voice-over settings).
+
+    COL-4: the voice-over bundle (sub-plan 05) adds 3 new handlers:
+      - SetMicDeviceRequested (+1)
+      - SetTranscriptionBackendRequested (+1)
+      - TriggerModelDownloadRequested (+1)
+    """
     from frontprompt.show_session import ShowSession
 
     s = ShowSession(url="https://example.com")
-    assert s.handler_count() == 25, (
-        f"Expected 25 handlers (17 base + 5 recording + 3 assertion-authoring), got {s.handler_count()}. "
+    assert s.handler_count() == 28, (
+        f"Expected 28 handlers (17 base + 5 recording + 3 assertion-authoring + 3 voice-over settings), got {s.handler_count()}. "
         "Update handler_count() and its comment when adding/removing bridge message handlers."
     )
 
