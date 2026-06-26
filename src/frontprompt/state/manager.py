@@ -1283,6 +1283,34 @@ class StateManager:
 
     # ----- Mutation API: Voice-over recording meta (single-writer) ----------
 
+    async def set_has_voice_over(self, recording_id: str, value: bool) -> StateSnapshot:
+        """Explicitly set has_voice_over on a recording.
+
+        Used by AudioCaptureManager to degrade gracefully on PortAudioError
+        (COL-7): marks the recording as having no voice-over after a mic-open
+        failure, ensuring the UI reflects the correct state. Also broadcasts.
+
+        No-op (with warning) if recording_id is unknown.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning("state.manager.set_has_voice_over.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                recording.has_voice_over = value
+                for meta in self._recordings_state.recordings:
+                    if meta.recording_id == recording_id:
+                        meta.has_voice_over = value
+                        break
+                self._log.info(
+                    "state.manager.set_has_voice_over",
+                    recording_id=recording_id,
+                    value=value,
+                )
+                snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
+        return await self._notify_and_return(snap)
+
     async def set_audio_path(self, recording_id: str, audio_path: str) -> StateSnapshot:
         """Set the audio file path on a recording after capture completes.
 

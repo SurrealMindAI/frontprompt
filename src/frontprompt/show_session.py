@@ -120,6 +120,14 @@ class ShowSession:
         self._registered_handler_count = 0
         # Nav observation: last known URL, tracked in OverlayReady handler (sub-plan 04).
         self._last_url: str | None = None
+        # Voice-over components — constructed in run() with COL-2 lazy imports.
+        # _audio_capture: manages sounddevice InputStream → WAV drainer (sub-plan 03).
+        # _mic_watcher: topology-hash-based anyio task for device enumeration (sub-plan 03).
+        # _voice_over_recording_ids: tracks which active recordings have voice-over capture
+        #   running (to coordinate stop flow without relying on has_voice_over state).
+        self._audio_capture: object | None = None
+        self._mic_watcher: object | None = None
+        self._voice_over_recording_ids: set[str] = set()
 
     def handler_count(self) -> int:
         """Return the number of bridge handler types this session registers."""
@@ -253,15 +261,72 @@ class ShowSession:
     async def _on_region_selected(self, msg: RegionSelectedRequested) -> None:
         await self._sm.select_region(msg.region_id)
 
-    # ----- Recording handlers (sub-plan 04) -----
+    # ----- Recording handlers (sub-plan 04, extended by sub-plan 03 for voice-over) -----
 
     async def _on_recording_start(self, msg: RecordingStartRequested) -> None:
-        """RecordingStartRequested → create new recording. Broadcasts snapshot via StateManager listener."""
-        await self._sm.start_recording(msg.name, msg.description)
+        """RecordingStartRequested → create new recording + optionally start audio capture.
+
+        Sub-plan 03 extension: if ``msg.with_voice_over=True`` and ``_audio_capture`` is
+        initialized, calls ``AudioCaptureManager.start()`` (COL-2: lazy import kept in
+        ``run()``, not here). On PortAudioError the capture degrades gracefully (COL-7)
+        and the recording continues without voice-over.
+
+        Broadcasts snapshot via StateManager listener (unchanged from recorder sub-plan 04).
+        """
+        snap = await self._sm.start_recording(msg.name, msg.description)
+
+        if not msg.with_voice_over or self._audio_capture is None:
+            return
+
+        recording_id = snap.recordings_state.active_recording_id
+        if recording_id is None:
+            return
+
+        from frontprompt.ipc.paths import audio_path_for
+
+        wav_path = audio_path_for(self._sm.session_id, recording_id)
+        device_id = msg.mic_device_id or self._sm.snapshot().microphone_state.selected_device_id
+
+        started: bool = await self._audio_capture.start(  # type: ignore[attr-defined]
+            recording_id, device_id, wav_path
+        )
+        if started:
+            self._voice_over_recording_ids.add(recording_id)
+            self._log.info(
+                "show.voice_over.capture_started",
+                recording_id=recording_id,
+                device_id=device_id,
+            )
+        else:
+            self._log.warning(
+                "show.voice_over.capture_start_failed",
+                recording_id=recording_id,
+            )
 
     async def _on_recording_stop(self, msg: RecordingStopRequested) -> None:
-        """RecordingStopRequested → stop active recording. Broadcasts snapshot via StateManager listener."""
+        """RecordingStopRequested → stop active recording + finalise voice-over WAV if active.
+
+        Sub-plan 03 extension: if the recording had voice-over capture running (tracked in
+        ``_voice_over_recording_ids``), stops the audio capture, gets the WAV path, and calls
+        ``StateManager.set_audio_path()`` to persist and broadcast the durable artifact.
+
+        Broadcasts snapshot via StateManager listener (unchanged from recorder sub-plan 04).
+        """
         await self._sm.stop_recording(msg.recording_id)
+
+        if self._audio_capture is None or msg.recording_id not in self._voice_over_recording_ids:
+            return
+
+        self._voice_over_recording_ids.discard(msg.recording_id)
+
+        wav_path = await self._audio_capture.stop(msg.recording_id)  # type: ignore[attr-defined]
+        if wav_path is not None:
+            await self._sm.set_audio_path(msg.recording_id, str(wav_path))
+            self._log.info(
+                "show.voice_over.capture_stopped",
+                recording_id=msg.recording_id,
+                wav_path=str(wav_path),
+            )
 
     async def _on_recording_rename(self, msg: RecordingRenameRequested) -> None:
         """RecordingRenameRequested → patch name/description. Broadcasts snapshot via StateManager listener."""
@@ -413,6 +478,18 @@ class ShowSession:
                     # state_snapshot envelope. See ARCHITECTURE.md and bridge.svelte.ts.
                     integrity_token = secrets.token_hex(32)
 
+                    # Voice-over components — COL-2: imports are INSIDE _run_browser(),
+                    # not at module top-level. This mirrors the existing pattern of
+                    # importing `_wait_for_socket_listening` inside run(). Even though
+                    # audio_capture.py / mic_watcher.py themselves lazy-import sounddevice,
+                    # we avoid pulling the voice package at all on non-[voice] installs
+                    # by keeping these imports local.
+                    from frontprompt.voice.audio_capture import AudioCaptureManager
+                    from frontprompt.voice.mic_watcher import MicrophoneWatcher
+
+                    self._audio_capture = AudioCaptureManager(tg, state_manager=self._sm)
+                    self._mic_watcher = MicrophoneWatcher()
+
                     async with BrowserSessionManager(headless=False) as browser:
                         async with BridgeManager(browser, bundle_build_session=manifest.build_session) as bridge:
                             # inject task group so handlers are routed via
@@ -560,6 +637,8 @@ class ShowSession:
                             )
 
                             tg.start_soon(self._heartbeat_sender, bridge)
+                            # Voice-over: mic topology watcher runs for the lifetime of the session
+                            tg.start_soon(self._mic_watcher.run, self._sm)  # type: ignore[attr-defined]
 
                             await browser.wait_until_closed()
                             self._log.info("show.page.closed_by_user")

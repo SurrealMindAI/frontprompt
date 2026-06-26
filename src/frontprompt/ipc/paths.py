@@ -102,7 +102,20 @@ def session_log_path(session_id: str, role: str) -> Path:
     return session_dir(session_id) / f"{role}.log"
 
 
+def audio_path_for(session_id: str, recording_id: str) -> Path:
+    """WAV audio path for a voice-over recording inside a session dir.
+
+    Returns ``<session-dir>/recording-<recording_id>.wav``.
+
+    The WAV is a durable source artifact — kept for mlx-whisper transcription
+    after stop. Reclamation deferred to a future ``recordings clean-audio``
+    command (COL-8: retention decision).
+    """
+    return session_dir(session_id) / f"recording-{recording_id}.wav"
+
+
 __all__ = [
+    "audio_path_for",
     "cache_root",
     "logs_root",
     "metadata_path_for",
