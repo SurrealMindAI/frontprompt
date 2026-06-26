@@ -1,4 +1,4 @@
-"""MCP stdio server — 29 tools (1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0).
+"""MCP stdio server — 31 tools (1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording v0.7.0).
 
 Each MCP-daemon process owns exactly one browser-session (spawned as
 ``frontprompt show`` child). This module exposes 29 MCP tools that
@@ -86,6 +86,8 @@ from frontprompt.ipc import (
     GetPageOutlineRequest,
     GetPickRequest,
     GetPicksRequest,
+    GetRecordingRequest,
+    GetRecordingsRequest,
     GetSnapshotRequest,
     GetStateSummaryRequest,
     InspectElementsRequest,
@@ -258,7 +260,7 @@ class LazyBrowserSessionProvider:
 
 
 def _build_tool_list() -> list[types.Tool]:
-    """29 tools — 1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0.
+    """31 tools — 1 diagnostic + 7 read-only v0.1+0.2+0.6 + 6 scout v0.3.0 + 14 refinement v0.4.0 + 1 state-summary v0.5.0 + 2 recording v0.7.0.
 
     5 deprecated v0.3.0 element-readers removed (IPC 0.6.0): get_text, get_html,
     get_attributes, get_state, get_outline. Replacement: frontprompt_inspect_elements.
@@ -823,6 +825,39 @@ def _build_tool_list() -> list[types.Tool]:
                 "additionalProperties": False,
             },
         ),
+        # ── Recording read-side v0.7.0 ───────────────────────────────────────────
+        types.Tool(
+            name="frontprompt_list_recordings",
+            description=(
+                "List all recordings in this session. Returns array of "
+                "RecordingMeta objects: {recording_id, name, description, status, started_at_ms, "
+                "ended_at_ms, entry_count}. Use frontprompt_get_recording to fetch the full "
+                "timeline of a specific recording."
+            ),
+            inputSchema=empty_input,
+        ),
+        types.Tool(
+            name="frontprompt_get_recording",
+            description=(
+                "Return a specific recording with its full timeline. Returns "
+                "Recording object: {recording_id, name, status, entries: [{kind, seq, timestamp_ms, ...}]}. "
+                "entry kinds: page_event (click/pointerdown/keydown), pick_ref, region_ref, relation_ref, "
+                "navigation. Replay-ready: page_event entries carry sufficient data to reconstruct IpcRequest "
+                "sequences for future replay agents."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recording_id": {
+                        "type": "string",
+                        "description": "UUID4 of the recording to retrieve.",
+                        "minLength": 1,
+                    },
+                },
+                "required": ["recording_id"],
+                "additionalProperties": False,
+            },
+        ),
     ]
 
 
@@ -963,6 +998,14 @@ def _build_ipc_request(name: str, arguments: dict[str, Any]) -> IpcRequest:
             parent_pick_id=arguments.get("parent_pick_id"),
             limit=arguments.get("limit", 10),
         )
+    # ── Recording read-side v0.7.0 ──────────────────────────────────────────
+    if name == "frontprompt_list_recordings":
+        return GetRecordingsRequest()
+    if name == "frontprompt_get_recording":
+        recording_id = arguments.get("recording_id")
+        if not isinstance(recording_id, str) or not recording_id:
+            raise ValueError("recording_id is required and must be a non-empty string")
+        return GetRecordingRequest(recording_id=recording_id)
     raise ValueError(f"unknown tool: {name!r}")
 
 

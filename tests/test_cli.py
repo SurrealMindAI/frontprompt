@@ -269,3 +269,93 @@ def test_new_debug_subcommands_appear_in_help() -> None:
     assert result.exit_code == 0
     for cmd in ("navigate", "eval", "page-info", "screenshot", "pick"):
         assert cmd in result.output
+
+
+# ── recordings subcommand group ──────────────────────────────────────────────
+
+
+def test_recordings_group_appears_in_help() -> None:
+    """recordings group is registered and appears in frontprompt --help."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "recordings" in result.output
+
+
+def test_recordings_list_sends_get_recordings_request() -> None:
+    captured, fake_query = _capture(IpcResponse(ok=True, data=[]))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "list"])
+    assert result.exit_code == 0, result.output
+    assert captured["request"].kind == "get_recordings"
+
+
+def test_recordings_list_emits_json() -> None:
+    data = [{"recording_id": "r1", "name": "My Rec", "status": "active"}]
+    _captured, fake_query = _capture(IpcResponse(ok=True, data=data))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "list"])
+    assert result.exit_code == 0, result.output
+    assert "My Rec" in result.output
+    assert "r1" in result.output
+
+
+def test_recordings_get_sends_get_recording_request() -> None:
+    data = {"recording_id": "r1", "name": "Rec", "status": "stopped", "entries": []}
+    captured, fake_query = _capture(IpcResponse(ok=True, data=data))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "get", "r1"])
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.kind == "get_recording"
+    assert req.recording_id == "r1"
+
+
+def test_recordings_get_emits_json() -> None:
+    data = {"recording_id": "r1", "name": "Rec", "entries": []}
+    _captured, fake_query = _capture(IpcResponse(ok=True, data=data))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "get", "r1"])
+    assert result.exit_code == 0, result.output
+    assert "r1" in result.output
+    assert "entries" in result.output
+
+
+def test_recordings_list_exits_2_when_no_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """recordings list exits 2 when no running session is found."""
+    from frontprompt.ipc import pick_latest_session
+
+    monkeypatch.setattr("frontprompt.ipc.pick_latest_session", lambda: None)
+    monkeypatch.setattr("frontprompt.ipc.discover_sessions", lambda: [])
+    runner = CliRunner()
+    result = runner.invoke(main, ["recordings", "list"])
+    assert result.exit_code == 2
+
+
+def test_recordings_get_exits_3_on_error_response() -> None:
+    """recordings get exits 3 on ok=False IPC response (recording not found)."""
+    _captured, fake_query = _capture(IpcResponse(ok=False, error="recording not found: unknown-id"))
+    runner = CliRunner()
+    with (
+        patch("frontprompt.cli._resolve_session", return_value=_fake_session()),
+        patch("frontprompt.ipc.query", new=fake_query),
+    ):
+        result = runner.invoke(main, ["recordings", "get", "unknown-id"])
+    assert result.exit_code == 3
+    assert "recording not found" in result.output

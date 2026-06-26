@@ -42,7 +42,7 @@ _SCHEMAS_MODULE = "frontprompt.bridge.messages"
 
 #: Mirrors the latest Schema-history entry in CLAUDE.md. Informational only —
 #: the bridge build-session handshake keys off the per-build UUID, not this.
-_SCHEMA_VERSION = "0.7.0"
+_SCHEMA_VERSION = "0.8.0"
 
 
 def _log(msg: str) -> None:

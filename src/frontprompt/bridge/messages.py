@@ -13,8 +13,9 @@ Jede Envelope trägt ``schema_version: str`` — Breaking-Changes (Field
 rename/remove, kind rename) erfordern Bump + Codegen-Re-Run. Forward-compatible
 adds (neue *optional* Felder) ohne Bump zulässig.
 
-Aktuell: ``0.7.0`` (+ origin_session on Pick/Region/Relation).
-Vorherig: ``0.6.0`` (Region.rect page-absolute + Viewport-snapshot).
+Aktuell: ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
+Vorherig: ``0.7.0`` (+ origin_session on Pick/Region/Relation).
+            ``0.6.0`` (Region.rect page-absolute + Viewport-snapshot).
             ``0.2.0`` (Phase 1 + Inspector / Pick-Flow).
             ``0.1.0`` (Phase 1 panel-only Durchstich — siehe
 :func:`~frontprompt.state.state.StateSnapshot` docstring für migration-history).
@@ -62,6 +63,13 @@ OUTBOUND (Overlay → Python)
     :class:`RegionUpdatedRequested`         Region-note patchen.
     :class:`RegionSelectedRequested`        Region als active_region_id setzen (für PickDetails).
 
+**Recording-Mutations (Schema 0.8.0)**
+    :class:`RecordingStartRequested`            Neue Aufnahme beginnen.
+    :class:`RecordingStopRequested`             Aktive Aufnahme beenden.
+    :class:`RecordingRenameRequested`           Name/Beschreibung einer Aufnahme patchen.
+    :class:`RecordingSelectedRequested`         Aufnahme für Detail-Ansicht selektieren (oder deselect).
+    :class:`RecordedEventCapturedRequested`     Page-Event (click/pointerdown/keydown) zur aktiven Aufnahme.
+
 INBOUND (Python → Overlay)
 --------------------------
 
@@ -96,13 +104,13 @@ from pydantic import BaseModel, Field
 # Pick grows fields that should not be sent over the wire), introduce dedicated
 # WirePick / WireRegion / WireRelation DTOs and map from domain here. Until then,
 # do NOT add a translation layer — YAGNI.
-from frontprompt.state.state import PanelId, Pick, Region, Relation, RelationKind, StateSnapshot
+from frontprompt.state.state import PageEventEntry, PanelId, Pick, Region, Relation, RelationKind, StateSnapshot
 
 # ============================================================================
 # Schema-Version — bumped on breaking changes (Field add/remove, kind rename)
 # ============================================================================
 
-SCHEMA_VERSION: str = "0.7.0"
+SCHEMA_VERSION: str = "0.8.0"
 
 
 # ============================================================================
@@ -449,6 +457,102 @@ class RegionSelectedRequested(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Section G — Recording-Mutations (Schema 0.8.0, sub-plan 02)
+# ---------------------------------------------------------------------------
+
+
+class RecordingStartRequested(BaseModel):
+    """User klickte "Start Recording" im Recordings-Tab — neue Aufnahme beginnen.
+
+    **User-Trigger**: Click auf den Start-Button im :svelte:`RecordingsTab`.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.start_recording`
+    erstellt ein neues :class:`~frontprompt.state.state.Recording`-Aggregat
+    (uuid4 vom Client, status=active) + broadcastet snapshot.
+    **Atomicity**: eine Mutation (add-to-list + active_recording_id = new id).
+    """
+
+    kind: Literal["recording_start_requested"] = "recording_start_requested"
+    schema_version: str = SCHEMA_VERSION
+    name: str = Field(default="New Recording", description="Benutzer-vergebener Name der Aufnahme.")
+    description: str = Field(default="", description="Optionale Beschreibung der Aufnahme.")
+
+
+class RecordingStopRequested(BaseModel):
+    """User klickte "Stop Recording" — aktive Aufnahme beenden.
+
+    **User-Trigger**: Click auf den Stop-Button im :svelte:`RecordingsTab` oder
+    in der HUD-Toolbar während einer aktiven Aufnahme.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.stop_recording`
+    setzt ``recording.status = 'stopped'``, ``ended_at_ms``, und clears
+    ``active_recording_id``. Ein snapshot-broadcast.
+    **Atomicity**: eine Mutation — stop + active_recording_id = None.
+    """
+
+    kind: Literal["recording_stop_requested"] = "recording_stop_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der zu stoppenden aktiven Aufnahme.")
+
+
+class RecordingRenameRequested(BaseModel):
+    """User editierte Name/Beschreibung einer Aufnahme — Metadaten patchen.
+
+    **User-Trigger**: Click auf "Save" im Edit-Dialog im :svelte:`RecordingsTab`.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.rename_recording`
+    patcht ``name`` und ``description`` der Aufnahme. Beide Felder reisen
+    immer mit (kein partial-update-race). Kein-op + warning wenn id unbekannt.
+    """
+
+    kind: Literal["recording_rename_requested"] = "recording_rename_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der zu umbenennenden Aufnahme.")
+    name: str = Field(description="Neuer Name.")
+    description: str = Field(description="Neue Beschreibung (auch Leer-String gültig).")
+
+
+class RecordingSelectedRequested(BaseModel):
+    """User clickte eine Aufnahme in der Liste — Detail-Ansicht öffnen (oder deselect).
+
+    **User-Trigger**: Click auf ein :svelte:`RecordingItem` in :svelte:`RecordingsTab`
+    (oder click auf den aktuell selektierten Eintrag zum Deselektieren).
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.select_recording`
+    setzt ``recordings_state.active_detail_recording_id``. Wenn ``recording_id``
+    None: deselect (active_detail_recording_id = None, detail_recording = None).
+    """
+
+    kind: Literal["recording_selected_requested"] = "recording_selected_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str | None = Field(
+        description="UUID der zu selektierenden Aufnahme, oder None zum Deselektieren."
+    )
+
+
+class RecordedEventCapturedRequested(BaseModel):
+    """Overlay erfasste ein Page-Event während einer aktiven Aufnahme.
+
+    **User-Trigger**: click, pointerdown oder keydown auf ein nicht-HUD-chrome-
+    Element während ``recordings_state.active_recording_id`` gesetzt ist.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.append_timeline_entry`
+    weist ``seq`` (len(recording.entries)) zu und appended den
+    :class:`~frontprompt.state.state.PageEventEntry` zur Aufnahme.
+    **seq-Semantik**: ``entry`` trägt KEIN ``seq`` auf dem Wire — Python
+    stampft seq Python-seitig als ``len(recording.entries)`` (reviewer Q1).
+    Das UNIQUE(recording_id, seq)-Constraint kann so nie verletzt werden
+    unabhängig von Message-Arrival-Reihenfolge.
+    **HUD-chrome-Filter**: isHudChrome=true-Events werden client-seitig
+    gefiltert und nie in diese Envelope gepackt.
+    """
+
+    kind: Literal["recorded_event_captured_requested"] = "recorded_event_captured_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der Aufnahme, zu der der Event gehört.")
+    entry: PageEventEntry = Field(
+        description="Page-Event-Payload — ohne ``seq`` (wird Python-seitig vergeben). "
+        "Nur page_event-Events (click/pointerdown/keydown) — nav-Events werden "
+        "Python-seitig direkt als NavigationEntry appended (kein Wire-Event)."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union — Outbound
 # ---------------------------------------------------------------------------
 
@@ -470,7 +574,12 @@ OutboundMessage = Annotated[
     | RegionCreatedRequested
     | RegionDeletedRequested
     | RegionUpdatedRequested
-    | RegionSelectedRequested,
+    | RegionSelectedRequested
+    | RecordingStartRequested
+    | RecordingStopRequested
+    | RecordingRenameRequested
+    | RecordingSelectedRequested
+    | RecordedEventCapturedRequested,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Overlay → Python messages. Pydantic routet via ``kind``.
@@ -583,6 +692,12 @@ __codegen_roots__ = [
     "RegionDeletedRequested",
     "RegionUpdatedRequested",
     "RegionSelectedRequested",
+    # Outbound — Recording-Mutations (Schema 0.8.0)
+    "RecordingStartRequested",
+    "RecordingStopRequested",
+    "RecordingRenameRequested",
+    "RecordingSelectedRequested",
+    "RecordedEventCapturedRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",
@@ -615,6 +730,12 @@ __all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector 
     "RegionDeletedRequested",
     "RegionUpdatedRequested",
     "RegionSelectedRequested",
+    # Outbound — Recording-Mutations (Schema 0.8.0)
+    "RecordingStartRequested",
+    "RecordingStopRequested",
+    "RecordingRenameRequested",
+    "RecordingSelectedRequested",
+    "RecordedEventCapturedRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",

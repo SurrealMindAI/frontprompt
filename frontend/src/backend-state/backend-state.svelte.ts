@@ -15,10 +15,12 @@
 import type { StateSnapshot } from '../_generated/state';
 import { InspectorState } from './inspector-state.svelte';
 import { PanelState } from './panel-state.svelte';
+import { RecordingState } from './recording-state.svelte';
 
 class BackendState {
   panel = new PanelState();
   inspector = new InspectorState();
+  recordings = new RecordingState();
   // future: annotations = new AnnotationState();
 
   /**
@@ -29,6 +31,7 @@ class BackendState {
   hydrate(snap: StateSnapshot): void {
     if (snap.panel_state) this.panel.hydrate(snap.panel_state);
     if (snap.inspector_state) this.inspector.hydrate(snap.inspector_state);
+    if (snap.recordings_state) this.recordings.hydrate(snap.recordings_state);
     // future: if (snap.annotations) this.annotations.hydrate(snap.annotations);
   }
 }

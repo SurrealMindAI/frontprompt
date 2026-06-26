@@ -9,6 +9,7 @@ Subcommands:
     frontprompt sessions list   — Listet laufende show-Sessions (+ prune).
     frontprompt ping|state      — Liveness / vollen StateSnapshot einer Session lesen.
     frontprompt picks list|get  — Pick-flow-state lesen.
+    frontprompt recordings list|get — Recording-state lesen.
     frontprompt navigate <url>  — Session zu URL navigieren.
     frontprompt eval <js>       — JavaScript in der Session ausführen (Debug).
     frontprompt page-info       — Page-Metadaten der Session.
@@ -251,6 +252,30 @@ def picks_get_command(pick_id: str, session_id: str | None) -> None:
         _emit_json(response.data)
 
     anyio.run(_run)
+
+
+@main.group("recordings")
+def recordings_group() -> None:
+    """Inspect Recording state of a running `frontprompt show`."""
+
+
+@recordings_group.command("list")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_list_command(session_id: str | None) -> None:
+    """Liste alle Recordings der ausgewählten session als JSON-array."""
+    from frontprompt.ipc import GetRecordingsRequest
+
+    _emit_json(_query_session(session_id, GetRecordingsRequest()))
+
+
+@recordings_group.command("get")
+@click.argument("recording_id")
+@click.option("--session", "session_id", default=None, help="Spezifische session-id; sonst latest.")
+def recordings_get_command(recording_id: str, session_id: str | None) -> None:
+    """Drucke vollständiges Recording mit Timeline by ID."""
+    from frontprompt.ipc import GetRecordingRequest
+
+    _emit_json(_query_session(session_id, GetRecordingRequest(recording_id=recording_id)))
 
 
 @main.command("ping")

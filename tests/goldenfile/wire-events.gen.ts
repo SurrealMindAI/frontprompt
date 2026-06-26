@@ -2,177 +2,426 @@
 /* AUTO-GENERATED — pydantic-zod-codegen pipeline output. DO NOT HAND-EDIT. */
 import { z } from "zod";
 
+export type RecordingStatus = "active" | "stopped";
+
+export const RecordingStatus = z.union([z.literal("active"), z.literal("stopped")]);
+
+export type TimelineEntryKind = "page_event" | "pick_ref" | "region_ref" | "relation_ref" | "navigation";
+
+export const TimelineEntryKind = z.union([z.literal("page_event"), z.literal("pick_ref"), z.literal("region_ref"), z.literal("relation_ref"), z.literal("navigation")]);
+
 /**
- * Äußerer Container für alle Daemon→Tab Wire-Events (Channel 2).
+ * Eine erfasste Seiten-Interaktion (click, pointerdown, keydown).
  *
- * Enthält Daemon-Metadaten (`daemon_id`, `schema_version`,
- * `emitted_at_monotonic_ns`) plus den discriminated-union `payload`.
- *
- * Wire-Serialisierung: `model_dump(mode='json')` → JSON-RPC params-Objekt.
- * Wire-Deserialisierung: `EventEnvelope.model_validate(raw_dict)`.
+ * ``wheel``/``scroll`` sind bewusst ausgeschlossen (wire-economy: bis zu 60
+ * Events/s würden den expose_function-Transport überlasten).
+ * HUD-chrome-Events (isHudChrome=true) sind excluded — die eigenen Toolbar-
+ * Clicks dürfen die Aufnahme nicht verschmutzen.
  */
-export interface EventEnvelope {
-  schema_version: 1;
-  daemon_id: string;
-  emitted_at_monotonic_ns: number;
-  payload: SessionStarted | PageNavigated | PickAcknowledged | AnnotationPersisted;
+export interface PageEventEntry {
+  kind?: "page_event";
+  /**
+   * Monotoner Sequence-Counter, Python-seitig gestempelt.
+   */
+  seq: number;
+  /**
+   * Epoch ms zum Capture-Zeitpunkt.
+   */
+  timestamp_ms: number;
+  /**
+   * Event-Typ — nur durable relevante Interactions (wheel/scroll excluded).
+   */
+  event_type: "click" | "pointerdown" | "keydown";
+  /**
+   * tag#id.class descriptor des Zielelements.
+   */
+  target: string;
+  /**
+   * Tag-Sequenz root→Element (DOM-Pfad).
+   */
+  target_path?: string[];
+  /**
+   * Ob event.preventDefault() aufgerufen wurde.
+   */
+  default_prevented: boolean;
+  /**
+   * keydown only — gedrückte Taste.
+   */
+  key?: string | null;
 }
+
+export const PageEventEntry = z.object({
+  kind: z.literal("page_event").default("page_event"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
+  event_type: z.enum(["click", "pointerdown", "keydown"]),
+  target: z.string(),
+  target_path: z.array(z.string()).optional(),
+  default_prevented: z.boolean(),
+  key: z.string().nullable().optional().default(null),
+});
+
 /**
- * Daemon→Tab: eine neue PageSession wurde im Daemon geöffnet.
+ * Referenz auf einen Pick, der während dieser Aufnahme erstellt wurde.
  *
- * Wird emittiert wenn der Programmatic-Executor-BC eine neue PageSession
- * initialisiert (z.B. durch MCP navigate-Tool oder Scrapling-Substrate-Boot).
+ * FK-Dehydration (ADR-012): ``pick_id`` ist ein bare UUID-Fremdschlüssel,
+ * kein eingebettetes Objekt.
  */
-export interface SessionStarted {
-  type: "session_started";
-  page_session_id: string;
-  dns_domain: string;
-  started_at_monotonic_ns: number;
-}
-/**
- * Daemon→Tab: die PageSession hat eine Navigation vollzogen.
- *
- * Emittiert nach jeder erfolgreichen Navigation (including forward/back).
- * dom_snapshot_hash ermöglicht dem Frontend Stale-DOM-Detection.
- */
-export interface PageNavigated {
-  type: "page_navigated";
-  page_session_id: string;
-  url: string;
-  dom_snapshot_hash: string;
-  navigated_at_monotonic_ns: number;
-}
-/**
- * Daemon→Tab: ein Pick wurde vom Interactive-Surface-BC akzeptiert.
- *
- * Der Daemon bestätigt dem Tab, dass der PickRequested-Mutation verarbeitet
- * wurde und der Pick persistiert ist.
- */
-export interface PickAcknowledged {
-  type: "pick_acknowledged";
+export interface PickRefEntry {
+  kind?: "pick_ref";
+  seq: number;
+  timestamp_ms: number;
+  /**
+   * FK → Pick.pick_id (client-generated uuid4).
+   */
   pick_id: string;
-  pointing_session_id: string;
-  acknowledged_at_monotonic_ns: number;
-}
-/**
- * Daemon→Tab: ein AnnotationDraft wurde vom Daemon persistiert.
- *
- * Der Daemon bestätigt dem Tab, dass der AnnotationDraftSubmitted-Mutation
- * verarbeitet und die Annotation im PointingSession-Aggregate gespeichert ist.
- */
-export interface AnnotationPersisted {
-  type: "annotation_persisted";
-  annotation_id: string;
-  pointing_session_id: string;
-  persisted_at_monotonic_ns: number;
 }
 
-export const SessionStarted = z.object({
-  type: z.literal("session_started"),
-  page_session_id: z.string(),
-  dns_domain: z.string(),
-  started_at_monotonic_ns: z.number().int(),
-});
-
-export const PageNavigated = z.object({
-  type: z.literal("page_navigated"),
-  page_session_id: z.string(),
-  url: z.string(),
-  dom_snapshot_hash: z.string(),
-  navigated_at_monotonic_ns: z.number().int(),
-});
-
-export const PickAcknowledged = z.object({
-  type: z.literal("pick_acknowledged"),
+export const PickRefEntry = z.object({
+  kind: z.literal("pick_ref").default("pick_ref"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
   pick_id: z.string(),
-  pointing_session_id: z.string(),
-  acknowledged_at_monotonic_ns: z.number().int(),
-});
-
-export const AnnotationPersisted = z.object({
-  type: z.literal("annotation_persisted"),
-  annotation_id: z.string(),
-  pointing_session_id: z.string(),
-  persisted_at_monotonic_ns: z.number().int(),
-});
-
-export const EventEnvelope = z.object({
-  schema_version: z.literal(1),
-  daemon_id: z.string(),
-  emitted_at_monotonic_ns: z.number().int(),
-  payload: z.discriminatedUnion("type", [SessionStarted, PageNavigated, PickAcknowledged, AnnotationPersisted]),
 });
 
 /**
- * Äußerer Container für alle Tab→Daemon Wire-Mutations (Channel 3).
- *
- * Enthält Empfangs-Metadaten (`schema_version`, `received_at_monotonic_ns`)
- * plus den discriminated-union `payload`.
- *
- * Kein `daemon_id` hier — der Daemon empfängt die Mutation (er sendet sie
- * nicht). `received_at_monotonic_ns` wird vom HTTP-Endpoint beim
- * Deserialisieren gesetzt (Aufgabe des Endpoints, nicht des Envelope-Models).
- *
- * Wire-Deserialisierung: `MutationEnvelope.model_validate(raw_dict)`.
+ * Referenz auf eine Region, die während dieser Aufnahme gezeichnet wurde.
  */
-export interface MutationEnvelope {
-  schema_version: 1;
-  received_at_monotonic_ns: number;
-  payload: PickRequested | AnnotationDraftSubmitted;
-}
-/**
- * Tab→Daemon: Tab fordert einen Pick-Vorgang vom Daemon an.
- *
- * Der Daemon startet daraufhin den interaktiven Pick-Prozess:
- * eine neue Pick-Entity im PointingSession-Aggregate anlegen,
- * DOM-Capture via Scrapling triggern.
- */
-export interface PickRequested {
-  type: "pick_requested";
-  pointing_session_id: string;
-  selector: string;
-  score: string;
-  idempotency_key: string;
-}
-/**
- * Tab→Daemon: Tab reicht einen Annotations-Draft ein.
- *
- * Der Daemon validiert via ACL, persistiert die Annotation
- * im PointingSession-Aggregate, und emittiert AnnotationPersisted.
- *
- * Optionale dehydrated IDs (dehydrierte Identifier-Felder):
- * Alle None wenn der Tab keine Programmatic-Executor-Informationen hatte.
- */
-export interface AnnotationDraftSubmitted {
-  type: "annotation_draft_submitted";
-  pointing_session_id: string;
-  content: string;
-  idempotency_key: string;
-  page_session_id?: string | null;
-  interaction_flow_step_id?: string | null;
-  dom_snapshot_hash?: string | null;
+export interface RegionRefEntry {
+  kind?: "region_ref";
+  seq: number;
+  timestamp_ms: number;
+  /**
+   * FK → Region.region_id.
+   */
+  region_id: string;
 }
 
-export const PickRequested = z.object({
-  type: z.literal("pick_requested"),
-  pointing_session_id: z.string(),
-  selector: z.string(),
-  score: z.string(),
-  idempotency_key: z.string(),
+export const RegionRefEntry = z.object({
+  kind: z.literal("region_ref").default("region_ref"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
+  region_id: z.string(),
 });
 
-export const AnnotationDraftSubmitted = z.object({
-  type: z.literal("annotation_draft_submitted"),
-  pointing_session_id: z.string(),
-  content: z.string(),
-  idempotency_key: z.string(),
-  page_session_id: z.string().nullable().optional().default(null),
-  interaction_flow_step_id: z.string().nullable().optional().default(null),
-  dom_snapshot_hash: z.string().nullable().optional().default(null),
+/**
+ * Referenz auf eine Relation, die während dieser Aufnahme erstellt wurde.
+ */
+export interface RelationRefEntry {
+  kind?: "relation_ref";
+  seq: number;
+  timestamp_ms: number;
+  /**
+   * FK → Relation.relation_id.
+   */
+  relation_id: string;
+}
+
+export const RelationRefEntry = z.object({
+  kind: z.literal("relation_ref").default("relation_ref"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
+  relation_id: z.string(),
 });
 
-export const MutationEnvelope = z.object({
-  schema_version: z.literal(1),
-  received_at_monotonic_ns: z.number().int(),
-  payload: z.discriminatedUnion("type", [PickRequested, AnnotationDraftSubmitted]),
+/**
+ * Eine Page-Navigation, die vom Python-Session erfasst wurde.
+ *
+ * Cross-origin-Survival: Aufnahmen laufen über Navigationen hinweg —
+ * NavigationEntry dokumentiert den Sprung für spätere Replay-Rekonstruktion.
+ */
+export interface NavigationEntry {
+  kind?: "navigation";
+  seq: number;
+  timestamp_ms: number;
+  /**
+   * URL vor der Navigation.
+   */
+  from_url: string;
+  /**
+   * URL nach der Navigation.
+   */
+  to_url: string;
+}
+
+export const NavigationEntry = z.object({
+  kind: z.literal("navigation").default("navigation"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
+  from_url: z.string(),
+  to_url: z.string(),
+});
+
+export type TimelineEntry = PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry;
+
+export const TimelineEntry = z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry]);
+
+/**
+ * Leichtgewichtige Zusammenfassung eines Recordings — ohne ``entries``.
+ *
+ * Enthalten in jedem StateSnapshot-Broadcast (``RecordingsState.recordings``).
+ * Wird im Recordings-Tab und im MCP-Listing-Tool verwendet.
+ */
+export interface RecordingMeta {
+  /**
+   * Client-generated uuid4.
+   */
+  recording_id: string;
+  /**
+   * User-vergebener Name.
+   */
+  name: string;
+  /**
+   * Optionale Beschreibung.
+   */
+  description?: string;
+  status: "active" | "stopped";
+  /**
+   * Client-clock epoch ms zum Start.
+   */
+  started_at_ms: number;
+  /**
+   * None solange aktiv.
+   */
+  ended_at_ms?: number | null;
+  /**
+   * Anzahl Timeline-Einträge (≥0).
+   */
+  entry_count: number;
+}
+
+export const RecordingMeta = z.object({
+  recording_id: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  status: z.enum(["active", "stopped"]),
+  started_at_ms: z.number().int(),
+  ended_at_ms: z.number().int().nullable().optional().default(null),
+  entry_count: z.number().int().gte(0),
+});
+
+/**
+ * Vollständiges Recording-Aggregat mit Timeline-Einträgen.
+ *
+ * Nicht in jedem StateSnapshot-Broadcast enthalten — nur in
+ * ``RecordingsState.detail_recording`` wenn ``active_detail_recording_id``
+ * gesetzt ist. ``entries`` sind append-only, geordnet nach ``seq``.
+ *
+ * ``origin_session`` folgt der steal-on-mutate-Provenance-Convention
+ * von Pick/Region/Relation (sqlite-persistence).
+ */
+export interface Recording {
+  /**
+   * Client-generated uuid4 — Identität (keine UNIQUE auf name).
+   */
+  recording_id: string;
+  name: string;
+  description?: string;
+  status: "active" | "stopped";
+  /**
+   * Client-clock epoch ms.
+   */
+  started_at_ms: number;
+  ended_at_ms?: number | null;
+  /**
+   * Timeline-Einträge append-only, geordnet nach seq.
+   */
+  entries?: (PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry)[];
+  /**
+   * session_id of the session that last mutated this entity (steal-on-mutate provenance via sqlite-persistence). None until first persisted.
+   */
+  origin_session?: string | null;
+}
+
+export const Recording = z.object({
+  recording_id: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  status: z.enum(["active", "stopped"]),
+  started_at_ms: z.number().int(),
+  ended_at_ms: z.number().int().nullable().optional().default(null),
+  entries: z.array(z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry])).optional(),
+  origin_session: z.string().nullable().optional().default(null),
+});
+
+/**
+ * Recording-feature Backend-State — Teil des StateSnapshot.
+ *
+ * ``active_recording_id`` überlebt cross-origin-Navigationen (backendState).
+ * ``active_detail_recording_id`` ist ebenfalls backendState (analog zu
+ * ``active_pick_id`` / ``active_region_id`` — right-panel Detail-Selektion
+ * persistiert nach Nav). ADR-018 verbietet nur ephemere UI-States (hover,
+ * drag), nicht durable Selektionszustände.
+ *
+ * ``detail_recording`` wird nur befüllt wenn ``active_detail_recording_id``
+ * gesetzt ist — vollständige Timeline inklusive. Nicht in jedem Broadcast
+ * enthalten wenn None.
+ */
+export interface RecordingsState {
+  /**
+   * ID der laufenden Aufnahme, None = nicht aufnehmend.
+   */
+  active_recording_id?: string | null;
+  /**
+   * Lightweight Zusammenfassungen aller Recordings.
+   */
+  recordings?: RecordingMeta[];
+  /**
+   * ID der im right-panel angezeigten Aufnahme (detail-Ansicht).
+   */
+  active_detail_recording_id?: string | null;
+  /**
+   * Vollständiges Recording mit Timeline (nur wenn active_detail_recording_id gesetzt).
+   */
+  detail_recording?: Recording | null;
+}
+
+export const RecordingsState = z.object({
+  active_recording_id: z.string().nullable().optional().default(null),
+  recordings: z.array(RecordingMeta).optional(),
+  active_detail_recording_id: z.string().nullable().optional().default(null),
+  detail_recording: Recording.nullable().optional().default(null),
+});
+
+/**
+ * User klickte "Start Recording" im Recordings-Tab — neue Aufnahme beginnen.
+ *
+ * **User-Trigger**: Click auf den Start-Button im :svelte:`RecordingsTab`.
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.start_recording`
+ * erstellt ein neues :class:`~frontprompt.state.state.Recording`-Aggregat
+ * (uuid4 vom Client, status=active) + broadcastet snapshot.
+ * **Atomicity**: eine Mutation (add-to-list + active_recording_id = new id).
+ */
+export interface RecordingStartRequested {
+  kind?: "recording_start_requested";
+  schema_version?: string;
+  /**
+   * Benutzer-vergebener Name der Aufnahme.
+   */
+  name?: string;
+  /**
+   * Optionale Beschreibung der Aufnahme.
+   */
+  description?: string;
+}
+
+export const RecordingStartRequested = z.object({
+  kind: z.literal("recording_start_requested").default("recording_start_requested"),
+  schema_version: z.string().default("0.8.0"),
+  name: z.string().default("New Recording"),
+  description: z.string().default(""),
+});
+
+/**
+ * User klickte "Stop Recording" — aktive Aufnahme beenden.
+ *
+ * **User-Trigger**: Click auf den Stop-Button im :svelte:`RecordingsTab` oder
+ * in der HUD-Toolbar während einer aktiven Aufnahme.
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.stop_recording`
+ * setzt ``recording.status = 'stopped'``, ``ended_at_ms``, und clears
+ * ``active_recording_id``. Ein snapshot-broadcast.
+ * **Atomicity**: eine Mutation — stop + active_recording_id = None.
+ */
+export interface RecordingStopRequested {
+  kind?: "recording_stop_requested";
+  schema_version?: string;
+  /**
+   * UUID der zu stoppenden aktiven Aufnahme.
+   */
+  recording_id: string;
+}
+
+export const RecordingStopRequested = z.object({
+  kind: z.literal("recording_stop_requested").default("recording_stop_requested"),
+  schema_version: z.string().default("0.8.0"),
+  recording_id: z.string(),
+});
+
+/**
+ * User editierte Name/Beschreibung einer Aufnahme — Metadaten patchen.
+ *
+ * **User-Trigger**: Click auf "Save" im Edit-Dialog im :svelte:`RecordingsTab`.
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.rename_recording`
+ * patcht ``name`` und ``description`` der Aufnahme. Beide Felder reisen
+ * immer mit (kein partial-update-race). Kein-op + warning wenn id unbekannt.
+ */
+export interface RecordingRenameRequested {
+  kind?: "recording_rename_requested";
+  schema_version?: string;
+  /**
+   * UUID der zu umbenennenden Aufnahme.
+   */
+  recording_id: string;
+  /**
+   * Neuer Name.
+   */
+  name: string;
+  /**
+   * Neue Beschreibung (auch Leer-String gültig).
+   */
+  description: string;
+}
+
+export const RecordingRenameRequested = z.object({
+  kind: z.literal("recording_rename_requested").default("recording_rename_requested"),
+  schema_version: z.string().default("0.8.0"),
+  recording_id: z.string(),
+  name: z.string(),
+  description: z.string(),
+});
+
+/**
+ * User clickte eine Aufnahme in der Liste — Detail-Ansicht öffnen (oder deselect).
+ *
+ * **User-Trigger**: Click auf ein :svelte:`RecordingItem` in :svelte:`RecordingsTab`
+ * (oder click auf den aktuell selektierten Eintrag zum Deselektieren).
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.select_recording`
+ * setzt ``recordings_state.active_detail_recording_id``. Wenn ``recording_id``
+ * None: deselect (active_detail_recording_id = None, detail_recording = None).
+ */
+export interface RecordingSelectedRequested {
+  kind?: "recording_selected_requested";
+  schema_version?: string;
+  /**
+   * UUID der zu selektierenden Aufnahme, oder None zum Deselektieren.
+   */
+  recording_id: string | null;
+}
+
+export const RecordingSelectedRequested = z.object({
+  kind: z.literal("recording_selected_requested").default("recording_selected_requested"),
+  schema_version: z.string().default("0.8.0"),
+  recording_id: z.string().nullable(),
+});
+
+/**
+ * Overlay erfasste ein Page-Event während einer aktiven Aufnahme.
+ *
+ * **User-Trigger**: click, pointerdown oder keydown auf ein nicht-HUD-chrome-
+ * Element während ``recordings_state.active_recording_id`` gesetzt ist.
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.append_timeline_entry`
+ * weist ``seq`` (len(recording.entries)) zu und appended den
+ * :class:`~frontprompt.state.state.PageEventEntry` zur Aufnahme.
+ * **seq-Semantik**: ``entry`` trägt KEIN ``seq`` auf dem Wire — Python
+ * stampft seq Python-seitig als ``len(recording.entries)`` (reviewer Q1).
+ * Das UNIQUE(recording_id, seq)-Constraint kann so nie verletzt werden
+ * unabhängig von Message-Arrival-Reihenfolge.
+ * **HUD-chrome-Filter**: isHudChrome=true-Events werden client-seitig
+ * gefiltert und nie in diese Envelope gepackt.
+ */
+export interface RecordedEventCapturedRequested {
+  kind?: "recorded_event_captured_requested";
+  schema_version?: string;
+  /**
+   * UUID der Aufnahme, zu der der Event gehört.
+   */
+  recording_id: string;
+  entry: PageEventEntry;
+}
+
+export const RecordedEventCapturedRequested = z.object({
+  kind: z.literal("recorded_event_captured_requested").default("recorded_event_captured_requested"),
+  schema_version: z.string().default("0.8.0"),
+  recording_id: z.string(),
+  entry: PageEventEntry,
 });

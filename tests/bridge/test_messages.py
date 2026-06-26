@@ -46,9 +46,9 @@ _OUTBOUND = TypeAdapter(OutboundMessage)
 # ---------------------------------------------------------------------------
 
 
-def test_schema_version_bumped_to_0_7_0() -> None:
-    """Schema 0.7.0 — + origin_session on Pick/Region/Relation (persistence provenance)."""
-    assert SCHEMA_VERSION == "0.7.0"
+def test_schema_version_bumped_to_0_8_0() -> None:
+    """Schema 0.8.0 — + Recording-feature (sub-plan 02); previously 0.7.0 + origin_session."""
+    assert SCHEMA_VERSION == "0.8.0"
 
 
 # ---------------------------------------------------------------------------

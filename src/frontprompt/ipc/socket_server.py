@@ -58,6 +58,8 @@ from frontprompt.ipc.protocol import (
     GetPageOutlineRequest,
     GetPickRequest,
     GetPicksRequest,
+    GetRecordingRequest,
+    GetRecordingsRequest,
     GetSnapshotRequest,
     GetStateRequest,
     GetStateSummaryRequest,
@@ -151,6 +153,18 @@ async def _dispatch(
             if p.comment
         ]
         return IpcResponse(ok=True, data=entries)
+
+    if isinstance(request, GetRecordingsRequest):
+        # Return lightweight RecordingMeta list — no full timeline payloads.
+        metas = state_manager.list_recordings_meta()
+        return IpcResponse(ok=True, data=[m.model_dump(mode="json") for m in metas])
+
+    if isinstance(request, GetRecordingRequest):
+        # Return full Recording with timeline entries, or 404-style error.
+        recording = state_manager.get_recording(request.recording_id)
+        if recording is None:
+            return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
+        return IpcResponse(ok=True, data=recording.model_dump(mode="json"))
 
     snap = state_manager.snapshot()
 

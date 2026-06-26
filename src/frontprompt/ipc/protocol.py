@@ -27,7 +27,8 @@ from frontprompt.analysis.types import DomPatchOp, FindQuery
 #:          + screenshot return_mode + pick_by_text rewire
 #: 0.5.0 — additive: get_state_summary (navigable counts+grouping overview)
 #: 0.6.0 — additive: get_comments (compact agent-readable annotation surface)
-IPC_SCHEMA_VERSION: str = "0.6.0"
+#: 0.7.0 — additive: get_recordings (list RecordingMeta) + get_recording (full Recording)
+IPC_SCHEMA_VERSION: str = "0.7.0"
 
 
 # ----------------------------------------------------------------------------
@@ -465,6 +466,36 @@ class DomPatchRequest(BaseModel):
     operations: list[DomPatchOp] = Field(min_length=1)
 
 
+# ── Recording read-side (Schema 0.7.0) ───────────────────────────────────────
+
+
+class GetRecordingsRequest(BaseModel):
+    """Return list of RecordingMeta for all recordings in this session (Schema 0.7.0).
+
+    Returns the lightweight RecordingMeta list — without full entry timelines.
+    Use GetRecordingRequest to fetch a full Recording with its entries.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["get_recordings"] = "get_recordings"
+    schema_version: str = IPC_SCHEMA_VERSION
+
+
+class GetRecordingRequest(BaseModel):
+    """Return a specific recording with its full timeline (Schema 0.7.0).
+
+    Returns the full Recording object including all TimelineEntry items.
+    Returns {ok: false, error: "recording not found: <id>"} when the id is unknown.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["get_recording"] = "get_recording"
+    schema_version: str = IPC_SCHEMA_VERSION
+    recording_id: str = Field(min_length=1, description="UUID4 of the recording to retrieve.")
+
+
 IpcRequest = Annotated[
     PingRequest
     | GetSnapshotRequest
@@ -498,7 +529,10 @@ IpcRequest = Annotated[
     | InspectElementsRequest
     | PickByXpathRequest
     | EvalJsRequest
-    | DomPatchRequest,
+    | DomPatchRequest
+    # ── Schema 0.7.0 ──
+    | GetRecordingsRequest
+    | GetRecordingRequest,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller IPC-requests. Server routet via ``kind``."""
@@ -753,6 +787,8 @@ __all__ = [
     "GetPageOutlineRequest",
     "GetPickRequest",
     "GetPicksRequest",
+    "GetRecordingRequest",
+    "GetRecordingsRequest",
     "GetSnapshotRequest",
     "GetStateRequest",
     "GetStateSummaryRequest",

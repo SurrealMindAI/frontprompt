@@ -36,6 +36,11 @@ import type {
   PickCommentUpdatedRequested,
   PickDeletedRequested,
   PickSelectedRequested,
+  RecordedEventCapturedRequested,
+  RecordingRenameRequested,
+  RecordingSelectedRequested,
+  RecordingStartRequested,
+  RecordingStopRequested,
   RegionCreatedRequested,
   RegionDeletedRequested,
   RegionSelectedRequested,
@@ -71,7 +76,12 @@ export type OutboundMessage =
   | RegionCreatedRequested
   | RegionDeletedRequested
   | RegionUpdatedRequested
-  | RegionSelectedRequested;
+  | RegionSelectedRequested
+  | RecordingStartRequested
+  | RecordingStopRequested
+  | RecordingRenameRequested
+  | RecordingSelectedRequested
+  | RecordedEventCapturedRequested;
 
 /** Tagged union aller Inbound-Messages (Python → Overlay). */
 export type InboundMessage = Heartbeat | StateSnapshotMessage;
