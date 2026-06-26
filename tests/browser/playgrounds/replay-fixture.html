@@ -1,0 +1,65 @@
+<!--
+  replay-fixture.html — Replay e2e playground: click, type, observable DOM state changes.
+  Consumed by: tests/browser/test_replay_e2e.py
+
+  Stable DOM hooks:
+    h1#heading             — heading with known text (assertion target for selector_exists / text_equals)
+    button#btn-click       — click target; sets #click-result.data-clicked="true" on click
+    div#click-result       — observable result element; text="clicked!" after click
+    input#input-text       — keydown/type target
+    p#status               — page identity marker for navigation assertions
+
+  Design:
+    - #click-result starts with text "not clicked" + no data-clicked attribute
+    - After one click: text="clicked!" + data-clicked="true"
+    - This allows replay tests to observe that the replay actually re-drove the page
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Replay Fixture</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    h1 { color: #333; }
+    button { margin: 4px; padding: 8px 16px; cursor: pointer; }
+    input { display: block; margin: 4px 0; padding: 6px; }
+    #click-result {
+      margin: 8px 0;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f9f9f9;
+      min-width: 120px;
+      display: inline-block;
+    }
+    #click-result.clicked {
+      background: #d4edda;
+      border-color: #28a745;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="heading">Replay Fixture Heading</h1>
+  <p id="status">replay-fixture page</p>
+
+  <section id="buttons-section">
+    <button id="btn-click">Click Me</button>
+    <div id="click-result">not clicked</div>
+  </section>
+
+  <section id="inputs-section">
+    <input id="input-text" type="text" placeholder="Type here" />
+  </section>
+
+  <script>
+    const btn = document.getElementById('btn-click');
+    const result = document.getElementById('click-result');
+
+    btn.addEventListener('click', () => {
+      result.textContent = 'clicked!';
+      result.setAttribute('data-clicked', 'true');
+      result.classList.add('clicked');
+    });
+  </script>
+</body>
+</html>

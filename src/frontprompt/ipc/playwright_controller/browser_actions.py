@@ -127,14 +127,21 @@ async def _apply_dom_op(handle: ElementHandle, op: dict[str, Any]) -> None:
 
 
 async def click_selector(page: Page, selector: str) -> dict[str, Any]:
-    """Click an element by CSS selector.
+    """Click an element by CSS selector via JavaScript element.click().
+
+    Uses ``page.eval_on_selector(selector, "el => el.click()")`` to fire the click
+    event directly on the matched DOM element, bypassing Playwright's coordinate-based
+    hit-testing. This is correct for replay: the user's original click is re-dispatched
+    on the exact element regardless of any visual overlay (e.g. the frontprompt HUD
+    ``<fp-overlay>`` covering the element). Coordinate-based dispatch (``page.click()``)
+    would land on the overlay instead of the target element.
 
     Always returns — never raises. Returns ``{"ok": True}`` on success or
     ``{"ok": False, "error": str(exc)}`` on PlaywrightError.
     """
     _LOG.info("click_selector.start", selector=selector)
     try:
-        await page.click(selector)
+        await page.eval_on_selector(selector, "el => el.click()")
         _LOG.info("click_selector.done", ok=True)
         return {"ok": True}
     except PlaywrightError as exc:

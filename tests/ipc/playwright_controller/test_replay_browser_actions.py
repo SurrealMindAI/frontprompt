@@ -12,28 +12,33 @@ import pytest
 
 
 @pytest.mark.anyio
-async def test_click_selector_calls_page_click_once() -> None:
-    """click_selector(page, selector) calls page.click(selector) exactly once."""
+async def test_click_selector_calls_eval_on_selector() -> None:
+    """click_selector(page, selector) calls page.eval_on_selector(selector, 'el => el.click()').
+
+    Uses JS dispatch (eval_on_selector) instead of coordinate-based page.click() so that
+    replay fires the click directly on the matched element regardless of any visual overlay
+    (e.g. the frontprompt HUD <fp-overlay> covering the element).
+    """
     from frontprompt.ipc.playwright_controller.browser_actions import click_selector
 
     page = AsyncMock()
-    page.click = AsyncMock(return_value=None)
+    page.eval_on_selector = AsyncMock(return_value=None)
 
     result = await click_selector(page, "button#submit")
 
-    page.click.assert_called_once_with("button#submit")
+    page.eval_on_selector.assert_called_once_with("button#submit", "el => el.click()")
     assert result == {"ok": True}
 
 
 @pytest.mark.anyio
 async def test_click_selector_returns_error_on_playwright_error() -> None:
-    """click_selector returns {ok: False, error: ...} when page.click raises."""
+    """click_selector returns {ok: False, error: ...} when page.eval_on_selector raises."""
     from playwright.async_api import Error as PlaywrightError
 
     from frontprompt.ipc.playwright_controller.browser_actions import click_selector
 
     page = AsyncMock()
-    page.click = AsyncMock(side_effect=PlaywrightError("element not found"))
+    page.eval_on_selector = AsyncMock(side_effect=PlaywrightError("element not found"))
 
     result = await click_selector(page, "button#missing")
 
