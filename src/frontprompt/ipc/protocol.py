@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from frontprompt.analysis.types import DomPatchOp, FindQuery
+from frontprompt.state.state import AssertionComparator, AssertionType, ReplayStatus
 
 #: Schema-version dieses IPC-Protokolls.
 #: 0.1.0 — initial read-only protocol (ping, get_snapshot, get_picks, get_pick)
@@ -28,7 +29,9 @@ from frontprompt.analysis.types import DomPatchOp, FindQuery
 #: 0.5.0 — additive: get_state_summary (navigable counts+grouping overview)
 #: 0.6.0 — additive: get_comments (compact agent-readable annotation surface)
 #: 0.7.0 — additive: get_recordings (list RecordingMeta) + get_recording (full Recording)
-IPC_SCHEMA_VERSION: str = "0.7.0"
+#: 0.8.0 — additive: start_recording + stop_recording + run_replay + get_replay_report
+#:          + list_replay_reports + add_assertion (replay-bundle write-side, sub-plan 02)
+IPC_SCHEMA_VERSION: str = "0.8.0"
 
 
 # ----------------------------------------------------------------------------
@@ -496,6 +499,138 @@ class GetRecordingRequest(BaseModel):
     recording_id: str = Field(min_length=1, description="UUID4 of the recording to retrieve.")
 
 
+# ── Recording write-side + Replay execution (Schema 0.8.0) ──────────────────
+
+
+class StartRecordingRequest(BaseModel):
+    """Startet eine neue Aufnahme (agent-initiiert, Schema 0.8.0).
+
+    Response: ``{ok: true, recording_id: str, name: str, started_at_ms: int}``.
+    Der agent-Write-Surface für ``frontprompt show`` — bisher nur via UI möglich.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["start_recording"] = "start_recording"
+    schema_version: str = IPC_SCHEMA_VERSION
+    name: str = Field(default="New Recording", description="Benutzer-vergebener Name der Aufnahme.")
+    description: str = Field(default="", description="Optionale Beschreibung.")
+
+
+class StopRecordingRequest(BaseModel):
+    """Beendet eine laufende Aufnahme (agent-initiiert, Schema 0.8.0).
+
+    Response: ``{ok: true}`` oder ``{ok: false, error: "recording not found: <id>"}``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["stop_recording"] = "stop_recording"
+    schema_version: str = IPC_SCHEMA_VERSION
+    recording_id: str = Field(min_length=1, description="UUID der zu stoppenden Aufnahme.")
+
+
+class RunReplayRequest(BaseModel):
+    """Führt eine Aufnahme als Replay aus (synchron, Schema 0.8.0).
+
+    Blockiert bis der Replay abgeschlossen (oder timeout/fehler) ist.
+    Response: voller ``ReplayReport``-JSON.
+
+    ``dry_run=True`` loggt alle intendierten Aktionen ohne Ausführung.
+    ``real_time=True`` hält die Zeitabstände zwischen Events ein; ``False``
+    (default) führt so schnell wie möglich aus.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["run_replay"] = "run_replay"
+    schema_version: str = IPC_SCHEMA_VERSION
+    recording_id: str = Field(min_length=1, description="UUID der auszuführenden Aufnahme.")
+    parameters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Parameter-Bindings: Substitutions-Schlüssel → konkreter Wert.",
+    )
+    real_time: bool = Field(
+        default=False,
+        description="True = Timestamp-Deltas als Sleep-Intervalle einhalten; False = max speed.",
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="True = alle Aktionen loggen ohne Browser-State zu ändern.",
+    )
+
+
+class GetReplayReportRequest(BaseModel):
+    """Ruft einen gespeicherten ReplayReport ab (Schema 0.8.0).
+
+    Response: ``ReplayReport``-JSON oder ``{ok: false, error: "replay report not found: <id>"}``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["get_replay_report"] = "get_replay_report"
+    schema_version: str = IPC_SCHEMA_VERSION
+    replay_id: str = Field(min_length=1, description="UUID4 des Replay-Reports.")
+
+
+class ListReplayReportsRequest(BaseModel):
+    """Listet verfügbare ReplayReports als leichtgewichtige Meta-Einträge (Schema 0.8.0).
+
+    ``recording_id=None`` = alle Reports dieser Session.
+    Response: ``list[ReplayReportMeta]``-JSON.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["list_replay_reports"] = "list_replay_reports"
+    schema_version: str = IPC_SCHEMA_VERSION
+    recording_id: str | None = Field(
+        default=None,
+        description="UUID der Aufnahme zum Filtern; None = alle Reports der Session.",
+    )
+
+
+class AddAssertionRequest(BaseModel):
+    """Fügt eine Assertion direkt via IPC zur Aufnahme hinzu (agent-write-side, Schema 0.8.0).
+
+    Das IPC-Pendant zu :class:`~frontprompt.bridge.messages.AssertionAddedToRecordingRequested`
+    (UI). Agents nutzen AddAssertionRequest; die UI sendet die bridge message.
+
+    Response: ``{ok: true, assertion_id: str, seq: int}``.
+    ``assertion_id`` ist vom Server generiert (uuid4). ``seq`` ist der zugewiesene
+    monotone Sequence-Counter in der Timeline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["add_assertion"] = "add_assertion"
+    schema_version: str = IPC_SCHEMA_VERSION
+    recording_id: str = Field(min_length=1, description="UUID der Aufnahme.")
+    assertion_type: AssertionType = Field(description="Art der Assertion.")
+    target: str = Field(
+        default="",
+        description="CSS-Selektor für element-targeted assertions; leer für url_equals.",
+    )
+    target_kind: Literal["selector", "url"] = Field(
+        description="Typ des target — 'selector' für DOM-Assertions, 'url' für URL-Assertion."
+    )
+    expected: str | None = Field(
+        default=None,
+        description="Erwarteter Wert; None für selector_exists und visible.",
+    )
+    comparator: AssertionComparator = Field(
+        description="Vergleichsoperator; 'none' für selector_exists und visible."
+    )
+    description: str = Field(
+        default="",
+        description="Human-readable Label für Report-Anzeige.",
+    )
+    insert_after_seq: int | None = Field(
+        default=None,
+        description="None = append; Integer = insert nach dem Eintrag mit diesem seq.",
+    )
+
+
 IpcRequest = Annotated[
     PingRequest
     | GetSnapshotRequest
@@ -532,7 +667,14 @@ IpcRequest = Annotated[
     | DomPatchRequest
     # ── Schema 0.7.0 ──
     | GetRecordingsRequest
-    | GetRecordingRequest,
+    | GetRecordingRequest
+    # ── Schema 0.8.0 ──
+    | StartRecordingRequest
+    | StopRecordingRequest
+    | RunReplayRequest
+    | GetReplayReportRequest
+    | ListReplayReportsRequest
+    | AddAssertionRequest,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller IPC-requests. Server routet via ``kind``."""
@@ -760,6 +902,32 @@ class AnnotationEntry(BaseModel):
     url: str
 
 
+# ── Result models (Schema 0.8.0) ──────────────────────────────────────────────
+
+
+class ReplayReportMeta(BaseModel):
+    """Leichtgewichtige Zusammenfassung eines Replay-Reports (Schema 0.8.0).
+
+    Returned by :class:`ListReplayReportsRequest` — keine ``step_results``
+    (die sind im vollen :class:`~frontprompt.state.state.ReplayReport` via
+    :class:`GetReplayReportRequest`). Agents nutzen dies für eine schnelle Übersicht.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    replay_id: str = Field(description="UUID des Replay-Runs.")
+    recording_id: str = Field(description="UUID der zugrundeliegenden Aufnahme.")
+    status: ReplayStatus = Field(description="Abschluss-Status des Replays.")
+    started_at_ms: int = Field(description="Epoch ms bei Replay-Start.")
+    ended_at_ms: int | None = Field(
+        default=None,
+        description="Epoch ms bei Replay-Ende; None für aborted replays.",
+    )
+    step_count: int = Field(description="Gesamtanzahl der Steps (alle Timeline-Einträge).")
+    passed_assertions: int = Field(description="Anzahl bestandener Assertions.")
+    failed_assertions: int = Field(description="Anzahl fehlgeschlagener Assertions.")
+
+
 __all__ = [
     "IPC_SCHEMA_VERSION",
     "AnnotationEntry",
@@ -821,4 +989,12 @@ __all__ = [
     "ScrollToResult",
     "StateReaderResult",
     "TextReaderResult",
+    # Schema 0.8.0 — replay write-side
+    "AddAssertionRequest",
+    "GetReplayReportRequest",
+    "ListReplayReportsRequest",
+    "ReplayReportMeta",
+    "RunReplayRequest",
+    "StartRecordingRequest",
+    "StopRecordingRequest",
 ]

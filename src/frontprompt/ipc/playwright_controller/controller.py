@@ -18,6 +18,7 @@ from playwright.async_api import Page
 
 from frontprompt.ipc.page_controller import PageController
 from frontprompt.ipc.playwright_controller import browser_actions, dom_readers, page_meta, xpath_query
+from frontprompt.ipc.playwright_controller.assertion_evaluator import AssertionEvaluator
 from frontprompt.ipc.playwright_controller.element_resolver import (
     ElementResolver,
     StalePickError,
@@ -27,7 +28,7 @@ from frontprompt.ipc.playwright_controller.screenshots import (
     shoot_element,
     shoot_page,
 )
-from frontprompt.state.state import Pick
+from frontprompt.state.state import AssertionEntry, Pick
 
 if TYPE_CHECKING:
     from frontprompt.analysis.analyzer import PageAnalyzer
@@ -364,6 +365,24 @@ class PlaywrightPageController(PageController):
             return {"error": "stale_pick"}
         state = await dom_readers.read_state(handle)
         return {f: state.get(f) for f in fields if f in state}
+
+    # ── Replay actions (sub-plan 03) ───────────────────────────────────────
+
+    async def click_selector(self, selector: str) -> dict[str, Any]:
+        """Click an element by CSS selector (replay-side action)."""
+        return await browser_actions.click_selector(self._page, selector)
+
+    async def keyboard_type(self, text: str) -> dict[str, Any]:
+        """Type text via keyboard (replay-side action)."""
+        return await browser_actions.keyboard_type(self._page, text)
+
+    async def keyboard_press(self, key: str) -> dict[str, Any]:
+        """Press a named key (Enter/Escape/Tab/Arrow*) via keyboard (replay-side action)."""
+        return await browser_actions.keyboard_press(self._page, key)
+
+    async def evaluate_assertion(self, entry: AssertionEntry) -> dict[str, Any]:
+        """Evaluate an AssertionEntry against the live DOM."""
+        return await AssertionEvaluator().evaluate(self._page, entry)
 
     # ── Low-level escape-hatch (Schema 0.4.0) ──────────────────────────────
 

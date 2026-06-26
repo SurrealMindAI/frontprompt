@@ -21,9 +21,9 @@
  *      → renameRecording() sends recording_rename_requested
  */
 import { bridge } from '../bridge/bridge.svelte';
-import type { Recording, RecordingMeta, RecordingsState } from '../_generated/state';
+import type { Recording, RecordingMeta, RecordingsState, ReplayProgress } from '../_generated/state';
 
-const SCHEMA_VERSION = '0.8.0';
+const SCHEMA_VERSION = '0.9.0';
 
 export class RecordingState {
   /** Mirror: ID der laufenden Aufnahme, null = nicht aufnehmend. */
@@ -37,6 +37,9 @@ export class RecordingState {
 
   /** Mirror: Vollständige Aufnahme mit Timeline (nur wenn activeDetailRecordingId gesetzt). */
   detailRecording = $state<Recording | null>(null);
+
+  /** Mirror: laufender Replay-Fortschritt (null = kein aktiver Replay). */
+  activeReplayProgress = $state<ReplayProgress | null>(null);
 
   /** Convenience: ob gerade aufgenommen wird. */
   isRecording = $derived(this.activeRecordingId !== null);
@@ -59,6 +62,8 @@ export class RecordingState {
     if (view.active_detail_recording_id !== undefined)
       this.activeDetailRecordingId = view.active_detail_recording_id;
     if (view.detail_recording !== undefined) this.detailRecording = view.detail_recording;
+    if (view.active_replay_progress !== undefined)
+      this.activeReplayProgress = view.active_replay_progress ?? null;
   }
 
   // ----- Intents (bridge-send) -----------------------------------------------

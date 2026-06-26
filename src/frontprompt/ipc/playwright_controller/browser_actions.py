@@ -1,11 +1,15 @@
-"""Browser-side actions — navigate, scroll_to, eval_js, dom_patch. Pure I/O on Playwright Page."""
+"""Browser-side actions — navigate, scroll_to, eval_js, dom_patch, click_selector, keyboard_type, keyboard_press. Pure I/O on Playwright Page.
+
+All functions follow the "always return, never raise" contract: Playwright errors are
+caught and returned as ``{"ok": False, "error": str(exc)}``.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
-from playwright.async_api import ElementHandle, Page
+from playwright.async_api import ElementHandle, Error as PlaywrightError, Page
 
 _LOG = structlog.get_logger(__name__)
 
@@ -122,4 +126,52 @@ async def _apply_dom_op(handle: ElementHandle, op: dict[str, Any]) -> None:
         await handle.evaluate("(el) => el.remove()")
 
 
-__all__ = ["dom_patch", "eval_js", "navigate", "scroll_to"]
+async def click_selector(page: Page, selector: str) -> dict[str, Any]:
+    """Click an element by CSS selector.
+
+    Always returns — never raises. Returns ``{"ok": True}`` on success or
+    ``{"ok": False, "error": str(exc)}`` on PlaywrightError.
+    """
+    _LOG.info("click_selector.start", selector=selector)
+    try:
+        await page.click(selector)
+        _LOG.info("click_selector.done", ok=True)
+        return {"ok": True}
+    except PlaywrightError as exc:
+        _LOG.warning("click_selector.done", ok=False, error=str(exc))
+        return {"ok": False, "error": str(exc)}
+
+
+async def keyboard_type(page: Page, text: str) -> dict[str, Any]:
+    """Type text via the keyboard (page.keyboard.type).
+
+    Always returns — never raises. Returns ``{"ok": True}`` on success or
+    ``{"ok": False, "error": str(exc)}`` on PlaywrightError.
+    """
+    _LOG.info("keyboard_type.start", text_length=len(text))
+    try:
+        await page.keyboard.type(text)
+        _LOG.info("keyboard_type.done", ok=True)
+        return {"ok": True}
+    except PlaywrightError as exc:
+        _LOG.warning("keyboard_type.done", ok=False, error=str(exc))
+        return {"ok": False, "error": str(exc)}
+
+
+async def keyboard_press(page: Page, key: str) -> dict[str, Any]:
+    """Press a named key (e.g. 'Enter', 'Escape', 'Tab') via page.keyboard.press.
+
+    Always returns — never raises. Returns ``{"ok": True}`` on success or
+    ``{"ok": False, "error": str(exc)}`` on PlaywrightError.
+    """
+    _LOG.info("keyboard_press.start", key=key)
+    try:
+        await page.keyboard.press(key)
+        _LOG.info("keyboard_press.done", ok=True)
+        return {"ok": True}
+    except PlaywrightError as exc:
+        _LOG.warning("keyboard_press.done", ok=False, error=str(exc))
+        return {"ok": False, "error": str(exc)}
+
+
+__all__ = ["click_selector", "dom_patch", "eval_js", "keyboard_press", "keyboard_type", "navigate", "scroll_to"]

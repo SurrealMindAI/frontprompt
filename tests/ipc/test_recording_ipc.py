@@ -94,9 +94,9 @@ def test_existing_ping_still_routes_correctly() -> None:
     assert isinstance(parsed, PingRequest)
 
 
-def test_schema_version_is_0_7_0() -> None:
-    """IPC_SCHEMA_VERSION is bumped to 0.7.0."""
-    assert IPC_SCHEMA_VERSION == "0.7.0"
+def test_schema_version_is_0_8_0() -> None:
+    """IPC_SCHEMA_VERSION is bumped to 0.8.0 (replay-bundle sub-plan 02 adds write-side requests)."""
+    assert IPC_SCHEMA_VERSION == "0.8.0"
 
 
 # ---------------------------------------------------------------------------

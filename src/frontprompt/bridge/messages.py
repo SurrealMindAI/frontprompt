@@ -13,8 +13,9 @@ Jede Envelope trägt ``schema_version: str`` — Breaking-Changes (Field
 rename/remove, kind rename) erfordern Bump + Codegen-Re-Run. Forward-compatible
 adds (neue *optional* Felder) ohne Bump zulässig.
 
-Aktuell: ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
-Vorherig: ``0.7.0`` (+ origin_session on Pick/Region/Relation).
+Aktuell: ``0.9.0`` (+ Replay-Assertion-Authoring: 3 neue Outbound-Envelopes, sub-plan 02 replay-bundle).
+Vorherig: ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
+            ``0.7.0`` (+ origin_session on Pick/Region/Relation).
             ``0.6.0`` (Region.rect page-absolute + Viewport-snapshot).
             ``0.2.0`` (Phase 1 + Inspector / Pick-Flow).
             ``0.1.0`` (Phase 1 panel-only Durchstich — siehe
@@ -70,6 +71,11 @@ OUTBOUND (Overlay → Python)
     :class:`RecordingSelectedRequested`         Aufnahme für Detail-Ansicht selektieren (oder deselect).
     :class:`RecordedEventCapturedRequested`     Page-Event (click/pointerdown/keydown) zur aktiven Aufnahme.
 
+**Replay-Assertion-Authoring (Schema 0.9.0)**
+    :class:`AssertionAddedToRecordingRequested` Assertion zur Aufnahme hinzufügen (append oder insert).
+    :class:`AssertionDeletedRequested`          Assertion aus der Aufnahme entfernen.
+    :class:`AssertionUpdatedRequested`          Felder einer bestehenden Assertion patchen.
+
 INBOUND (Python → Overlay)
 --------------------------
 
@@ -104,13 +110,23 @@ from pydantic import BaseModel, Field
 # Pick grows fields that should not be sent over the wire), introduce dedicated
 # WirePick / WireRegion / WireRelation DTOs and map from domain here. Until then,
 # do NOT add a translation layer — YAGNI.
-from frontprompt.state.state import PageEventEntry, PanelId, Pick, Region, Relation, RelationKind, StateSnapshot
+from frontprompt.state.state import (
+    AssertionComparator,
+    AssertionType,
+    PageEventEntry,
+    PanelId,
+    Pick,
+    Region,
+    Relation,
+    RelationKind,
+    StateSnapshot,
+)
 
 # ============================================================================
 # Schema-Version — bumped on breaking changes (Field add/remove, kind rename)
 # ============================================================================
 
-SCHEMA_VERSION: str = "0.8.0"
+SCHEMA_VERSION: str = "0.9.0"
 
 
 # ============================================================================
@@ -553,6 +569,94 @@ class RecordedEventCapturedRequested(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Section H — Replay-Assertion-Authoring (Schema 0.9.0, replay sub-plan 02)
+# ---------------------------------------------------------------------------
+
+
+class AssertionAddedToRecordingRequested(BaseModel):
+    """User fügte eine Assertion zur Aufnahme hinzu (UI-Assertion-Authoring).
+
+    **User-Trigger**: User klickt "Add Assertion" im :svelte:`AssertionAuthoringPanel`
+    und bestätigt die Assertion-Definition.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.add_assertion_to_timeline`
+    weist ``seq`` zu (Python-seitig) und appended / inserted die neue Assertion.
+    **Atomicity**: eine Mutation — append/insert + seq-Stempel + snapshot-broadcast.
+
+    ``assertion`` enthält alle Felder des :class:`~frontprompt.state.state.AssertionEntry`
+    **ohne** ``seq`` (Python stamps seq atomisch). ``insert_after_seq=None`` bedeutet
+    append (nach dem letzten bestehenden Eintrag); ein Integer-Wert bedeutet Insert
+    nach dem Eintrag mit dem entsprechenden ``seq``.
+    """
+
+    kind: Literal["assertion_added_to_recording_requested"] = "assertion_added_to_recording_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der Aufnahme, zu der die Assertion hinzugefügt wird.")
+    assertion: dict = Field(
+        description=(
+            "Assertion-Payload ohne ``seq`` — alle Felder aus AssertionEntry "
+            "ausser seq (Python stamps seq). Enthält: assertion_id, assertion_type, "
+            "target, target_kind, expected, comparator, description."
+        )
+    )
+    insert_after_seq: int | None = Field(
+        default=None,
+        description=(
+            "None = append nach dem letzten Eintrag. "
+            "Integer = insert nach dem Eintrag mit dem entsprechenden seq."
+        ),
+    )
+
+
+class AssertionDeletedRequested(BaseModel):
+    """User entfernte eine Assertion aus der Aufnahme.
+
+    **User-Trigger**: Click auf den x-button bei einer Assertion im
+    :svelte:`AssertionAuthoringPanel` oder in der Timeline-Ansicht.
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.delete_assertion`
+    entfernt den AssertionEntry aus ``recording.entries``. No-op + idempotente
+    rehydrate-broadcast wenn id unbekannt.
+    """
+
+    kind: Literal["assertion_deleted_requested"] = "assertion_deleted_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der Aufnahme, aus der die Assertion entfernt wird.")
+    assertion_id: str = Field(description="UUID der zu entfernenden Assertion.")
+
+
+class AssertionUpdatedRequested(BaseModel):
+    """User aktualisierte Felder einer bestehenden Assertion (Partial-Patch).
+
+    **User-Trigger**: User editiert eine Assertion im :svelte:`AssertionAuthoringPanel`
+    und klickt "Save".
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.update_assertion`
+    patcht nur die Felder, die nicht ``None`` sind (None = keine Änderung).
+    **Semantik**: ``None``-Felder im Payload sind Sentinel für "dieses Feld nicht
+    ändern" — ein Leer-String würde den Wert auf ``""`` setzen.
+    """
+
+    kind: Literal["assertion_updated_requested"] = "assertion_updated_requested"
+    schema_version: str = SCHEMA_VERSION
+    recording_id: str = Field(description="UUID der Aufnahme, die die Assertion enthält.")
+    assertion_id: str = Field(description="UUID der zu patchenden Assertion.")
+    assertion_type: AssertionType | None = Field(
+        default=None,
+        description="Neuer assertion_type; None = unverändert.",
+    )
+    target: str | None = Field(
+        default=None,
+        description="Neuer target (CSS-Selektor oder URL-Pattern); None = unverändert.",
+    )
+    expected: str | None = Field(
+        default=None,
+        description="Neuer expected-Wert; None = unverändert (kein Löschen-Sentinel).",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Neue human-readable Beschreibung; None = unverändert.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union — Outbound
 # ---------------------------------------------------------------------------
 
@@ -579,7 +683,10 @@ OutboundMessage = Annotated[
     | RecordingStopRequested
     | RecordingRenameRequested
     | RecordingSelectedRequested
-    | RecordedEventCapturedRequested,
+    | RecordedEventCapturedRequested
+    | AssertionAddedToRecordingRequested
+    | AssertionDeletedRequested
+    | AssertionUpdatedRequested,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Overlay → Python messages. Pydantic routet via ``kind``.
@@ -698,13 +805,17 @@ __codegen_roots__ = [
     "RecordingRenameRequested",
     "RecordingSelectedRequested",
     "RecordedEventCapturedRequested",
+    # Outbound — Replay-Assertion-Authoring (Schema 0.9.0)
+    "AssertionAddedToRecordingRequested",
+    "AssertionDeletedRequested",
+    "AssertionUpdatedRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",
 ]
 
 
-__all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector / Pick / Relation / Region / Inbound / Unions) is intentional and load-bearing for developer orientation
+__all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector / Pick / Relation / Region / Recording / Assertion / Inbound / Unions) is intentional and load-bearing for developer orientation
     "SCHEMA_VERSION",
     # Outbound — Lifecycle
     "OverlayReady",
@@ -736,6 +847,10 @@ __all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector 
     "RecordingRenameRequested",
     "RecordingSelectedRequested",
     "RecordedEventCapturedRequested",
+    # Outbound — Replay-Assertion-Authoring (Schema 0.9.0)
+    "AssertionAddedToRecordingRequested",
+    "AssertionDeletedRequested",
+    "AssertionUpdatedRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",

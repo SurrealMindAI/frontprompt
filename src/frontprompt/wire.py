@@ -32,26 +32,45 @@ Inbound Recording-Messages (Overlay → Python):
     :class:`RecordingSelectedRequested`     Detail-Selektion (oder deselect).
     :class:`RecordedEventCapturedRequested` Page-Event während aktiver Aufnahme.
 
+Replay-Assertion-Authoring (Overlay → Python, Schema 0.9.0):
+    :class:`AssertionAddedToRecordingRequested` Assertion zur Aufnahme hinzufügen.
+    :class:`AssertionDeletedRequested`          Assertion aus Aufnahme entfernen.
+    :class:`AssertionUpdatedRequested`          Assertion-Felder patchen.
+
 Timeline-Entry-Varianten:
     :class:`PageEventEntry`     Page-Interaktion (click/pointerdown/keydown).
     :class:`PickRefEntry`       Referenz auf einen erstellten Pick.
     :class:`RegionRefEntry`     Referenz auf eine gezeichnete Region.
     :class:`RelationRefEntry`   Referenz auf eine erstellte Relation.
     :class:`NavigationEntry`    Page-Navigation (Python-seitig erfasst).
+    :class:`AssertionEntry`     Assertion-Checkpoint (replay sub-plan 01).
     :data:`TimelineEntry`       Discriminated union aller Entry-Typen.
 
 State-Typen:
     :class:`RecordingMeta`      Lightweight summary (für Listen-Ansicht).
     :class:`Recording`          Vollständiges Aggregat mit Timeline.
     :class:`RecordingsState`    Gesamter Recording-State (StateSnapshot-Feld).
+
+Replay-State-Typen (sub-plan 01/02):
+    :class:`ParameterDeclaration`   Parameter-Deklaration auf Recording.
+    :data:`AssertionType`           Assertion-Art-Discriminator.
+    :data:`AssertionComparator`     Vergleichsoperator.
+    :data:`ReplayStatus`            Replay-Abschluss-Status.
+    :class:`ReplayStepResult`       Per-Step-Ergebnis im ReplayReport.
+    :class:`ReplayReport`           Vollständiges Replay-Ergebnis.
+    :class:`ReplayProgress`         Lightweight Progress-Snapshot (live im State).
 """
 
 from __future__ import annotations
 
 # Re-exports from state SSoT — intentional, no duplication
 from frontprompt.state.state import (
+    AssertionComparator,
+    AssertionEntry,
+    AssertionType,
     NavigationEntry,
     PageEventEntry,
+    ParameterDeclaration,
     PickRefEntry,
     Recording,
     RecordingMeta,
@@ -59,12 +78,19 @@ from frontprompt.state.state import (
     RecordingStatus,
     RegionRefEntry,
     RelationRefEntry,
+    ReplayProgress,
+    ReplayReport,
+    ReplayStatus,
+    ReplayStepResult,
     TimelineEntry,
     TimelineEntryKind,
 )
 
 # Re-exports from bridge messages SSoT
 from frontprompt.bridge.messages import (
+    AssertionAddedToRecordingRequested,
+    AssertionDeletedRequested,
+    AssertionUpdatedRequested,
     RecordedEventCapturedRequested,
     RecordingRenameRequested,
     RecordingSelectedRequested,
@@ -89,11 +115,20 @@ __codegen_roots__ = [
     "RegionRefEntry",
     "RelationRefEntry",
     "NavigationEntry",
+    # Assertion entry variant (replay sub-plan 01)
+    "AssertionType",
+    "AssertionComparator",
+    "AssertionEntry",
     # TimelineEntry discriminated union
     "TimelineEntry",
     # Recording domain aggregates
     "RecordingMeta",
+    "ParameterDeclaration",
     "Recording",
+    # Replay state types (sub-plan 01)
+    "ReplayStatus",
+    "ReplayStepResult",
+    "ReplayProgress",
     "RecordingsState",
     # Outbound bridge messages (Overlay → Python) for recording feature
     "RecordingStartRequested",
@@ -101,12 +136,20 @@ __codegen_roots__ = [
     "RecordingRenameRequested",
     "RecordingSelectedRequested",
     "RecordedEventCapturedRequested",
+    # Outbound bridge messages — Replay-Assertion-Authoring (Schema 0.9.0)
+    "AssertionAddedToRecordingRequested",
+    "AssertionDeletedRequested",
+    "AssertionUpdatedRequested",
 ]
 
 __all__ = [
     # State types
+    "AssertionComparator",
+    "AssertionEntry",
+    "AssertionType",
     "NavigationEntry",
     "PageEventEntry",
+    "ParameterDeclaration",
     "PickRefEntry",
     "Recording",
     "RecordingMeta",
@@ -114,12 +157,20 @@ __all__ = [
     "RecordingStatus",
     "RegionRefEntry",
     "RelationRefEntry",
+    "ReplayProgress",
+    "ReplayReport",
+    "ReplayStatus",
+    "ReplayStepResult",
     "TimelineEntry",
     "TimelineEntryKind",
-    # Bridge messages
+    # Bridge messages — Recording
     "RecordedEventCapturedRequested",
     "RecordingRenameRequested",
     "RecordingSelectedRequested",
     "RecordingStartRequested",
     "RecordingStopRequested",
+    # Bridge messages — Replay-Assertion-Authoring (Schema 0.9.0)
+    "AssertionAddedToRecordingRequested",
+    "AssertionDeletedRequested",
+    "AssertionUpdatedRequested",
 ]

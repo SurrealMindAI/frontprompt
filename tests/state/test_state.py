@@ -572,8 +572,8 @@ def test_pick_region_relation_carry_origin_session() -> None:
     assert relation_no_session.origin_session is None
 
 
-def test_schema_version_is_0_8_0() -> None:
-    """Schema 0.8.0: + recordings_state (recording domain, sub-plans 01/02); previously 0.7.0."""
+def test_schema_version_is_0_9_0() -> None:
+    """Schema 0.9.0: + assertion-authoring bridge messages (replay sub-plan 02); previously 0.8.0."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.8.0"
+    assert SCHEMA_VERSION == "0.9.0"

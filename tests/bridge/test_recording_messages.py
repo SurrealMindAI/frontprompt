@@ -43,11 +43,11 @@ def _make_page_event_entry(**kwargs: object) -> PageEventEntry:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_version_bumped_to_0_8_0() -> None:
-    """Schema 0.8.0 — + recordings_state (recording domain, sub-plan 01/02)."""
+def test_schema_version_bumped_to_0_9_0() -> None:
+    """Schema 0.9.0 — + Replay-Assertion-Authoring (replay sub-plan 02); 0.8.0 + recordings_state."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.8.0"
+    assert SCHEMA_VERSION == "0.9.0"
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def test_recording_start_requested_defaults() -> None:
     assert msg.kind == "recording_start_requested"
     assert msg.name == "New Recording"
     assert msg.description == ""
-    assert msg.schema_version == "0.8.0"
+    assert msg.schema_version == "0.9.0"
 
 
 def test_recording_start_requested_custom_fields() -> None:
