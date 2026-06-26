@@ -24,6 +24,9 @@
  */
 
 import type {
+  AssertionAddedToRecordingRequested,
+  AssertionDeletedRequested,
+  AssertionUpdatedRequested,
   Heartbeat,
   HeartbeatAck,
   HideAllPanelsRequested,
@@ -81,7 +84,10 @@ export type OutboundMessage =
   | RecordingStopRequested
   | RecordingRenameRequested
   | RecordingSelectedRequested
-  | RecordedEventCapturedRequested;
+  | RecordedEventCapturedRequested
+  | AssertionAddedToRecordingRequested
+  | AssertionDeletedRequested
+  | AssertionUpdatedRequested;
 
 /** Tagged union aller Inbound-Messages (Python → Overlay). */
 export type InboundMessage = Heartbeat | StateSnapshotMessage;

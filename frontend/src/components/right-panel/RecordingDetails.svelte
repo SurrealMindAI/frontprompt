@@ -7,14 +7,25 @@
 
   started_at and ended_at are read-only metadata. When recording is still active
   (ended_at_ms is null), ended_at shows "recording…".
+
+  Also renders:
+  - Assertion entries from recording.entries (with delete button)
+  - "Add assertion" toggle (localState) → AssertionEditor
+  - Parameter declarations list (read-only)
 -->
 
 <script lang="ts">
   import { untrack } from 'svelte';
   import { backendState } from '../../backend-state/backend-state.svelte';
-  import type { Recording } from '../../_generated/state';
+  import { bridge } from '../../bridge/bridge.svelte';
+  import type { AssertionDeletedRequested } from '../../_generated/schemas';
+  import type { AssertionEntry, ParameterDeclaration, Recording } from '../../_generated/state';
+  import AssertionEditor from './AssertionEditor.svelte';
 
   let { recording }: { recording: Recording } = $props();
+
+  // localState: toggle AssertionEditor panel (ADR-018: ephemeral UI state)
+  let showAssertionEditor = $state(false);
 
   // localState edit draft (ADR-018: ephemeral in-flight edit, not backendState)
   let nameValue = $state(untrack(() => recording.name));
@@ -26,6 +37,32 @@
 
   const dirty = $derived(nameValue !== nameBaseline || descValue !== descBaseline);
 
+  // Derived: assertion entries from the recording's timeline (PIT-037: inline, no local $state copy)
+  const assertionEntries = $derived(
+    (recording.entries ?? []).filter(
+      (e): e is AssertionEntry => (e as AssertionEntry).kind === 'assertion'
+    )
+  );
+
+  // Derived: parameter declarations (read-only display)
+  const parameters = $derived<ParameterDeclaration[]>(recording.parameters ?? []);
+
+  const SCHEMA_VERSION = '0.9.0';
+
+  function deleteAssertion(assertionId: string): void {
+    const message: AssertionDeletedRequested = {
+      kind: 'assertion_deleted_requested',
+      schema_version: SCHEMA_VERSION,
+      recording_id: recording.recording_id,
+      assertion_id: assertionId,
+    };
+    void bridge.send(message);
+  }
+
+  function toggleAssertionEditor(): void {
+    showAssertionEditor = !showAssertionEditor;
+  }
+
   // Re-sync when a different recording is selected (recording prop changes).
   $effect(() => {
     // Track recording_id so effect fires when the user selects a different recording.
@@ -34,6 +71,8 @@
     descValue = recording.description ?? '';
     nameBaseline = recording.name;
     descBaseline = recording.description ?? '';
+    // Reset the assertion editor toggle on recording change
+    showAssertionEditor = false;
   });
 
   function save(): void {
@@ -120,6 +159,66 @@
       </button>
     </div>
   </div>
+
+  <!-- ── Assertions section ── -->
+  <div class="assertions-section">
+    <div class="section-header">
+      <span class="section-label">assertions</span>
+      <button
+        type="button"
+        class="details-add-assertion section-header__btn"
+        onclick={toggleAssertionEditor}
+      >
+        {showAssertionEditor ? '− hide' : '+ add'}
+      </button>
+    </div>
+
+    {#if assertionEntries.length > 0}
+      <ul class="assertion-list">
+        {#each assertionEntries as entry (entry.assertion_id)}
+          <li class="assertion-row">
+            <span class="assertion-chip">{entry.assertion_type}</span>
+            <span class="assertion-target-label">{entry.target}</span>
+            <button
+              type="button"
+              class="assertion-delete assertion-row__delete"
+              title="Delete assertion"
+              onclick={() => deleteAssertion(entry.assertion_id)}
+            >
+              ×
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    {#if showAssertionEditor}
+      <AssertionEditor recording_id={recording.recording_id} />
+    {/if}
+  </div>
+
+  <!-- ── Parameters section ── -->
+  {#if parameters.length > 0}
+    <div class="parameters-section">
+      <div class="section-header">
+        <span class="section-label">parameters</span>
+      </div>
+      <ul class="parameter-list">
+        {#each parameters as param (param.name)}
+          <li class="parameter-row">
+            <span class="parameter-name">{param.name}</span>
+            <span class="parameter-type">{param.param_type}</span>
+            {#if param.default_value != null}
+              <span class="parameter-default">{param.default_value}</span>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {:else}
+    <!-- Empty parameter-list for test selector compatibility -->
+    <ul class="parameter-list" style="display:none"></ul>
+  {/if}
 </div>
 
 <style>
@@ -259,5 +358,140 @@
   .editor__save--dirty {
     background: rgba(120, 180, 255, 0.18);
     border-color: rgba(120, 220, 255, 0.85);
+  }
+
+  /* ---- Shared section header ---- */
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px 4px;
+    border-top: 1px solid var(--fp-color-border-subtle);
+  }
+
+  .section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fp-color-text-muted);
+  }
+
+  .section-header__btn {
+    background: transparent;
+    border: 1px solid var(--fp-color-border);
+    color: var(--fp-color-text-secondary);
+    font: inherit;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  .section-header__btn:hover {
+    background: var(--fp-color-surface-secondary);
+    color: var(--fp-color-text-primary);
+  }
+
+  /* ---- Assertions section ---- */
+
+  .assertions-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .assertion-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 14px 6px;
+  }
+
+  .assertion-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 11px;
+  }
+
+  .assertion-chip {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 7px;
+    background: rgba(157, 255, 177, 0.18);
+    color: var(--fp-color-text-primary);
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    flex-shrink: 0;
+  }
+
+  .assertion-target-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    color: var(--fp-color-text-secondary);
+  }
+
+  .assertion-row__delete {
+    background: transparent;
+    border: none;
+    color: var(--fp-color-text-muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 120ms ease;
+  }
+
+  .assertion-row__delete:hover {
+    color: rgba(255, 100, 100, 0.9);
+  }
+
+  /* ---- Parameters section ---- */
+
+  .parameters-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .parameter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 14px 6px;
+  }
+
+  .parameter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 11px;
+  }
+
+  .parameter-name {
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 10px;
+    color: var(--fp-color-text-primary);
+  }
+
+  .parameter-type {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 7px;
+    background: rgba(180, 120, 255, 0.18);
+    color: var(--fp-color-text-primary);
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+
+  .parameter-default {
+    font-size: 10px;
+    color: var(--fp-color-text-muted);
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
   }
 </style>

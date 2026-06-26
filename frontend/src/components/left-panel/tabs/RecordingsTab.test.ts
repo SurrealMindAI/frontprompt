@@ -10,6 +10,9 @@
  *   - Timeline: PageEventEntry (event_type + target), PickRefEntry (inline pick lookup),
  *     NavigationEntry (from_url → to_url)
  *   - Back button sends recording_selected_requested with null
+ *   - Replay progress bar shown when activeReplayProgress is non-null
+ *   - Progress bar shows current_seq/total_steps + passed/failed assertion counts
+ *   - No progress bar when activeReplayProgress is null
  */
 
 // Bridge mock — hoisted before module imports
@@ -20,7 +23,7 @@ import { describe, expect, test, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import RecordingsTab from './RecordingsTab.svelte';
 import { backendState } from '../../../backend-state/backend-state.svelte';
-import type { RecordingMeta, Recording } from '../../../_generated/state';
+import type { RecordingMeta, Recording, ReplayProgress } from '../../../_generated/state';
 import type { Pick as PickType } from '../../../_generated/state';
 
 afterEach(() => {
@@ -31,6 +34,7 @@ afterEach(() => {
   backendState.recordings.activeDetailRecordingId = null;
   backendState.recordings.detailRecording = null;
   backendState.recordings.activeRecordingId = null;
+  backendState.recordings.activeReplayProgress = null;
   backendState.inspector.picks = [];
 });
 
@@ -225,5 +229,51 @@ describe('RecordingsTab — timeline view', () => {
         recording_id: null,
       })
     );
+  });
+});
+
+// --- Tests: replay progress bar -----------------------------------------
+
+function makeReplayProgress(overrides: Partial<ReplayProgress> = {}): ReplayProgress {
+  return {
+    replay_id: 'replay-001',
+    recording_id: 'rec-0001',
+    current_seq: 3,
+    total_steps: 10,
+    passed_assertions: 1,
+    failed_assertions: 0,
+    ...overrides,
+  } as ReplayProgress;
+}
+
+describe('RecordingsTab — replay progress bar', () => {
+  test('renders progress bar when activeReplayProgress is non-null', () => {
+    backendState.recordings.activeReplayProgress = makeReplayProgress();
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.replay-progress-bar')).not.toBeNull();
+  });
+
+  test('does not render progress bar when activeReplayProgress is null', () => {
+    backendState.recordings.activeReplayProgress = null;
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.replay-progress-bar')).toBeNull();
+  });
+
+  test('progress bar shows current_seq / total_steps', () => {
+    backendState.recordings.activeReplayProgress = makeReplayProgress({ current_seq: 5, total_steps: 12 });
+    const { container } = render(RecordingsTab, {});
+    const bar = container.querySelector('.replay-progress-bar');
+    expect(bar).not.toBeNull();
+    expect(bar!.textContent).toContain('5');
+    expect(bar!.textContent).toContain('12');
+  });
+
+  test('progress bar shows passed_assertions count', () => {
+    backendState.recordings.activeReplayProgress = makeReplayProgress({ passed_assertions: 3, failed_assertions: 1 });
+    const { container } = render(RecordingsTab, {});
+    const bar = container.querySelector('.replay-progress-bar');
+    expect(bar).not.toBeNull();
+    expect(bar!.textContent).toContain('3');
+    expect(bar!.textContent).toContain('1');
   });
 });

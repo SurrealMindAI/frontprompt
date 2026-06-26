@@ -7,7 +7,9 @@
  * was OK ist (visual sugar ist ephemeral by design).
  *
  * Phase 1 scope: leftPanelTab + relationsVisible + hoveredRelationId.
- * Kandidaten für Phase 2:
+ * Phase 2 additions:
+ *   - activeDetailReplayId: which ReplayReport is expanded in RecordingDetails (recorder-replay sub-plan 06)
+ * Kandidaten für spätere Phase:
  *   - filter-states (eventsTab type-filter, picks-search)
  *   - dark/light theme
  *   - debug-panel collapsed-state
@@ -47,6 +49,13 @@ class UiPrefs {
    * null wenn nichts gehovered.
    */
   hoveredRelationId = $state<string | null>(null);
+
+  /**
+   * Welcher ReplayReport ist im RecordingDetails-Panel expandiert?
+   * localState (ADR-018: ephemeral UI-Selektion, nicht backendState).
+   * null wenn kein Report expanded ist.
+   */
+  activeDetailReplayId = $state<string | null>(null);
 
   /** Imperative helper: open events-tab. Used vom Toolbar-status-click. */
   showEventsTab(): void {
@@ -94,6 +103,14 @@ class UiPrefs {
    */
   hoverRelation(id: string | null): void {
     this.hoveredRelationId = id;
+  }
+
+  /**
+   * Select/deselect which ReplayReport is expanded in the RecordingDetails panel.
+   * null = collapse all; replay_id = expand that report.
+   */
+  showDetailReplay(replayId: string | null): void {
+    this.activeDetailReplayId = replayId;
   }
 }
 
