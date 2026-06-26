@@ -13,6 +13,8 @@ adaptive scrapling-relocate on cross-origin nav.
 
 from __future__ import annotations
 
+import time
+import uuid
 from collections.abc import Awaitable, Callable
 
 import anyio
@@ -23,18 +25,27 @@ from frontprompt.state.state import (
     PANEL_IDS,
     HostnameGroup,
     InspectorState,
+    NavigationEntry,
     OriginSessionGroup,
     OwnedVsForeign,
+    PageEventEntry,
     PanelId,
     PanelStateView,
     PanelView,
     Pick,
+    PickRefEntry,
+    Recording,
+    RecordingMeta,
+    RecordingsState,
     Region,
+    RegionRefEntry,
     Relation,
     RelationKind,
+    RelationRefEntry,
     StateSnapshot,
     StateSummary,
     SummaryCounts,
+    TimelineEntry,
     hostname_for_url,
 )
 
@@ -154,6 +165,12 @@ class StateManager:
         self._panel_state: PanelStateView = self._load_panel_or_default()
         self._inspector_state: InspectorState = self._load_inspector_or_default()
         self._listeners: list[SnapshotListener] = []
+        # Recording domain (sub-plan 01)
+        # _full_recordings: in-memory store for full Recording objects (with entries).
+        # _recordings_state: snapshot-ready lightweight state (RecordingMeta list, no entries).
+        # COL-2: snapshot() MUST include _recordings_state; see snapshot() implementation.
+        self._full_recordings: dict[str, Recording] = {}
+        self._recordings_state: RecordingsState = self._load_recordings_or_default()
 
     def _load_panel_or_default(self) -> PanelStateView:
         loaded = self._persistence.load_panel_state()
@@ -173,6 +190,37 @@ class StateManager:
             return loaded
         self._log.info("state.manager.init.inspector.default")
         return InspectorState()
+
+    def _load_recordings_or_default(self) -> RecordingsState:
+        """Load persisted recordings and build in-memory state.
+
+        Populates ``self._full_recordings`` (full Recording objects for mutations)
+        and returns a ``RecordingsState`` with the lightweight meta list.
+        Ephemeral selection fields (active_recording_id, active_detail_recording_id,
+        detail_recording) are NOT restored — they default to None.
+        """
+        recordings = self._persistence.load_recordings()
+        for rec in recordings:
+            self._full_recordings[rec.recording_id] = rec
+        if recordings:
+            self._log.info("state.manager.init.recordings.loaded_from_persistence", count=len(recordings))
+        else:
+            self._log.info("state.manager.init.recordings.empty")
+        metas = [self._recording_to_meta(r) for r in recordings]
+        return RecordingsState(recordings=metas)
+
+    @staticmethod
+    def _recording_to_meta(recording: Recording) -> RecordingMeta:
+        """Build a lightweight RecordingMeta from a full Recording."""
+        return RecordingMeta(
+            recording_id=recording.recording_id,
+            name=recording.name,
+            description=recording.description,
+            status=recording.status,
+            started_at_ms=recording.started_at_ms,
+            ended_at_ms=recording.ended_at_ms,
+            entry_count=len(recording.entries),
+        )
 
     # ----- Read API ----------------------------------------------------------
 
@@ -203,9 +251,14 @@ class StateManager:
         # semantically equivalent — all nested Pydantic models are reconstructed.
         # StateSnapshot wrapper is constructed fresh (not model_copy'd) so that
         # schema_version always comes from the class default.
+        # COL-2: recordings_state MUST be passed explicitly here.
+        # Without this, StateSnapshot uses default_factory=RecordingsState() and
+        # silently emits an empty RecordingsState on every broadcast, making
+        # the overlay completely blind to all recording state changes.
         return StateSnapshot(
             panel_state=self._panel_state.model_copy(deep=True),
             inspector_state=self._inspector_state.model_copy(deep=True),
+            recordings_state=self._recordings_state.model_copy(deep=True),
         )
 
     def state_summary(self) -> StateSummary:
@@ -296,6 +349,22 @@ class StateManager:
             owned_vs_foreign=OwnedVsForeign(owned=owned, foreign=foreign),
         )
 
+    def get_recording(self, recording_id: str) -> Recording | None:
+        """Return the full Recording object by id, or None if unknown.
+
+        Lock-free read — same discipline as snapshot(). Safe to call inside or
+        outside the lock (read-only over _full_recordings).
+        """
+        return self._full_recordings.get(recording_id)
+
+    def list_recordings_meta(self) -> list[RecordingMeta]:
+        """Return the lightweight RecordingMeta list from the current recordings_state.
+
+        Lock-free read. Returns a shallow copy to prevent callers from
+        accidentally mutating the live state list.
+        """
+        return list(self._recordings_state.recordings)
+
     # ----- Mutation API: Panel (single-writer) -----------------------
 
     async def toggle_panel(self, panel_id: PanelId) -> StateSnapshot:
@@ -376,6 +445,13 @@ class StateManager:
                 )
             self._inspector_state.active_pick_id = pick.pick_id
             self._inspector_state.active = False
+            # COL-6: auto-link PickRefEntry into the active recording's timeline.
+            # Same lock scope — one atomic operation.
+            if self._recordings_state.active_recording_id is not None:
+                self._append_timeline_entry_locked(
+                    self._recordings_state.active_recording_id,
+                    PickRefEntry(kind="pick_ref", seq=0, timestamp_ms=0, pick_id=pick.pick_id),
+                )
             snap = self._post_mutate_locked(lambda: self._persistence.upsert_pick(pick))
         return await self._notify_and_return(snap)
 
@@ -406,6 +482,13 @@ class StateManager:
                     pick_id=pick.pick_id,
                     selector=pick.element.selector,
                     url=pick.url,
+                )
+            # COL-6: auto-link PickRefEntry from the programmatic path too.
+            # Agent-created picks get equal timeline treatment.
+            if self._recordings_state.active_recording_id is not None:
+                self._append_timeline_entry_locked(
+                    self._recordings_state.active_recording_id,
+                    PickRefEntry(kind="pick_ref", seq=0, timestamp_ms=0, pick_id=pick.pick_id),
                 )
             snap = self._post_mutate_locked(lambda: self._persistence.upsert_pick(pick))
         await self._notify_and_return(snap)
@@ -544,6 +627,12 @@ class StateManager:
                 )
             self._inspector_state.active_region_id = region.region_id
             self._inspector_state.active_pick_id = None
+            # COL-6: auto-link RegionRefEntry into the active recording's timeline.
+            if self._recordings_state.active_recording_id is not None:
+                self._append_timeline_entry_locked(
+                    self._recordings_state.active_recording_id,
+                    RegionRefEntry(kind="region_ref", seq=0, timestamp_ms=0, region_id=region.region_id),
+                )
             snap = self._post_mutate_locked(lambda: self._persistence.upsert_region(region))
         return await self._notify_and_return(snap)
 
@@ -693,6 +782,12 @@ class StateManager:
                         source=f"{relation.source_kind}:{relation.source_id}",
                         target=f"{relation.target_kind}:{relation.target_id}",
                     )
+                # COL-6: auto-link RelationRefEntry into the active recording's timeline.
+                if self._recordings_state.active_recording_id is not None:
+                    self._append_timeline_entry_locked(
+                        self._recordings_state.active_recording_id,
+                        RelationRefEntry(kind="relation_ref", seq=0, timestamp_ms=0, relation_id=relation.relation_id),
+                    )
                 snap = self._post_mutate_locked(lambda: self._persistence.upsert_relation(relation))
         return await self._notify_and_return(snap)
 
@@ -755,6 +850,162 @@ class StateManager:
             persist = (lambda r=mutated: self._persistence.upsert_relation(r)) if mutated is not None else None
             snap = self._post_mutate_locked(persist)
         return await self._notify_and_return(snap)
+
+    # ----- Mutation API: Recordings (single-writer) ------------------
+
+    async def start_recording(self, name: str = "New Recording", description: str = "") -> StateSnapshot:
+        """Create a new Recording, set active_recording_id, broadcast snapshot.
+
+        If a recording is already active, it is stopped first (idempotent guard).
+        Clears active_detail_recording_id (reviewer Q2: avoids broadcasting a stale
+        large detail_recording on every keydown during capture).
+        """
+        async with self._lock:
+            # Stop any active recording first (idempotent guard)
+            if self._recordings_state.active_recording_id is not None:
+                self._stop_recording_locked(self._recordings_state.active_recording_id)
+
+            recording_id = str(uuid.uuid4())
+            now_ms = int(time.time() * 1000)
+            recording = Recording(
+                recording_id=recording_id,
+                name=name,
+                description=description,
+                status="active",
+                started_at_ms=now_ms,
+                origin_session=self._session_id,
+            )
+            self._full_recordings[recording_id] = recording
+            meta = self._recording_to_meta(recording)
+            self._recordings_state.recordings.append(meta)
+            self._recordings_state.active_recording_id = recording_id
+
+            # Q2: clear detail selection — prevents large stale detail from riding
+            # every broadcast during capture (~10 Hz)
+            self._recordings_state.active_detail_recording_id = None
+            self._recordings_state.detail_recording = None
+
+            self._log.info("state.manager.start_recording", recording_id=recording_id, name=name)
+            snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
+        return await self._notify_and_return(snap)
+
+    async def stop_recording(self, recording_id: str) -> StateSnapshot:
+        """Mark recording as stopped, clear active_recording_id, broadcast snapshot.
+
+        No-op (with warning log) if recording_id is unknown.
+        """
+        async with self._lock:
+            if recording_id not in self._full_recordings:
+                self._log.warning("state.manager.stop_recording.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                ended_at_ms = self._stop_recording_locked(recording_id)
+                snap = self._post_mutate_locked(
+                    lambda r_id=recording_id, ts=ended_at_ms: self._persistence.mark_recording_stopped(r_id, ts)
+                )
+        return await self._notify_and_return(snap)
+
+    def _stop_recording_locked(self, recording_id: str) -> int:
+        """Stop a recording in-memory. Must be called inside the lock. Returns ended_at_ms."""
+        recording = self._full_recordings.get(recording_id)
+        if recording is None:
+            return 0
+        ended_at_ms = int(time.time() * 1000)
+        recording.status = "stopped"
+        recording.ended_at_ms = ended_at_ms
+        # Update the corresponding RecordingMeta in _recordings_state
+        for meta in self._recordings_state.recordings:
+            if meta.recording_id == recording_id:
+                meta.status = "stopped"
+                meta.ended_at_ms = ended_at_ms
+                break
+        if self._recordings_state.active_recording_id == recording_id:
+            self._recordings_state.active_recording_id = None
+        self._log.info("state.manager.stop_recording_locked", recording_id=recording_id, ended_at_ms=ended_at_ms)
+        return ended_at_ms
+
+    async def rename_recording(self, recording_id: str, name: str, description: str) -> StateSnapshot:
+        """Update name + description of a recording. No-op if unknown."""
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning("state.manager.rename_recording.unknown", recording_id=recording_id)
+                snap = self._post_mutate_locked()
+            else:
+                recording.name = name
+                recording.description = description
+                for meta in self._recordings_state.recordings:
+                    if meta.recording_id == recording_id:
+                        meta.name = name
+                        meta.description = description
+                        break
+                self._log.info("state.manager.rename_recording", recording_id=recording_id, name=name)
+                snap = self._post_mutate_locked(
+                    lambda r_id=recording_id, n=name, d=description: self._persistence.update_recording_meta(r_id, n, d)
+                )
+        return await self._notify_and_return(snap)
+
+    async def select_recording(self, recording_id: str | None) -> StateSnapshot:
+        """Set active_detail_recording_id + populate detail_recording. None = deselect."""
+        async with self._lock:
+            if recording_id is None:
+                self._recordings_state.active_detail_recording_id = None
+                self._recordings_state.detail_recording = None
+                self._log.info("state.manager.select_recording.deselect")
+            else:
+                recording = self._full_recordings.get(recording_id)
+                if recording is None:
+                    self._log.warning("state.manager.select_recording.unknown", recording_id=recording_id)
+                else:
+                    self._recordings_state.active_detail_recording_id = recording_id
+                    self._recordings_state.detail_recording = recording.model_copy(deep=True)
+                    self._log.info("state.manager.select_recording", recording_id=recording_id)
+            snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    async def append_timeline_entry(self, recording_id: str, entry: TimelineEntry) -> None:
+        """Append a timeline entry to a recording.
+
+        NON-BROADCASTING PATH (COL-5): This method deliberately does NOT call
+        _post_mutate_locked / _notify_listeners. Every keydown event during capture
+        would trigger a full-state snapshot broadcast at ~10 Hz without this isolation.
+        The snapshot's RecordingMeta.entry_count stays stale until the next natural
+        snapshot trigger (nav, stop, rename) — acceptable since the frontend does not
+        need live entry_count during capture.
+
+        seq ownership (Q1): seq is stamped here as len(recording.entries) atomically
+        inside the lock — never by the frontend. One monotonic counter across ALL entry
+        kinds (page_event, pick_ref, region_ref, relation_ref, navigation) eliminates
+        UNIQUE(recording_id, seq) collision hazard regardless of message-arrival ordering.
+        """
+        async with self._lock:
+            self._append_timeline_entry_locked(recording_id, entry)
+            # Deliberate: NO _post_mutate_locked / _notify_listeners call here.
+            # See COL-5 note above.
+
+    def _append_timeline_entry_locked(self, recording_id: str, entry: TimelineEntry) -> None:
+        """Append entry to in-memory recording + persist. Must be called inside the lock.
+
+        Stamps seq + timestamp_ms server-side (Q1 Python-owned seq). Used by both
+        the public append_timeline_entry and the auto-link paths in add_pick / add_region
+        / add_relation / add_pick_from_programmatic_source.
+        """
+        recording = self._full_recordings.get(recording_id)
+        if recording is None:
+            self._log.warning("state.manager.append_timeline_entry.unknown_recording", recording_id=recording_id)
+            return
+        # Q1: Python stamps seq as len(entries) — atomically inside the lock.
+        # Any frontend-supplied seq value is overwritten here.
+        entry.seq = len(recording.entries)
+        entry.timestamp_ms = int(time.time() * 1000)
+        recording.entries.append(entry)
+        self._persistence.append_timeline_entry(recording_id, entry)
+        self._log.debug(
+            "state.manager.append_timeline_entry_locked",
+            recording_id=recording_id,
+            seq=entry.seq,
+            kind=entry.kind,
+        )
 
     # ----- Post-mutation hook ------------------------------------------------
 

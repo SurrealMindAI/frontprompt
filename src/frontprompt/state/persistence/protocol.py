@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Region, Relation
+    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Recording, Region, Relation, TimelineEntry
 
 
 class StatePersistence(Protocol):
@@ -81,6 +81,38 @@ class StatePersistence(Protocol):
 
     def delete_relation(self, relation_id: str) -> None:
         """Delete one relation by ``relation_id``. Idempotent (no-op if absent)."""
+        ...
+
+    # ----- Recording write-through (sub-plan 01) ---------------------------------
+
+    def upsert_recording(self, recording: "Recording") -> None:
+        """Insert-or-replace one recording keyed on ``recording_id``. Idempotent.
+
+        Bulk helper for tests and one-shot imports. Runtime mutations use the
+        targeted methods below (append_timeline_entry / update_recording_meta /
+        mark_recording_stopped) — not this full-recording overwrite, which would
+        risk resurrecting deleted entries.
+        """
+        ...
+
+    def delete_recording(self, recording_id: str) -> None:
+        """Delete recording + all its timeline entries (cascade). Idempotent."""
+        ...
+
+    def load_recordings(self) -> "list[Recording]":
+        """Return all recordings with their timeline entries, ordered by started_at_ms."""
+        ...
+
+    def append_timeline_entry(self, recording_id: str, entry: "TimelineEntry") -> None:
+        """Append a single timeline entry to an existing recording. Append-only."""
+        ...
+
+    def update_recording_meta(self, recording_id: str, name: str, description: str) -> None:
+        """Update only name + description of an existing recording."""
+        ...
+
+    def mark_recording_stopped(self, recording_id: str, ended_at_ms: int) -> None:
+        """Set status='stopped' and ended_at_ms. Idempotent."""
         ...
 
 

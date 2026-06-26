@@ -12,7 +12,7 @@ hier sind die state-shapes selbst.
 
 from __future__ import annotations
 
-from typing import Literal, get_args
+from typing import Annotated, Literal, get_args
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -427,6 +427,194 @@ class InspectorState(BaseModel):
 
 
 # ----------------------------------------------------------------------------
+# Recording domain models (Phase 2 — sub-plan 01)
+# ----------------------------------------------------------------------------
+
+RecordingStatus = Literal["active", "stopped"]
+"""Recording lifecycle status. 'active' während der Aufnahme, 'stopped' nach dem Stopp."""
+
+TimelineEntryKind = Literal["page_event", "pick_ref", "region_ref", "relation_ref", "navigation"]
+"""Discriminator für die TimelineEntry-Union. Eine pro Variant-Klasse."""
+
+
+class PageEventEntry(BaseModel):
+    """Eine erfasste Seiten-Interaktion (click, pointerdown, keydown).
+
+    ``wheel``/``scroll`` sind bewusst ausgeschlossen (wire-economy: bis zu 60
+    Events/s würden den expose_function-Transport überlasten).
+    HUD-chrome-Events (isHudChrome=true) sind excluded — die eigenen Toolbar-
+    Clicks dürfen die Aufnahme nicht verschmutzen.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["page_event"] = "page_event"
+    seq: int = Field(description="Monotoner Sequence-Counter, Python-seitig gestempelt.")
+    timestamp_ms: int = Field(description="Epoch ms zum Capture-Zeitpunkt.")
+    event_type: Literal["click", "pointerdown", "keydown"] = Field(
+        description="Event-Typ — nur durable relevante Interactions (wheel/scroll excluded)."
+    )
+    target: str = Field(description="tag#id.class descriptor des Zielelements.")
+    target_path: list[str] = Field(
+        default_factory=list,
+        description="Tag-Sequenz root→Element (DOM-Pfad).",
+    )
+    default_prevented: bool = Field(description="Ob event.preventDefault() aufgerufen wurde.")
+    key: str | None = Field(default=None, description="keydown only — gedrückte Taste.")
+
+
+class PickRefEntry(BaseModel):
+    """Referenz auf einen Pick, der während dieser Aufnahme erstellt wurde.
+
+    FK-Dehydration (ADR-012): ``pick_id`` ist ein bare UUID-Fremdschlüssel,
+    kein eingebettetes Objekt.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["pick_ref"] = "pick_ref"
+    seq: int
+    timestamp_ms: int
+    pick_id: str = Field(description="FK → Pick.pick_id (client-generated uuid4).")
+
+
+class RegionRefEntry(BaseModel):
+    """Referenz auf eine Region, die während dieser Aufnahme gezeichnet wurde."""
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["region_ref"] = "region_ref"
+    seq: int
+    timestamp_ms: int
+    region_id: str = Field(description="FK → Region.region_id.")
+
+
+class RelationRefEntry(BaseModel):
+    """Referenz auf eine Relation, die während dieser Aufnahme erstellt wurde."""
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["relation_ref"] = "relation_ref"
+    seq: int
+    timestamp_ms: int
+    relation_id: str = Field(description="FK → Relation.relation_id.")
+
+
+class NavigationEntry(BaseModel):
+    """Eine Page-Navigation, die vom Python-Session erfasst wurde.
+
+    Cross-origin-Survival: Aufnahmen laufen über Navigationen hinweg —
+    NavigationEntry dokumentiert den Sprung für spätere Replay-Rekonstruktion.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["navigation"] = "navigation"
+    seq: int
+    timestamp_ms: int
+    from_url: str = Field(description="URL vor der Navigation.")
+    to_url: str = Field(description="URL nach der Navigation.")
+
+
+TimelineEntry = Annotated[
+    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry,
+    Field(discriminator="kind"),
+]
+"""Discriminated union aller Timeline-Einträge. Discriminator-Feld: ``kind``.
+
+``seq`` ist global monoton über ALLE Entry-Arten einer Aufnahme — ein Zähler
+für alle (page_event, pick_ref, region_ref, relation_ref, navigation). Python-
+seitig gestempelt als ``len(recording.entries)`` in ``append_timeline_entry``
+atomisch innerhalb des Locks — nie durch das Frontend vergeben.
+"""
+
+
+class RecordingMeta(BaseModel):
+    """Leichtgewichtige Zusammenfassung eines Recordings — ohne ``entries``.
+
+    Enthalten in jedem StateSnapshot-Broadcast (``RecordingsState.recordings``).
+    Wird im Recordings-Tab und im MCP-Listing-Tool verwendet.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    recording_id: str = Field(description="Client-generated uuid4.")
+    name: str = Field(description="User-vergebener Name.")
+    description: str = Field(default="", description="Optionale Beschreibung.")
+    status: RecordingStatus
+    started_at_ms: int = Field(description="Client-clock epoch ms zum Start.")
+    ended_at_ms: int | None = Field(default=None, description="None solange aktiv.")
+    entry_count: int = Field(ge=0, description="Anzahl Timeline-Einträge (≥0).")
+
+
+class Recording(BaseModel):
+    """Vollständiges Recording-Aggregat mit Timeline-Einträgen.
+
+    Nicht in jedem StateSnapshot-Broadcast enthalten — nur in
+    ``RecordingsState.detail_recording`` wenn ``active_detail_recording_id``
+    gesetzt ist. ``entries`` sind append-only, geordnet nach ``seq``.
+
+    ``origin_session`` folgt der steal-on-mutate-Provenance-Convention
+    von Pick/Region/Relation (sqlite-persistence).
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    recording_id: str = Field(description="Client-generated uuid4 — Identität (keine UNIQUE auf name).")
+    name: str
+    description: str = Field(default="")
+    status: RecordingStatus
+    started_at_ms: int = Field(description="Client-clock epoch ms.")
+    ended_at_ms: int | None = Field(default=None)
+    entries: list[TimelineEntry] = Field(
+        default_factory=list,
+        description="Timeline-Einträge append-only, geordnet nach seq.",
+    )
+    origin_session: str | None = Field(
+        default=None,
+        description=(
+            "session_id of the session that last mutated this entity "
+            "(steal-on-mutate provenance via sqlite-persistence). "
+            "None until first persisted."
+        ),
+    )
+
+
+class RecordingsState(BaseModel):
+    """Recording-feature Backend-State — Teil des StateSnapshot.
+
+    ``active_recording_id`` überlebt cross-origin-Navigationen (backendState).
+    ``active_detail_recording_id`` ist ebenfalls backendState (analog zu
+    ``active_pick_id`` / ``active_region_id`` — right-panel Detail-Selektion
+    persistiert nach Nav). ADR-018 verbietet nur ephemere UI-States (hover,
+    drag), nicht durable Selektionszustände.
+
+    ``detail_recording`` wird nur befüllt wenn ``active_detail_recording_id``
+    gesetzt ist — vollständige Timeline inklusive. Nicht in jedem Broadcast
+    enthalten wenn None.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    active_recording_id: str | None = Field(
+        default=None,
+        description="ID der laufenden Aufnahme, None = nicht aufnehmend.",
+    )
+    recordings: list[RecordingMeta] = Field(
+        default_factory=list,
+        description="Lightweight Zusammenfassungen aller Recordings.",
+    )
+    active_detail_recording_id: str | None = Field(
+        default=None,
+        description="ID der im right-panel angezeigten Aufnahme (detail-Ansicht).",
+    )
+    detail_recording: Recording | None = Field(
+        default=None,
+        description="Vollständiges Recording mit Timeline (nur wenn active_detail_recording_id gesetzt).",
+    )
+
+
+# ----------------------------------------------------------------------------
 # StateSnapshot — top-level wire-payload
 # ----------------------------------------------------------------------------
 
@@ -453,6 +641,9 @@ class StateSnapshot(BaseModel):
           screenshot-extraction-context. Backwards-additiv am wire-shape, aber
           coords sind nicht mehr direkt vergleichbar — bewusster bump.
         - 0.7.0: + ``origin_session`` on Pick/Region/Relation (additive — persistence provenance).
+        - 0.8.0: + ``recordings_state`` (additive — Recording-feature domain, sub-plan 01).
+          Default ``RecordingsState()`` makes this forward-compatible: old overlays
+          ignore the new field; old Python payloads missing the field default to empty.
     """
 
     # Read-only wire-payload — constructed by snapshot(), never mutated after construction.
@@ -460,13 +651,17 @@ class StateSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     schema_version: str = Field(
-        default="0.7.0",
+        default="0.8.0",
         description="Forward-compat tag — bump bei breaking changes.",
     )
     panel_state: PanelStateView = Field(description="Aktueller authoritative panel-state.")
     inspector_state: InspectorState = Field(
         default_factory=InspectorState,
         description="Aktueller inspector-state — active toggle + picks-list.",
+    )
+    recordings_state: RecordingsState = Field(
+        default_factory=RecordingsState,
+        description="Recording-feature state — active recording + list + detail (Schema 0.8.0+).",
     )
 
 
@@ -592,6 +787,17 @@ __codegen_roots__ = [
     "Relation",
     "InspectorState",
     "StateSnapshot",
+    # Recording-feature domain (Schema 0.8.0, sub-plan 01)
+    "RecordingStatus",
+    "TimelineEntryKind",
+    "PageEventEntry",
+    "PickRefEntry",
+    "RegionRefEntry",
+    "RelationRefEntry",
+    "NavigationEntry",
+    "RecordingMeta",
+    "Recording",
+    "RecordingsState",
 ]
 
 __all__ = [
@@ -605,20 +811,31 @@ __all__ = [
     "ElementRect",
     "HostnameGroup",
     "InspectorState",
+    "NavigationEntry",
     "OriginSessionGroup",
     "OwnedVsForeign",
+    "PageEventEntry",
     "PanelId",
     "PanelStateView",
     "PanelView",
     "Pick",
     "PickElement",
+    "PickRefEntry",
+    "Recording",
+    "RecordingMeta",
+    "RecordingStatus",
+    "RecordingsState",
+    "RegionRefEntry",
     "Region",
+    "RelationRefEntry",
     "Relation",
     "RelationEndpointKind",
     "RelationKind",
     "StateSnapshot",
     "StateSummary",
     "SummaryCounts",
+    "TimelineEntry",
+    "TimelineEntryKind",
     "Viewport",
     "hostname_for_url",
 ]

@@ -262,6 +262,7 @@ then drill down via `get_snapshot` / `get_picks` / `get_pick`.
 | 0.5.0 | 2026-05-20 | + `Pick.color_index` + `Region.color_index` (additive — 32-color palette identity) |
 | 0.6.0 | 2026-05-20 | `Region.rect` migrated to page-absolute (was viewport-relative). + `Region.viewport_snapshot`. Screenshot-extraction-ready. |
 | 0.7.0 | 2026-05-31 | + `origin_session` on Pick/Region/Relation (additive — persistence provenance) |
+| 0.8.0 | 2026-06-26 | + `recordings_state: RecordingsState` on StateSnapshot (additive). Introduces Recording aggregate with TimelineEntry union (PageEventEntry/PickRefEntry/RegionRefEntry/RelationRefEntry/NavigationEntry), RecordingMeta (lightweight list), RecordingsState (active_recording_id + detail selection). SQLite tables: `recordings` + `timeline_entries` (WAL, UNIQUE(recording_id, seq)). Python-owned monotonic seq counter. Non-broadcasting `append_timeline_entry` path (COL-5). Auto-link on pick/region/relation add (COL-6). |
 
 ## IPC (tool) schema history
 

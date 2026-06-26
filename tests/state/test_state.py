@@ -201,9 +201,9 @@ def test_inspector_state_roundtrips_with_picks() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_state_snapshot_default_schema_version_is_0_7_0() -> None:
+def test_state_snapshot_default_schema_version_is_0_8_0() -> None:
     snap = StateSnapshot(panel_state=_panel_state())
-    assert snap.schema_version == "0.7.0"
+    assert snap.schema_version == "0.8.0"
 
 
 def test_state_snapshot_inspector_state_default_factory() -> None:

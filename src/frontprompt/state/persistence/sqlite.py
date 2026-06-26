@@ -26,7 +26,7 @@ import structlog
 
 if TYPE_CHECKING:
     from frontprompt.state.persistence.protocol import StatePersistence
-    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Region, Relation
+    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Recording, Region, Relation, TimelineEntry
 
 _LOG = structlog.get_logger(__name__)
 
@@ -66,6 +66,26 @@ CREATE TABLE IF NOT EXISTS relations (
 CREATE TABLE IF NOT EXISTS schema_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recordings (
+    recording_id   TEXT PRIMARY KEY,
+    origin_session TEXT,
+    payload_json   TEXT NOT NULL,
+    status         TEXT NOT NULL,
+    started_at_ms  INTEGER NOT NULL,
+    ended_at_ms    INTEGER,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS timeline_entries (
+    entry_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id TEXT NOT NULL REFERENCES recordings(recording_id),
+    seq          INTEGER NOT NULL,
+    kind         TEXT NOT NULL,
+    timestamp_ms INTEGER NOT NULL,
+    payload_json TEXT NOT NULL,
+    UNIQUE(recording_id, seq)
 );
 """
 
@@ -366,6 +386,197 @@ class SqlitePersistence:
             relations=len(inspector_state.relations),
         )
 
+
+    # ------------------------------------------------------------------
+    # Recording-domain (sub-plan 01)
+    # ------------------------------------------------------------------
+
+    _UPSERT_RECORDING = """
+        INSERT INTO recordings (recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (recording_id) DO UPDATE SET
+            origin_session = excluded.origin_session,
+            payload_json   = excluded.payload_json,
+            status         = excluded.status,
+            started_at_ms  = excluded.started_at_ms,
+            ended_at_ms    = excluded.ended_at_ms,
+            updated_at     = excluded.updated_at
+    """
+
+    def upsert_recording(self, recording: "Recording") -> None:
+        """Insert-or-replace one recording keyed on ``recording_id``. Idempotent.
+
+        Stores the recording metadata; timeline entries are NOT written by this
+        method — use ``append_timeline_entry`` for runtime event appends.
+        """
+        # Store only the meta fields (no entries) so that a bulk re-seed does
+        # not accidentally resurrect or duplicate timeline_entries.
+        import json
+
+        meta_payload = json.dumps(
+            {
+                "recording_id": recording.recording_id,
+                "name": recording.name,
+                "description": recording.description,
+                "origin_session": recording.origin_session,
+            }
+        )
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_RECORDING,
+                    (
+                        recording.recording_id,
+                        recording.origin_session,
+                        meta_payload,
+                        recording.status,
+                        recording.started_at_ms,
+                        recording.ended_at_ms,
+                    ),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="upsert_recording", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.upsert_recording.ok", recording_id=recording.recording_id)
+
+    def delete_recording(self, recording_id: str) -> None:
+        """Delete recording + all timeline_entries (cascade). Idempotent."""
+        try:
+            with self._conn:
+                # Delete entries first (no FK cascade in SQLite without PRAGMA foreign_keys)
+                self._conn.execute("DELETE FROM timeline_entries WHERE recording_id = ?", (recording_id,))
+                self._conn.execute("DELETE FROM recordings WHERE recording_id = ?", (recording_id,))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="delete_recording", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.delete_recording.ok", recording_id=recording_id)
+
+    def load_recordings(self) -> "list[Recording]":
+        """Return all recordings with their timeline entries, ordered by started_at_ms."""
+        import json
+
+        from pydantic import TypeAdapter
+
+        from frontprompt.state.state import Recording, TimelineEntry
+
+        ta: TypeAdapter[TimelineEntry] = TypeAdapter(TimelineEntry)
+
+        rec_rows = self._conn.execute(
+            "SELECT recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms "
+            "FROM recordings ORDER BY started_at_ms ASC"
+        ).fetchall()
+
+        results: list[Recording] = []
+        for row in rec_rows:
+            recording_id, origin_session, payload_json, status, started_at_ms, ended_at_ms = row
+            try:
+                meta = json.loads(payload_json)
+            except (json.JSONDecodeError, ValueError) as exc:
+                self._log.warning("state.persistence.load.row_skipped", table="recordings", error=str(exc))
+                continue
+
+            # Load timeline entries for this recording, ordered by seq
+            entry_rows = self._conn.execute(
+                "SELECT payload_json FROM timeline_entries WHERE recording_id = ? ORDER BY seq ASC",
+                (recording_id,),
+            ).fetchall()
+
+            entries = []
+            for entry_row in entry_rows:
+                try:
+                    entries.append(ta.validate_json(entry_row[0]))
+                except (json.JSONDecodeError, Exception) as exc:
+                    self._log.warning(
+                        "state.persistence.load.row_skipped",
+                        table="timeline_entries",
+                        recording_id=recording_id,
+                        error=str(exc),
+                    )
+                    # corrupt rows skipped — resilience convention (mirrors picks/regions)
+
+            results.append(
+                Recording(
+                    recording_id=recording_id,
+                    name=meta.get("name", ""),
+                    description=meta.get("description", ""),
+                    status=status,
+                    started_at_ms=started_at_ms,
+                    ended_at_ms=ended_at_ms,
+                    entries=entries,
+                    origin_session=origin_session,
+                )
+            )
+
+        self._log.debug("state.persistence.sqlite.load_recordings.ok", count=len(results))
+        return results
+
+    _UPSERT_TIMELINE_ENTRY = """
+        INSERT INTO timeline_entries (recording_id, seq, kind, timestamp_ms, payload_json)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (recording_id, seq) DO UPDATE SET
+            kind         = excluded.kind,
+            timestamp_ms = excluded.timestamp_ms,
+            payload_json = excluded.payload_json
+    """
+
+    def append_timeline_entry(self, recording_id: str, entry: "TimelineEntry") -> None:
+        """Append a single timeline entry to an existing recording. Append-only at runtime."""
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_TIMELINE_ENTRY,
+                    (recording_id, entry.seq, entry.kind, entry.timestamp_ms, entry.model_dump_json()),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="append_timeline_entry", error=str(exc))
+            return
+        self._log.debug(
+            "state.persistence.sqlite.append_timeline_entry.ok",
+            recording_id=recording_id,
+            seq=entry.seq,
+        )
+
+    def update_recording_meta(self, recording_id: str, name: str, description: str) -> None:
+        """Update only name + description of an existing recording."""
+        import json
+
+        # Read current meta payload, update fields, write back
+        row = self._conn.execute(
+            "SELECT payload_json FROM recordings WHERE recording_id = ?", (recording_id,)
+        ).fetchone()
+        if row is None:
+            self._log.warning("state.persistence.update_recording_meta.unknown", recording_id=recording_id)
+            return
+        try:
+            meta = json.loads(row[0])
+        except json.JSONDecodeError:
+            meta = {}
+        meta["name"] = name
+        meta["description"] = description
+        try:
+            with self._conn:
+                self._conn.execute(
+                    "UPDATE recordings SET payload_json = ?, updated_at = datetime('now') WHERE recording_id = ?",
+                    (json.dumps(meta), recording_id),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="update_recording_meta", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.update_recording_meta.ok", recording_id=recording_id)
+
+    def mark_recording_stopped(self, recording_id: str, ended_at_ms: int) -> None:
+        """Set status='stopped' and ended_at_ms. Idempotent."""
+        try:
+            with self._conn:
+                self._conn.execute(
+                    "UPDATE recordings SET status = 'stopped', ended_at_ms = ?, updated_at = datetime('now') "
+                    "WHERE recording_id = ?",
+                    (ended_at_ms, recording_id),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="mark_recording_stopped", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.mark_recording_stopped.ok", recording_id=recording_id)
 
 # ---------------------------------------------------------------------------
 # Factory
