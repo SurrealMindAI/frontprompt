@@ -397,8 +397,12 @@ def test_recordings_state_roundtrip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_state_snapshot_schema_version_is_0_8_0() -> None:
-    """Nach dem Schema-Bump muss StateSnapshot default schema_version '0.8.0' liefern."""
+def test_state_snapshot_schema_version_is_current() -> None:
+    """StateSnapshot default schema_version muss dem aktuellen Wert entsprechen.
+
+    History: 0.8.0 (recorder sub-plan 01) → 0.9.0 (replay sub-plan 01, AssertionEntry +
+    ParameterDeclaration + RecordingsState.active_replay_progress).
+    """
     from frontprompt.state.state import PanelStateView, PanelView, StateSnapshot
 
     panel = PanelStateView(
@@ -408,7 +412,7 @@ def test_state_snapshot_schema_version_is_0_8_0() -> None:
         right=PanelView(open=True, size=340),
     )
     snap = StateSnapshot(panel_state=panel)
-    assert snap.schema_version == "0.8.0"
+    assert snap.schema_version == "0.9.0"
 
 
 def test_state_snapshot_includes_recordings_state_field() -> None:

@@ -433,8 +433,27 @@ class InspectorState(BaseModel):
 RecordingStatus = Literal["active", "stopped"]
 """Recording lifecycle status. 'active' während der Aufnahme, 'stopped' nach dem Stopp."""
 
-TimelineEntryKind = Literal["page_event", "pick_ref", "region_ref", "relation_ref", "navigation"]
+TimelineEntryKind = Literal["page_event", "pick_ref", "region_ref", "relation_ref", "navigation", "assertion"]
 """Discriminator für die TimelineEntry-Union. Eine pro Variant-Klasse."""
+
+# ----------------------------------------------------------------------------
+# Assertion domain types (replay + assertion authoring — sub-plan 01)
+# ----------------------------------------------------------------------------
+
+AssertionType = Literal["selector_exists", "text_equals", "text_contains", "visible", "url_equals"]
+"""Art der Assertion — was geprüft wird.
+
+- ``selector_exists``: CSS-Selektor muss im DOM vorhanden sein.
+- ``text_equals``/``text_contains``: Text des Elements muss gleich/enthalten sein.
+- ``visible``: Element muss sichtbar sein (kein display:none, kein visibility:hidden).
+- ``url_equals``: Aktuelle URL muss übereinstimmen.
+"""
+
+AssertionComparator = Literal["equals", "contains", "regex", "none"]
+"""Vergleichsoperator für Assertion-Evaluierung.
+
+``'none'`` wird für ``selector_exists`` und ``visible`` verwendet wo ``expected`` immer None ist.
+"""
 
 
 class PageEventEntry(BaseModel):
@@ -516,8 +535,50 @@ class NavigationEntry(BaseModel):
     to_url: str = Field(description="URL nach der Navigation.")
 
 
+class AssertionEntry(BaseModel):
+    """Eine Assertion-Checkpoint in der Recording-Timeline (replay + assertions — sub-plan 01).
+
+    Wird während Replay durch den ``AssertionEvaluator`` ausgewertet. Pass/Fail
+    wird im ``ReplayReport`` festgehalten. Kann nachträglich auf eine gespeicherte
+    Aufnahme via ``AddAssertionRequest`` oder bridge-Authoring hinzugefügt werden.
+
+    ``assertion_id`` ist die Identität (kein UNIQUE auf description).
+    ``seq`` ist Python-seitig zugewiesen (monoton, analog allen anderen Varianten).
+    ``target`` ist ein CSS-Selektor für element-targeted assertions; leer für ``url_equals``.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    kind: Literal["assertion"] = "assertion"
+    seq: int = Field(description="Monotoner Sequence-Counter, Python-seitig gestempelt.")
+    timestamp_ms: int = Field(description="Epoch ms zum Erstellungszeitpunkt.")
+    assertion_id: str = Field(description="Client-generated uuid4 — Identität.")
+    assertion_type: AssertionType = Field(description="Art der Assertion.")
+    target: str = Field(
+        default="",
+        description=(
+            "CSS-Selektor für element-targeted assertions (tag#id.class descriptor). "
+            "Leer für url_equals."
+        ),
+    )
+    target_kind: Literal["selector", "url"] = Field(
+        description="Typ des target — 'selector' für DOM-Assertions, 'url' für URL-Assertion."
+    )
+    expected: str | None = Field(
+        default=None,
+        description="Erwarteter Wert; None für selector_exists und visible.",
+    )
+    comparator: AssertionComparator = Field(
+        description="Vergleichsoperator; 'none' für selector_exists und visible."
+    )
+    description: str = Field(
+        default="",
+        description="Human-readable Label für Report-Anzeige.",
+    )
+
+
 TimelineEntry = Annotated[
-    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry,
+    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry | AssertionEntry,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Timeline-Einträge. Discriminator-Feld: ``kind``.
@@ -527,6 +588,28 @@ für alle (page_event, pick_ref, region_ref, relation_ref, navigation). Python-
 seitig gestempelt als ``len(recording.entries)`` in ``append_timeline_entry``
 atomisch innerhalb des Locks — nie durch das Frontend vergeben.
 """
+
+
+class ParameterDeclaration(BaseModel):
+    """Benannter Parameter-Deklaration auf einem Recording (replay sub-plan 01).
+
+    Parameter werden zur Recording-Authoring-Zeit deklariert und beim Replay-Aufruf
+    an konkrete Werte gebunden. Substitutions-Syntax: ``{{param_name}}`` in
+    Navigations-URLs, keydown-Text-Werten und Assertion-Targets.
+
+    ``name`` ist der Substitutions-Schlüssel (z.B. ``"login_url"``, ``"username"``).
+    Name-Eindeutigkeit wird vom ``StateManager.add_parameter()`` erzwungen.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    name: str = Field(description="Substitutions-Schlüssel (eindeutig innerhalb der Aufnahme).")
+    param_type: Literal["string", "url", "selector"] = Field(description="Parameter-Typ.")
+    description: str = Field(default="", description="Human-readable Beschreibung.")
+    default_value: str | None = Field(
+        default=None,
+        description="Default-Wert wenn nicht beim Replay-Aufruf übergeben; None = kein Default.",
+    )
 
 
 class RecordingMeta(BaseModel):
@@ -570,6 +653,14 @@ class Recording(BaseModel):
         default_factory=list,
         description="Timeline-Einträge append-only, geordnet nach seq.",
     )
+    parameters: list[ParameterDeclaration] = Field(
+        default_factory=list,
+        description=(
+            "Benannte Parameter-Deklarationen für Replay-Parametrisierung (sub-plan 01). "
+            "Additive field — alte Clients ignorieren unbekannte Felder. "
+            "Name-Eindeutigkeit wird vom StateManager enforced."
+        ),
+    )
     origin_session: str | None = Field(
         default=None,
         description=(
@@ -578,6 +669,114 @@ class Recording(BaseModel):
             "None until first persisted."
         ),
     )
+
+
+# ----------------------------------------------------------------------------
+# Replay domain models (sub-plan 01)
+# ----------------------------------------------------------------------------
+
+ReplayStatus = Literal["completed", "failed", "aborted"]
+"""Status eines abgeschlossenen Replay-Laufs.
+
+- ``completed``: Alle Schritte ausgeführt (Assertions können fehlgeschlagen sein, Lauf fertig).
+- ``failed``: Nicht-wiederherstellbarer Fehler (Page-crash, Nav-timeout) hat Ausführung gestoppt.
+- ``aborted``: Explizit abgebrochen via StopReplayRequest (zukünftig) oder Timeout.
+"""
+
+
+class ReplayStepResult(BaseModel):
+    """Per-step Ergebnis innerhalb eines ReplayReport.
+
+    Ein Eintrag pro TimelineEntry-Versuch beim Replay.
+    ``ok=True AND assertion_passed=False`` ist valid — Schritt lief, aber Assertion schlug fehl.
+    ``ok=False`` bedeutet, dass der Schritt selbst nicht ausgeführt werden konnte.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    seq: int = Field(description="seq des zugehörigen TimelineEntry.")
+    kind: str = Field(description="kind des TimelineEntry (mirrors TimelineEntry.kind).")
+    ok: bool = Field(description="True = Schritt erfolgreich ausgeführt.")
+    skipped: bool = Field(description="True für pick_ref/region_ref/relation_ref im MVP.")
+    skipped_reason: str | None = Field(default=None, description="Grund für das Überspringen.")
+    error: str | None = Field(default=None, description="Fehlermeldung wenn ok=False.")
+    assertion_passed: bool | None = Field(
+        default=None,
+        description="None für Nicht-Assertions; True/False für Assertion-Schritte.",
+    )
+    assertion_actual: str | None = Field(
+        default=None,
+        description="Tatsächlicher Wert für Diagnose (nur bei assertion-Schritten).",
+    )
+    duration_ms: int = Field(description="Ausführungszeit dieses Schritts in ms.")
+
+
+class ReplayReport(BaseModel):
+    """Dauerhaftes Ergebnis eines einzelnen Replay-Laufs.
+
+    Erzeugt vom ReplayPlayer, in SQLite persistiert.
+    Nicht im StateSnapshot-Broadcast enthalten — nur ReplayProgress (leichtgewichtig)
+    ist in RecordingsState während eines aktiven Laufs. Vollständiger ReplayReport
+    wird via GetReplayReportRequest abgerufen.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    replay_id: str = Field(description="uuid4 — Identität.")
+    recording_id: str = Field(description="FK → Recording.recording_id.")
+    parameters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Beim Aufruf gebundene Parameter (leeres dict wenn keine Parameter).",
+    )
+    status: ReplayStatus
+    started_at_ms: int = Field(description="Epoch ms zum Start.")
+    ended_at_ms: int | None = Field(default=None, description="None wenn aborted vor Ende.")
+    step_results: list[ReplayStepResult] = Field(default_factory=list)
+    error: str | None = Field(
+        default=None,
+        description="Top-level Fehler für aborted-Replays.",
+    )
+    origin_session: str | None = Field(
+        default=None,
+        description="session_id der Session die den Replay initiiert hat (Provenance).",
+    )
+
+
+class ReplayReportMeta(BaseModel):
+    """Leichtgewichtige Zusammenfassung eines ReplayReport — ohne step_results.
+
+    Für List-Views (list_replay_reports_meta). Analog RecordingMeta für Recordings.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    replay_id: str = Field(description="uuid4 — Identität.")
+    recording_id: str = Field(description="FK → Recording.recording_id.")
+    status: ReplayStatus
+    started_at_ms: int
+    ended_at_ms: int | None = Field(default=None)
+    step_count: int = Field(ge=0, description="Anzahl step_results.")
+    passed_assertions: int = Field(ge=0, description="Anzahl bestandener Assertions.")
+    failed_assertions: int = Field(ge=0, description="Anzahl fehlgeschlagener Assertions.")
+
+
+class ReplayProgress(BaseModel):
+    """Leichtgewichtiger Fortschritts-Snapshot während eines aktiven Replays.
+
+    In RecordingsState.active_replay_progress während einer aktiven Replay-Ausführung.
+    Ermöglicht Live-Fortschrittsanzeige im Overlay ohne den vollen ReplayReport zu senden.
+    ``active_replay_progress`` ist backendState — Replay läuft über Cross-Origin-Navigationen
+    weiter; Progress muss Page-Destruction überleben.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    replay_id: str = Field(description="FK → ReplayReport.replay_id.")
+    recording_id: str = Field(description="FK → Recording.recording_id.")
+    current_seq: int = Field(description="seq des aktuell ausgeführten Schritts.")
+    total_steps: int = Field(description="Gesamtzahl der Timeline-Schritte.")
+    passed_assertions: int = Field(ge=0)
+    failed_assertions: int = Field(ge=0)
 
 
 class RecordingsState(BaseModel):
@@ -612,6 +811,14 @@ class RecordingsState(BaseModel):
         default=None,
         description="Vollständiges Recording mit Timeline (nur wenn active_detail_recording_id gesetzt).",
     )
+    active_replay_progress: ReplayProgress | None = Field(
+        default=None,
+        description=(
+            "Fortschritts-Snapshot eines aktiven Replay-Laufs (sub-plan 01, Schema 0.9.0+). "
+            "None wenn kein Replay läuft. Additive field — alte Overlays ignorieren unbekannte Felder. "
+            "backendState: Replay läuft über Cross-Origin-Navigationen weiter."
+        ),
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -644,6 +851,9 @@ class StateSnapshot(BaseModel):
         - 0.8.0: + ``recordings_state`` (additive — Recording-feature domain, sub-plan 01).
           Default ``RecordingsState()`` makes this forward-compatible: old overlays
           ignore the new field; old Python payloads missing the field default to empty.
+        - 0.9.0: + ``AssertionEntry`` TimelineEntry-Variante, + ``Recording.parameters``
+          (ParameterDeclaration list), + ``RecordingsState.active_replay_progress``
+          (ReplayProgress | None, additive — None-default macht es forward-compat).
     """
 
     # Read-only wire-payload — constructed by snapshot(), never mutated after construction.
@@ -651,7 +861,7 @@ class StateSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     schema_version: str = Field(
-        default="0.8.0",
+        default="0.9.0",
         description="Forward-compat tag — bump bei breaking changes.",
     )
     panel_state: PanelStateView = Field(description="Aktueller authoritative panel-state.")
@@ -798,6 +1008,16 @@ __codegen_roots__ = [
     "RecordingMeta",
     "Recording",
     "RecordingsState",
+    # Replay + assertion domain (Schema 0.9.0, sub-plan 01)
+    "AssertionType",
+    "AssertionComparator",
+    "AssertionEntry",
+    "ParameterDeclaration",
+    "ReplayStatus",
+    "ReplayStepResult",
+    "ReplayReport",
+    "ReplayReportMeta",
+    "ReplayProgress",
 ]
 
 __all__ = [
@@ -807,6 +1027,9 @@ __all__ = [
     "REGION_NOTE_MAX_LENGTH",
     "RELATION_ENDPOINT_KINDS",
     "RELATION_KINDS",
+    "AssertionComparator",
+    "AssertionEntry",
+    "AssertionType",
     "ElementFingerprint",
     "ElementRect",
     "HostnameGroup",
@@ -818,6 +1041,7 @@ __all__ = [
     "PanelId",
     "PanelStateView",
     "PanelView",
+    "ParameterDeclaration",
     "Pick",
     "PickElement",
     "PickRefEntry",
@@ -831,6 +1055,11 @@ __all__ = [
     "Relation",
     "RelationEndpointKind",
     "RelationKind",
+    "ReplayProgress",
+    "ReplayReport",
+    "ReplayReportMeta",
+    "ReplayStatus",
+    "ReplayStepResult",
     "StateSnapshot",
     "StateSummary",
     "SummaryCounts",

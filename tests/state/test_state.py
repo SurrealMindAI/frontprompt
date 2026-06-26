@@ -201,9 +201,10 @@ def test_inspector_state_roundtrips_with_picks() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_state_snapshot_default_schema_version_is_0_8_0() -> None:
+def test_state_snapshot_default_schema_version_is_0_9_0() -> None:
+    # Schema bumped 0.8.0 → 0.9.0 in replay sub-plan 01 (AssertionEntry + ReplayProgress).
     snap = StateSnapshot(panel_state=_panel_state())
-    assert snap.schema_version == "0.8.0"
+    assert snap.schema_version == "0.9.0"
 
 
 def test_state_snapshot_inspector_state_default_factory() -> None:

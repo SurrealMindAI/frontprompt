@@ -12,7 +12,17 @@ from typing import TYPE_CHECKING
 import structlog
 
 if TYPE_CHECKING:
-    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Recording, Region, Relation, TimelineEntry
+    from frontprompt.state.state import (
+        InspectorState,
+        PanelStateView,
+        Pick,
+        Recording,
+        Region,
+        Relation,
+        ReplayReport,
+        ReplayReportMeta,
+        TimelineEntry,
+    )
 
 _LOG = structlog.get_logger(__name__)
 
@@ -31,6 +41,8 @@ class InMemoryPersistence:
         self._log = _LOG.bind(impl="in_memory")
         # Recording in-memory store: recording_id -> Recording
         self._recordings: dict[str, "Recording"] = {}
+        # Replay report in-memory store: replay_id -> ReplayReport
+        self._replay_reports: dict[str, "ReplayReport"] = {}
 
     def load_panel_state(self) -> PanelStateView | None:
         self._log.info("state.persistence.load_panel.in_memory_no_op")
@@ -123,6 +135,43 @@ class InMemoryPersistence:
         rec.status = "stopped"
         rec.ended_at_ms = ended_at_ms
         self._log.debug("state.persistence.mark_recording_stopped.in_memory", recording_id=recording_id)
+
+    # ----- Replay-report write-through (sub-plan 01) --- in-memory dict store -----
+
+    def save_replay_report(self, report: "ReplayReport") -> None:
+        """In-memory upsert — last-write-wins by replay_id."""
+        self._replay_reports[report.replay_id] = report.model_copy(deep=True)
+        self._log.debug("state.persistence.save_replay_report.in_memory", replay_id=report.replay_id)
+
+    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+        """Retrieve by replay_id. Returns None when not found."""
+        return self._replay_reports.get(replay_id)
+
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+        """Return lightweight ReplayReportMeta list, optionally filtered by recording_id."""
+        from frontprompt.state.state import ReplayReportMeta
+
+        reports = list(self._replay_reports.values())
+        if recording_id is not None:
+            reports = [r for r in reports if r.recording_id == recording_id]
+
+        results: list[ReplayReportMeta] = []
+        for report in sorted(reports, key=lambda r: r.started_at_ms):
+            passed = sum(1 for s in report.step_results if s.assertion_passed is True)
+            failed = sum(1 for s in report.step_results if s.assertion_passed is False)
+            results.append(
+                ReplayReportMeta(
+                    replay_id=report.replay_id,
+                    recording_id=report.recording_id,
+                    status=report.status,
+                    started_at_ms=report.started_at_ms,
+                    ended_at_ms=report.ended_at_ms,
+                    step_count=len(report.step_results),
+                    passed_assertions=passed,
+                    failed_assertions=failed,
+                )
+            )
+        return results
 
 
 __all__ = ["InMemoryPersistence"]

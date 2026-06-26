@@ -23,6 +23,7 @@ import structlog
 from frontprompt.state.persistence import InMemoryPersistence, StatePersistence
 from frontprompt.state.state import (
     PANEL_IDS,
+    AssertionEntry,
     HostnameGroup,
     InspectorState,
     NavigationEntry,
@@ -32,6 +33,7 @@ from frontprompt.state.state import (
     PanelId,
     PanelStateView,
     PanelView,
+    ParameterDeclaration,
     Pick,
     PickRefEntry,
     Recording,
@@ -42,6 +44,9 @@ from frontprompt.state.state import (
     Relation,
     RelationKind,
     RelationRefEntry,
+    ReplayProgress,
+    ReplayReport,
+    ReplayReportMeta,
     StateSnapshot,
     StateSummary,
     SummaryCounts,
@@ -1006,6 +1011,227 @@ class StateManager:
             seq=entry.seq,
             kind=entry.kind,
         )
+
+    # ----- Mutation API: Assertions (single-writer) ------------------
+
+    async def add_assertion_to_timeline(
+        self,
+        recording_id: str,
+        entry_payload: dict,
+        insert_after_seq: int | None = None,
+    ) -> StateSnapshot:
+        """Append or insert an AssertionEntry into a recording's timeline.
+
+        When ``insert_after_seq=None``, appended at end (seq = len(entries)).
+        When ``insert_after_seq`` is set, the assertion is inserted after the
+        entry with that seq and all subsequent entries are renumbered.
+
+        No-op with warning if recording_id is unknown. Broadcasts snapshot.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning(
+                    "state.manager.add_assertion.unknown_recording", recording_id=recording_id
+                )
+                snap = self._post_mutate_locked()
+            else:
+                now_ms = int(time.time() * 1000)
+                entry = AssertionEntry(
+                    kind="assertion",
+                    seq=0,  # stamped below
+                    timestamp_ms=now_ms,
+                    **entry_payload,
+                )
+                if insert_after_seq is None:
+                    # Append at end
+                    entry.seq = len(recording.entries)
+                    recording.entries.append(entry)
+                else:
+                    # Insert after the given seq — find insertion index
+                    insert_idx = next(
+                        (i + 1 for i, e in enumerate(recording.entries) if e.seq == insert_after_seq),
+                        len(recording.entries),
+                    )
+                    entry.seq = insert_idx
+                    recording.entries.insert(insert_idx, entry)
+                    # Renumber all entries after the insertion point
+                    for i, e in enumerate(recording.entries):
+                        e.seq = i
+
+                self._log.info(
+                    "state.manager.add_assertion",
+                    recording_id=recording_id,
+                    assertion_id=entry.assertion_id,
+                    seq=entry.seq,
+                    insert_after_seq=insert_after_seq,
+                )
+                snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    async def delete_assertion(self, recording_id: str, assertion_id: str) -> StateSnapshot:
+        """Remove an AssertionEntry from a recording's timeline. Renumbers seqs.
+
+        No-op if recording or assertion is unknown. Broadcasts snapshot.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning(
+                    "state.manager.delete_assertion.unknown_recording", recording_id=recording_id
+                )
+                snap = self._post_mutate_locked()
+            else:
+                before = len(recording.entries)
+                recording.entries = [
+                    e for e in recording.entries
+                    if not (e.kind == "assertion" and e.assertion_id == assertion_id)  # type: ignore[attr-defined]
+                ]
+                removed = before - len(recording.entries)
+                if removed == 0:
+                    self._log.warning(
+                        "state.manager.delete_assertion.not_found",
+                        recording_id=recording_id,
+                        assertion_id=assertion_id,
+                    )
+                else:
+                    # Renumber seqs monotonically after deletion
+                    for i, e in enumerate(recording.entries):
+                        e.seq = i
+                    self._log.info(
+                        "state.manager.delete_assertion",
+                        recording_id=recording_id,
+                        assertion_id=assertion_id,
+                    )
+                snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    async def update_assertion(
+        self,
+        recording_id: str,
+        assertion_id: str,
+        patch: dict,
+    ) -> StateSnapshot:
+        """Partial update of an AssertionEntry in a recording's timeline.
+
+        Only the fields present in ``patch`` are updated; omitted fields stay unchanged.
+        No-op if recording or assertion is unknown. Broadcasts snapshot.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning(
+                    "state.manager.update_assertion.unknown_recording", recording_id=recording_id
+                )
+                snap = self._post_mutate_locked()
+            else:
+                mutated = False
+                for entry in recording.entries:
+                    if entry.kind == "assertion" and entry.assertion_id == assertion_id:  # type: ignore[attr-defined]
+                        for field, value in patch.items():
+                            if hasattr(entry, field):
+                                setattr(entry, field, value)
+                        mutated = True
+                        self._log.info(
+                            "state.manager.update_assertion",
+                            recording_id=recording_id,
+                            assertion_id=assertion_id,
+                            patch_keys=list(patch.keys()),
+                        )
+                        break
+                if not mutated:
+                    self._log.warning(
+                        "state.manager.update_assertion.not_found",
+                        recording_id=recording_id,
+                        assertion_id=assertion_id,
+                    )
+                snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: Parameters (single-writer) ------------------
+
+    async def add_parameter_to_recording(
+        self,
+        recording_id: str,
+        param: ParameterDeclaration,
+    ) -> StateSnapshot:
+        """Append a ParameterDeclaration to a recording.
+
+        Enforces name uniqueness — raises ``ValueError`` if ``param.name`` is
+        already declared on the recording. No-op (with warning) if recording
+        is unknown. Broadcasts snapshot.
+        """
+        async with self._lock:
+            recording = self._full_recordings.get(recording_id)
+            if recording is None:
+                self._log.warning(
+                    "state.manager.add_parameter.unknown_recording", recording_id=recording_id
+                )
+                snap = self._post_mutate_locked()
+            else:
+                existing_names = {p.name for p in recording.parameters}
+                if param.name in existing_names:
+                    raise ValueError(
+                        f"Parameter name '{param.name}' already declared on recording {recording_id!r}."
+                    )
+                recording.parameters.append(param)
+                self._log.info(
+                    "state.manager.add_parameter",
+                    recording_id=recording_id,
+                    param_name=param.name,
+                    param_type=param.param_type,
+                )
+                snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
+
+    # ----- Replay report API (read + write, no broadcast) ------------
+
+    async def save_replay_report(self, report: ReplayReport) -> None:
+        """Persist a ReplayReport. Delegates to persistence; no snapshot broadcast.
+
+        Replay reports are large; agents poll via GetReplayReportRequest IPC call.
+        Non-broadcasting path (mirrors append_timeline_entry discipline, PIT-105).
+        Acquires lock for safe write-through to the persistence layer.
+        """
+        async with self._lock:
+            self._persistence.save_replay_report(report)
+        self._log.debug("state.manager.save_replay_report", replay_id=report.replay_id)
+
+    async def get_replay_report(self, replay_id: str) -> ReplayReport | None:
+        """Retrieve a ReplayReport by replay_id from persistence.
+
+        Lock-free read (mirrors snapshot() / get_recording() discipline).
+        """
+        return self._persistence.get_replay_report(replay_id)
+
+    async def list_replay_reports_meta(
+        self, recording_id: str | None = None
+    ) -> list[ReplayReportMeta]:
+        """Return lightweight ReplayReportMeta list from persistence.
+
+        Lock-free read. Optionally filtered by recording_id.
+        """
+        return self._persistence.list_replay_reports_meta(recording_id)
+
+    # ----- Replay progress (backendState, broadcasts) ----------------
+
+    async def set_active_replay_progress(
+        self, progress: ReplayProgress | None
+    ) -> StateSnapshot:
+        """Update RecordingsState.active_replay_progress + broadcast snapshot.
+
+        ``None`` = no active replay (cleared after replay finishes or is aborted).
+        Single-field, last-writer-wins (one active replay at a time, MVP).
+        Acquires lock (ADR-011: anyio.Lock, single-writer).
+        """
+        async with self._lock:
+            self._recordings_state.active_replay_progress = progress
+            self._log.info(
+                "state.manager.set_active_replay_progress",
+                replay_id=progress.replay_id if progress is not None else None,
+            )
+            snap = self._post_mutate_locked()
+        return await self._notify_and_return(snap)
 
     # ----- Post-mutation hook ------------------------------------------------
 

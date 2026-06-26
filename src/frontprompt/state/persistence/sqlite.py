@@ -26,7 +26,17 @@ import structlog
 
 if TYPE_CHECKING:
     from frontprompt.state.persistence.protocol import StatePersistence
-    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Recording, Region, Relation, TimelineEntry
+    from frontprompt.state.state import (
+        InspectorState,
+        PanelStateView,
+        Pick,
+        Recording,
+        Region,
+        Relation,
+        ReplayReport,
+        ReplayReportMeta,
+        TimelineEntry,
+    )
 
 _LOG = structlog.get_logger(__name__)
 
@@ -86,6 +96,19 @@ CREATE TABLE IF NOT EXISTS timeline_entries (
     timestamp_ms INTEGER NOT NULL,
     payload_json TEXT NOT NULL,
     UNIQUE(recording_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS replay_reports (
+    replay_id        TEXT PRIMARY KEY,
+    recording_id     TEXT NOT NULL,
+    status           TEXT NOT NULL,
+    started_at_ms    INTEGER NOT NULL,
+    ended_at_ms      INTEGER,
+    parameters_json  TEXT NOT NULL,
+    step_results_json TEXT NOT NULL,
+    error            TEXT,
+    origin_session   TEXT,
+    updated_at       TEXT NOT NULL
 );
 """
 
@@ -577,6 +600,173 @@ class SqlitePersistence:
             self._log.warning("state.persistence.save.failed", method="mark_recording_stopped", error=str(exc))
             return
         self._log.debug("state.persistence.sqlite.mark_recording_stopped.ok", recording_id=recording_id)
+
+    # ------------------------------------------------------------------
+    # Replay-report domain (sub-plan 01)
+    # ------------------------------------------------------------------
+
+    _UPSERT_REPLAY_REPORT = """
+        INSERT INTO replay_reports (
+            replay_id, recording_id, status, started_at_ms, ended_at_ms,
+            parameters_json, step_results_json, error, origin_session, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (replay_id) DO UPDATE SET
+            recording_id      = excluded.recording_id,
+            status            = excluded.status,
+            started_at_ms     = excluded.started_at_ms,
+            ended_at_ms       = excluded.ended_at_ms,
+            parameters_json   = excluded.parameters_json,
+            step_results_json = excluded.step_results_json,
+            error             = excluded.error,
+            origin_session    = excluded.origin_session,
+            updated_at        = excluded.updated_at
+    """
+
+    def save_replay_report(self, report: "ReplayReport") -> None:
+        """Insert-or-replace one ReplayReport keyed on replay_id.
+
+        JSON blobs for ``parameters`` and ``step_results`` (WAL pattern
+        mirroring the recording domain's upsert_recording / append_timeline_entry).
+        Write failures (``sqlite3.Error``) are swallowed and logged as warnings.
+        """
+        import json
+
+        parameters_json = json.dumps(report.parameters)
+        step_results_json = json.dumps([s.model_dump() for s in report.step_results])
+        try:
+            with self._conn:
+                self._conn.execute(
+                    self._UPSERT_REPLAY_REPORT,
+                    (
+                        report.replay_id,
+                        report.recording_id,
+                        report.status,
+                        report.started_at_ms,
+                        report.ended_at_ms,
+                        parameters_json,
+                        step_results_json,
+                        report.error,
+                        report.origin_session,
+                    ),
+                )
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_replay_report", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.save_replay_report.ok", replay_id=report.replay_id)
+
+    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+        """Retrieve a ReplayReport by replay_id. Returns None when not found."""
+        import json
+
+        from frontprompt.state.state import ReplayReport, ReplayStepResult
+
+        row = self._conn.execute(
+            "SELECT replay_id, recording_id, status, started_at_ms, ended_at_ms, "
+            "parameters_json, step_results_json, error, origin_session "
+            "FROM replay_reports WHERE replay_id = ?",
+            (replay_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        r_id, recording_id, status, started_at_ms, ended_at_ms, parameters_json, step_results_json, error, origin_session = row
+
+        try:
+            parameters = json.loads(parameters_json)
+        except (json.JSONDecodeError, ValueError):
+            parameters = {}
+
+        step_results: list[ReplayStepResult] = []
+        try:
+            raw_steps = json.loads(step_results_json)
+            for raw in raw_steps:
+                try:
+                    step_results.append(ReplayStepResult.model_validate(raw))
+                except Exception as exc:
+                    self._log.warning(
+                        "state.persistence.load.row_skipped",
+                        table="replay_reports.step_results",
+                        replay_id=replay_id,
+                        error=str(exc),
+                    )
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._log.warning(
+                "state.persistence.load.row_skipped",
+                table="replay_reports",
+                replay_id=replay_id,
+                error=str(exc),
+            )
+
+        return ReplayReport(
+            replay_id=r_id,
+            recording_id=recording_id,
+            parameters=parameters,
+            status=status,
+            started_at_ms=started_at_ms,
+            ended_at_ms=ended_at_ms,
+            step_results=step_results,
+            error=error,
+            origin_session=origin_session,
+        )
+
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+        """Return lightweight ReplayReportMeta list, optionally filtered by recording_id.
+
+        ``step_count``, ``passed_assertions``, and ``failed_assertions`` are derived
+        from the stored step_results JSON blob.
+        """
+        import json
+
+        from frontprompt.state.state import ReplayReportMeta, ReplayStepResult
+
+        if recording_id is not None:
+            rows = self._conn.execute(
+                "SELECT replay_id, recording_id, status, started_at_ms, ended_at_ms, step_results_json "
+                "FROM replay_reports WHERE recording_id = ? ORDER BY started_at_ms ASC",
+                (recording_id,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT replay_id, recording_id, status, started_at_ms, ended_at_ms, step_results_json "
+                "FROM replay_reports ORDER BY started_at_ms ASC"
+            ).fetchall()
+
+        results: list[ReplayReportMeta] = []
+        for row in rows:
+            r_id, rec_id, status, started_at_ms, ended_at_ms, step_results_json = row
+            step_count = 0
+            passed = 0
+            failed = 0
+            try:
+                raw_steps = json.loads(step_results_json)
+                step_count = len(raw_steps)
+                for raw in raw_steps:
+                    try:
+                        step = ReplayStepResult.model_validate(raw)
+                        if step.assertion_passed is True:
+                            passed += 1
+                        elif step.assertion_passed is False:
+                            failed += 1
+                    except Exception:
+                        pass
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+            results.append(
+                ReplayReportMeta(
+                    replay_id=r_id,
+                    recording_id=rec_id,
+                    status=status,
+                    started_at_ms=started_at_ms,
+                    ended_at_ms=ended_at_ms,
+                    step_count=step_count,
+                    passed_assertions=passed,
+                    failed_assertions=failed,
+                )
+            )
+        self._log.debug("state.persistence.sqlite.list_replay_reports_meta.ok", count=len(results))
+        return results
 
 # ---------------------------------------------------------------------------
 # Factory

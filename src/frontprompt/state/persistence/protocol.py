@@ -10,7 +10,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from frontprompt.state.state import InspectorState, PanelStateView, Pick, Recording, Region, Relation, TimelineEntry
+    from frontprompt.state.state import (
+        InspectorState,
+        PanelStateView,
+        Pick,
+        Recording,
+        Region,
+        Relation,
+        ReplayReport,
+        ReplayReportMeta,
+        TimelineEntry,
+    )
 
 
 class StatePersistence(Protocol):
@@ -113,6 +123,20 @@ class StatePersistence(Protocol):
 
     def mark_recording_stopped(self, recording_id: str, ended_at_ms: int) -> None:
         """Set status='stopped' and ended_at_ms. Idempotent."""
+        ...
+
+    # ----- Replay-report write-through (sub-plan 01) -------------------------
+
+    def save_replay_report(self, report: "ReplayReport") -> None:
+        """Insert-or-replace one ReplayReport keyed on replay_id. Idempotent."""
+        ...
+
+    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+        """Retrieve a ReplayReport by replay_id. Returns None when not found."""
+        ...
+
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+        """Return lightweight ReplayReportMeta list, optionally filtered by recording_id."""
         ...
 
 
