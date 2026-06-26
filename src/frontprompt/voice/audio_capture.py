@@ -16,11 +16,24 @@ Design constraints:
       Reclamation deferred to a future ``recordings clean-audio`` command.
 
 WAV format: 16 kHz mono 16-bit PCM (mlx-whisper's expected input format).
+
+Test-injection seam (FRONTPROMPT_AUDIO_FIXTURE):
+    When the env var ``FRONTPROMPT_AUDIO_FIXTURE=<path>`` is set in the process
+    environment, ``start()`` enters *fixture mode*: it copies the file at <path>
+    to ``wav_path`` and returns ``True`` without opening a real sounddevice stream.
+    ``stop()`` in fixture mode returns ``wav_path`` immediately (no drainer wait).
+
+    This seam is used by ``tests/browser/test_voice_over_e2e.py`` to supply a
+    deterministic WAV to the PostProcessor without real microphone hardware or the
+    ``[voice]`` optional extra installed. It is a pure bypass — production paths are
+    unchanged when the env var is absent.
 """
 
 from __future__ import annotations
 
+import os
 import queue
+import shutil
 import threading
 import wave
 from pathlib import Path
@@ -79,6 +92,8 @@ class AudioCaptureManager:
         self._drain_complete: anyio.Event | None = None
         self._current_recording_id: str | None = None
         self._current_wav_path: Path | None = None
+        # Fixture mode flag — set when FRONTPROMPT_AUDIO_FIXTURE seam is active
+        self._fixture_mode: bool = False
 
     async def start(
         self,
@@ -99,7 +114,37 @@ class AudioCaptureManager:
 
         Note:
             ``import sounddevice`` is lazy — only executed inside this method (COL-2).
+
+            Fixture mode: if ``FRONTPROMPT_AUDIO_FIXTURE=<path>`` env var is set,
+            copies the fixture file to ``wav_path`` and returns ``True`` immediately
+            without opening a real sounddevice stream (test-injection seam).
         """
+        # Test-injection seam: fixture mode bypasses real audio hardware.
+        # Production code is unchanged when the env var is absent.
+        fixture_src = os.environ.get("FRONTPROMPT_AUDIO_FIXTURE")
+        if fixture_src:
+            fixture_path = Path(fixture_src)
+            if fixture_path.is_file():
+                wav_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(fixture_path, wav_path)
+                self._current_recording_id = recording_id
+                self._current_wav_path = wav_path
+                self._fixture_mode = True
+                _LOG.info(
+                    "voice.audio_capture.fixture_mode_started",
+                    recording_id=recording_id,
+                    fixture_src=str(fixture_src),
+                    wav_path=str(wav_path),
+                )
+                return True
+            else:
+                _LOG.warning(
+                    "voice.audio_capture.fixture_not_found",
+                    recording_id=recording_id,
+                    path=str(fixture_src),
+                )
+                # Fall through to real sounddevice path (will fail if not installed)
+
         try:
             import sounddevice as sd  # COL-2: lazy import
         except ImportError:
@@ -208,7 +253,22 @@ class AudioCaptureManager:
             ``wave.close()`` is called ONLY after ``drain_complete`` is awaited
             (COL-5) so the WAV header frame count is never corrupted by a premature
             close while frames are still in the drainer queue.
+
+            Fixture mode: if started in fixture mode, returns ``wav_path`` immediately
+            without waiting for a drainer (no stream was opened).
         """
+        # Fixture mode fast-path: no stream teardown needed
+        if self._fixture_mode and self._current_recording_id == recording_id:
+            wav_path = self._current_wav_path
+            self._fixture_mode = False
+            self._reset_state()
+            _LOG.info(
+                "voice.audio_capture.fixture_mode_stopped",
+                recording_id=recording_id,
+                wav_path=str(wav_path),
+            )
+            return wav_path
+
         if self._current_recording_id != recording_id or self._stream is None:
             _LOG.debug("voice.audio_capture.stop_noop", recording_id=recording_id)
             return None

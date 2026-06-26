@@ -581,6 +581,17 @@ class ShowSession:
                     self._audio_capture = AudioCaptureManager(tg, state_manager=self._sm)
                     self._mic_watcher = MicrophoneWatcher()
 
+                    # Test-injection seam: register mock backend when env var is set.
+                    # The show-child subprocess inherits this env var from the test process.
+                    # This seam is a pure additive: production paths are unchanged when absent.
+                    import os as _os
+                    if _os.environ.get("FRONTPROMPT_TRANSCRIPTION_BACKEND") == "mock":
+                        from frontprompt.voice import transcription as _tr
+                        from frontprompt.voice.backends._mock import MockTranscriptionBackend
+                        if not any(b.backend_id == "mock" for b in _tr.REGISTERED_BACKENDS):
+                            _tr.REGISTERED_BACKENDS.append(MockTranscriptionBackend())
+                            self._log.info("show.voice_over.mock_backend_registered_for_test")
+
                     async with BrowserSessionManager(headless=False) as browser:
                         async with BridgeManager(browser, bundle_build_session=manifest.build_session) as bridge:
                             # inject task group so handlers are routed via
