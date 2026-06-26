@@ -547,13 +547,64 @@ def pick_text_command(
     )
 
 
+async def _ensure_voice_backends(progress_prefix: str = "  ") -> None:
+    """Iterate registered backends and ensure() any that need download.
+
+    Calls ``backend.probe_status()`` for each registered backend; for backends
+    returning ``"needs_download"``, calls ``await backend.ensure(progress_cb)``
+    with a click-echo progress callback.
+
+    Backends returning ``"unavailable"`` or ``"missing_dep"`` are skipped with a
+    status line. Backends already ``"ready"`` are reported as already installed.
+    """
+    from frontprompt.voice import transcription
+
+    backends = transcription.REGISTERED_BACKENDS
+    if not backends:
+        click.echo(f"{progress_prefix}[--] voice backends .. none registered")
+        return
+
+    for backend in backends:
+        status = backend.probe_status()
+        name = getattr(backend, "display_name", backend.backend_id)
+        bid = backend.backend_id
+
+        if status == "unavailable":
+            click.echo(f"{progress_prefix}[--] voice:{bid} ... unavailable (platform not supported)")
+        elif status == "missing_dep":
+            click.echo(f"{progress_prefix}[!!] voice:{bid} ... missing dep (run: uv pip install frontprompt[voice])")
+        elif status == "ready":
+            click.echo(f"{progress_prefix}[ok] voice:{bid} ... already ready ({name})")
+        elif status == "needs_download":
+            click.echo(f"{progress_prefix}[..] voice:{bid} ... downloading model ({name})...")
+            _progress_log: list[str] = []
+
+            async def _progress_cb(fraction: float, _bid: str = bid, _prefix: str = progress_prefix) -> None:
+                pct = int(fraction * 100)
+                # Only log at 25% intervals to avoid spamming the terminal
+                key = f"{pct // 25 * 25}%"
+                if key not in _progress_log:
+                    _progress_log.append(key)
+                    click.echo(f"{_prefix}      ... {pct}%")
+
+            await backend.ensure(_progress_cb)
+            click.echo(f"{progress_prefix}[ok] voice:{bid} ... model downloaded")
+        else:
+            click.echo(f"{progress_prefix}[??] voice:{bid} ... status: {status}")
+
+
 @main.command("bootstrap")
 @click.option(
     "--chromium/--no-chromium",
     default=True,
     help="Install the Playwright Chromium driver (default: yes).",
 )
-def bootstrap_command(chromium: bool) -> None:
+@click.option(
+    "--voice/--no-voice",
+    default=False,
+    help="Download transcription backend models (e.g. mlx-whisper on Apple Silicon). Default: skip.",
+)
+def bootstrap_command(chromium: bool, voice: bool) -> None:
     """Pre-install runtime prerequisites for an installed frontprompt.
 
     The overlay frontend ships *inside* the package (embedded at build time), so
@@ -567,6 +618,7 @@ def bootstrap_command(chromium: bool) -> None:
 
         uv tool install ./dist/frontprompt-*.whl
         frontprompt bootstrap
+        frontprompt bootstrap --voice   # also pre-download transcription models
     """
     import subprocess as _subprocess
     import sys as _sys
@@ -599,7 +651,77 @@ def bootstrap_command(chromium: bool) -> None:
     else:
         click.echo("  [--] chromium ....... skipped (--no-chromium)")
 
+    # 3. Pre-download transcription backend models (optional, --voice flag).
+    if voice:
+        anyio.run(_ensure_voice_backends)
+    else:
+        click.echo("  [--] voice backends . skipped (--no-voice)")
+
     click.echo("bootstrap complete — `frontprompt show <url>` is ready.")
+
+
+@main.command("doctor")
+def doctor_command() -> None:
+    """Check frontprompt runtime prerequisites and report their status.
+
+    Verifies:
+        - Embedded overlay bundle (frontend) is present.
+        - Chromium browser binary is installed.
+        - Transcription backend availability (voice-over feature).
+
+    Exit codes:
+        0 — all prerequisites OK (may include warnings for optional deps).
+        1 — at least one critical prerequisite is missing.
+    """
+    from frontprompt.browser.manager import _chromium_present
+    from frontprompt.overlay.loader import load_build_manifest
+    from frontprompt.voice import transcription
+
+    click.echo("frontprompt doctor")
+    exit_code = 0
+
+    # 1. Overlay bundle
+    try:
+        manifest = load_build_manifest()
+        click.echo(
+            f"  [ok] overlay bundle .. embedded (schema {manifest.schema_version}, {manifest.bundle_size_bytes} bytes)"
+        )
+    except FileNotFoundError:
+        click.echo("  [!!] overlay bundle .. MISSING — run `python -m frontprompt.build`", err=True)
+        exit_code = 1
+
+    # 2. Chromium
+    if _chromium_present():
+        click.echo("  [ok] chromium ....... present")
+    else:
+        click.echo("  [!!] chromium ....... MISSING — run `frontprompt bootstrap`")
+        exit_code = 1
+
+    # 3. Voice backends
+    backends = transcription.REGISTERED_BACKENDS
+    if not backends:
+        click.echo("  [--] voice backends .. none registered")
+    else:
+        for backend in backends:
+            status = backend.probe_status()
+            bid = backend.backend_id
+            name = getattr(backend, "display_name", bid)
+            if status == "ready":
+                click.echo(f"  [ok] voice:{bid} ... ready ({name})")
+            elif status == "unavailable":
+                click.echo(f"  [--] voice:{bid} ... unavailable on this platform ({name})")
+            elif status == "missing_dep":
+                click.echo(f"  [!!] voice:{bid} ... optional dep missing — run: uv pip install frontprompt[voice]")
+            elif status == "needs_download":
+                click.echo(f"  [..] voice:{bid} ... needs model download — run: frontprompt bootstrap --voice")
+            else:
+                click.echo(f"  [??] voice:{bid} ... {status}")
+
+    if exit_code == 0:
+        click.echo("doctor: all checks passed.")
+    else:
+        click.echo("doctor: some checks failed — see above.", err=True)
+        raise SystemExit(exit_code)
 
 
 async def _show_async_main(url: str) -> None:

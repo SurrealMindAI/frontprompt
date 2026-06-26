@@ -1,7 +1,7 @@
 /**
  * schema-version.ts — shared overlay-envelope SCHEMA_VERSION constant.
  *
- * This is the envelope-level schema version (currently '0.9.0'), distinct from
+ * This is the envelope-level schema version (currently '0.10.0'), distinct from
  * the per-sub-store intent-message versions in inspector-state.svelte.ts ('0.5.0')
  * and panel-state.svelte.ts ('0.1.0').
  *
@@ -11,4 +11,4 @@
  * showed the hardcode in main.ts drifting stale to '0.3.0' — this module is the
  * single place to update when the Python SSoT bumps.
  */
-export const SCHEMA_VERSION = '0.9.0';
+export const SCHEMA_VERSION = '0.10.0';

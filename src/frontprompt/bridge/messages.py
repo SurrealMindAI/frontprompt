@@ -13,8 +13,9 @@ Jede Envelope trägt ``schema_version: str`` — Breaking-Changes (Field
 rename/remove, kind rename) erfordern Bump + Codegen-Re-Run. Forward-compatible
 adds (neue *optional* Felder) ohne Bump zulässig.
 
-Aktuell: ``0.9.0`` (+ Replay-Assertion-Authoring: 3 neue Outbound-Envelopes, sub-plan 02 replay-bundle).
-Vorherig: ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
+Aktuell: ``0.10.0`` (+ Voice-Over-Feature: RecordingStartRequested extended, 3 neue Outbound-Envelopes, sub-plan 02 voice-over-bundle).
+Vorherig: ``0.9.0`` (+ Replay-Assertion-Authoring: 3 neue Outbound-Envelopes, sub-plan 02 replay-bundle).
+            ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
             ``0.7.0`` (+ origin_session on Pick/Region/Relation).
             ``0.6.0`` (Region.rect page-absolute + Viewport-snapshot).
             ``0.2.0`` (Phase 1 + Inspector / Pick-Flow).
@@ -76,6 +77,11 @@ OUTBOUND (Overlay → Python)
     :class:`AssertionDeletedRequested`          Assertion aus der Aufnahme entfernen.
     :class:`AssertionUpdatedRequested`          Felder einer bestehenden Assertion patchen.
 
+**Voice-Over-Mutations (Schema 0.10.0)**
+    :class:`SetMicDeviceRequested`                  User-gewähltes Mikrofon setzen (oder auf System-Default zurück).
+    :class:`SetTranscriptionBackendRequested`        User-gewähltes Transkriptions-Backend setzen (oder auf Auto).
+    :class:`TriggerModelDownloadRequested`           Modell-Download für ein Transkriptions-Backend starten.
+
 INBOUND (Python → Overlay)
 --------------------------
 
@@ -126,7 +132,7 @@ from frontprompt.state.state import (
 # Schema-Version — bumped on breaking changes (Field add/remove, kind rename)
 # ============================================================================
 
-SCHEMA_VERSION: str = "0.9.0"
+SCHEMA_VERSION: str = "0.10.0"
 
 
 # ============================================================================
@@ -485,12 +491,28 @@ class RecordingStartRequested(BaseModel):
     erstellt ein neues :class:`~frontprompt.state.state.Recording`-Aggregat
     (uuid4 vom Client, status=active) + broadcastet snapshot.
     **Atomicity**: eine Mutation (add-to-list + active_recording_id = new id).
+
+    **Voice-Over-Extension (Schema 0.10.0, additive, backward-compat)**:
+    Wenn ``with_voice_over=True``, startet der Server zusätzlich den
+    :class:`~frontprompt.voice.audio_capture.AudioCaptureManager` und fängt
+    das Mikrofon-Audio in eine WAV-Datei. ``mic_device_id=None`` bedeutet
+    System-Default. Beide Felder haben Defaults — alte Overlays ohne Voice-Over
+    senden sie nicht und bekommen trotzdem das gewohnte Verhalten.
     """
 
     kind: Literal["recording_start_requested"] = "recording_start_requested"
     schema_version: str = SCHEMA_VERSION
     name: str = Field(default="New Recording", description="Benutzer-vergebener Name der Aufnahme.")
     description: str = Field(default="", description="Optionale Beschreibung der Aufnahme.")
+    # Voice-over extension (Schema 0.10.0 — additive, backward-compat via defaults)
+    with_voice_over: bool = Field(
+        default=False,
+        description="True = Voice-Over-Aufnahme starten (Mikrofon-Capture + Transkription).",
+    )
+    mic_device_id: int | None = Field(
+        default=None,
+        description="sounddevice-Index des zu verwendenden Mikrofons. None = System-Default.",
+    )
 
 
 class RecordingStopRequested(BaseModel):
@@ -657,6 +679,66 @@ class AssertionUpdatedRequested(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Section I — Voice-Over-Mutations (Schema 0.10.0, voice-over sub-plan 02)
+# ---------------------------------------------------------------------------
+
+
+class SetMicDeviceRequested(BaseModel):
+    """User wählte ein Mikrofon in den Settings — dauerhaft persistieren.
+
+    **User-Trigger**: Auswahl eines Mikrofons im :svelte:`SettingsTab` (MicrophoneSelector).
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.set_mic_device`
+    persistiert ``selected_device_id`` in der ``settings``-Tabelle + broadcastet
+    ein Update von ``microphone_state.selected_device_id`` im nächsten Snapshot.
+    **Semantik**: ``mic_device_id=None`` bedeutet "System-Default verwenden" (User-
+    Reset auf die automatische Auswahl). Eine integer ID ist ein sounddevice-Index.
+    """
+
+    kind: Literal["set_mic_device_requested"] = "set_mic_device_requested"
+    schema_version: str = SCHEMA_VERSION
+    mic_device_id: int | None = Field(
+        description="sounddevice-Index des zu setzenden Mikrofons. None = System-Default."
+    )
+
+
+class SetTranscriptionBackendRequested(BaseModel):
+    """User wählte ein Transkriptions-Backend in den Settings — dauerhaft persistieren.
+
+    **User-Trigger**: Auswahl eines Backends im :svelte:`SettingsTab` (BackendSelector).
+    **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.set_settings`
+    persistiert ``selected_transcription_backend_id`` in der ``settings``-Tabelle
+    + broadcastet ein Update von ``settings_state`` im nächsten Snapshot.
+    **Semantik**: ``backend_id=None`` bedeutet "Auto" (erstes ``ready``-Backend).
+    Ein String ist der ``backend_id`` eines :class:`~frontprompt.state.state.TranscriptionBackendInfo`.
+    """
+
+    kind: Literal["set_transcription_backend_requested"] = "set_transcription_backend_requested"
+    schema_version: str = SCHEMA_VERSION
+    backend_id: str | None = Field(
+        description="Backend-ID (z.B. 'mlx_whisper'). None = Auto (erstes 'ready'-Backend)."
+    )
+
+
+class TriggerModelDownloadRequested(BaseModel):
+    """User clickte "Download" für ein Transkriptions-Backend — Modell-Download starten.
+
+    **User-Trigger**: Click auf den Download-Button eines Backends im :svelte:`SettingsTab`.
+    **Server-Wirkung**: :meth:`~frontprompt.show_session.ShowSession._on_trigger_model_download`
+    startet ``TranscriptionBackend.ensure(progress_cb)`` als ``tg.start_soon``-Task.
+    ``ensure()`` spiegelt die ``ensure_chromium``-Pattern: probe-first, download-only-if-needed.
+    Fortschritt reist via ``StateManager.update_transcription_backend_status()`` → Snapshot-Broadcast.
+    **Semantik**: ``backend_id`` ist ein Pflicht-String — der User klickt auf ein spezifisches
+    Backend, kein Auto-Mode. Unbekannte ``backend_id`` → silent ignore + warning-log.
+    """
+
+    kind: Literal["trigger_model_download_requested"] = "trigger_model_download_requested"
+    schema_version: str = SCHEMA_VERSION
+    backend_id: str = Field(
+        description="Backend-ID für den Modell-Download (z.B. 'mlx_whisper'). Pflicht — kein None."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union — Outbound
 # ---------------------------------------------------------------------------
 
@@ -686,7 +768,10 @@ OutboundMessage = Annotated[
     | RecordedEventCapturedRequested
     | AssertionAddedToRecordingRequested
     | AssertionDeletedRequested
-    | AssertionUpdatedRequested,
+    | AssertionUpdatedRequested
+    | SetMicDeviceRequested
+    | SetTranscriptionBackendRequested
+    | TriggerModelDownloadRequested,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Overlay → Python messages. Pydantic routet via ``kind``.
@@ -809,6 +894,10 @@ __codegen_roots__ = [
     "AssertionAddedToRecordingRequested",
     "AssertionDeletedRequested",
     "AssertionUpdatedRequested",
+    # Outbound — Voice-Over-Mutations (Schema 0.10.0)
+    "SetMicDeviceRequested",
+    "SetTranscriptionBackendRequested",
+    "TriggerModelDownloadRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",
@@ -851,6 +940,10 @@ __all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector 
     "AssertionAddedToRecordingRequested",
     "AssertionDeletedRequested",
     "AssertionUpdatedRequested",
+    # Outbound — Voice-Over-Mutations (Schema 0.10.0)
+    "SetMicDeviceRequested",
+    "SetTranscriptionBackendRequested",
+    "TriggerModelDownloadRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",

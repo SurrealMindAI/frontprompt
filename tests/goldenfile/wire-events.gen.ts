@@ -6,9 +6,9 @@ export type RecordingStatus = "active" | "stopped";
 
 export const RecordingStatus = z.union([z.literal("active"), z.literal("stopped")]);
 
-export type TimelineEntryKind = "page_event" | "pick_ref" | "region_ref" | "relation_ref" | "navigation" | "assertion";
+export type TimelineEntryKind = "page_event" | "pick_ref" | "region_ref" | "relation_ref" | "navigation" | "assertion" | "transcript_segment";
 
-export const TimelineEntryKind = z.union([z.literal("page_event"), z.literal("pick_ref"), z.literal("region_ref"), z.literal("relation_ref"), z.literal("navigation"), z.literal("assertion")]);
+export const TimelineEntryKind = z.union([z.literal("page_event"), z.literal("pick_ref"), z.literal("region_ref"), z.literal("relation_ref"), z.literal("navigation"), z.literal("assertion"), z.literal("transcript_segment")]);
 
 /**
  * Eine erfasste Seiten-Interaktion (click, pointerdown, keydown).
@@ -224,15 +224,66 @@ export const AssertionEntry = z.object({
   description: z.string().default(""),
 });
 
+/**
+ * Ein transkribiertes Sprachsegment in der Recording-Timeline (voice-over — sub-plan 01).
+ *
+ * Wird nach der Transkription durch den Post-Processor via
+ * ``StateManager.append_transcript_segments`` in Batches injiziert.
+ * Ein einziger Broadcast am Ende des Batches (nicht pro-Segment — wire-economy).
+ *
+ * ``timestamp_ms = recording.started_at_ms + start_ms`` — sortiert korrekt
+ * im chronologischen Timeline-Merge. ``seq`` ist Python-seitig gestempelt
+ * (monotoner Zähler, gleiche Invariante wie alle anderen Varianten).
+ * ``backend_id`` dokumentiert welches Backend das Segment erzeugt hat.
+ */
+export interface TranscriptSegmentEntry {
+  kind?: "transcript_segment";
+  /**
+   * Monotoner Sequence-Counter, Python-seitig gestempelt.
+   */
+  seq: number;
+  /**
+   * Epoch ms = recording.started_at_ms + start_ms.
+   */
+  timestamp_ms: number;
+  /**
+   * Segmentbeginn relativ zum Aufnahmestart in ms.
+   */
+  start_ms: number;
+  /**
+   * Segmentende relativ zum Aufnahmestart in ms.
+   */
+  end_ms: number;
+  /**
+   * Transkribierter Text dieses Segments.
+   */
+  text: string;
+  /**
+   * Backend-ID das dieses Segment erzeugt hat (z.B. 'mlx_whisper').
+   */
+  backend_id: string;
+}
+
+export const TranscriptSegmentEntry = z.object({
+  kind: z.literal("transcript_segment").default("transcript_segment"),
+  seq: z.number().int(),
+  timestamp_ms: z.number().int(),
+  start_ms: z.number().int(),
+  end_ms: z.number().int(),
+  text: z.string(),
+  backend_id: z.string(),
+});
+
 export type TimelineEntry =
   | PageEventEntry
   | PickRefEntry
   | RegionRefEntry
   | RelationRefEntry
   | NavigationEntry
-  | AssertionEntry;
+  | AssertionEntry
+  | TranscriptSegmentEntry;
 
-export const TimelineEntry = z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry, AssertionEntry]);
+export const TimelineEntry = z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry, AssertionEntry, TranscriptSegmentEntry]);
 
 /**
  * Leichtgewichtige Zusammenfassung eines Recordings — ohne ``entries``.
@@ -266,6 +317,18 @@ export interface RecordingMeta {
    * Anzahl Timeline-Einträge (≥0).
    */
   entry_count: number;
+  /**
+   * True wenn eine Voice-Over-Aufnahme für dieses Recording vorliegt.
+   */
+  has_voice_over?: boolean;
+  /**
+   * Absoluter Pfad zur WAV-Datei. None bis Datei finalisiert.
+   */
+  audio_path?: string | null;
+  /**
+   * Transkriptions-Status der Voice-Over-Aufnahme.
+   */
+  transcription_status?: "none" | "pending" | "transcribing" | "done" | "failed";
 }
 
 export const RecordingMeta = z.object({
@@ -276,6 +339,9 @@ export const RecordingMeta = z.object({
   started_at_ms: z.number().int(),
   ended_at_ms: z.number().int().nullable().optional().default(null),
   entry_count: z.number().int().gte(0),
+  has_voice_over: z.boolean().default(false),
+  audio_path: z.string().nullable().optional().default(null),
+  transcription_status: z.enum(["none", "pending", "transcribing", "done", "failed"]).default("none"),
 });
 
 /**
@@ -340,7 +406,15 @@ export interface Recording {
   /**
    * Timeline-Einträge append-only, geordnet nach seq.
    */
-  entries?: (PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry | AssertionEntry)[];
+  entries?: (
+    | PageEventEntry
+    | PickRefEntry
+    | RegionRefEntry
+    | RelationRefEntry
+    | NavigationEntry
+    | AssertionEntry
+    | TranscriptSegmentEntry
+  )[];
   /**
    * Benannte Parameter-Deklarationen für Replay-Parametrisierung (sub-plan 01). Additive field — alte Clients ignorieren unbekannte Felder. Name-Eindeutigkeit wird vom StateManager enforced.
    */
@@ -349,6 +423,22 @@ export interface Recording {
    * session_id of the session that last mutated this entity (steal-on-mutate provenance via sqlite-persistence). None until first persisted.
    */
   origin_session?: string | null;
+  /**
+   * True wenn eine Voice-Over-Aufnahme für dieses Recording vorliegt.
+   */
+  has_voice_over?: boolean;
+  /**
+   * Absoluter Pfad zur WAV-Datei im Session-Verzeichnis (~/.cache/frontprompt/sessions/<session_id>/recording-<recording_id>.wav). None bis Datei finalisiert.
+   */
+  audio_path?: string | null;
+  /**
+   * Transkriptions-Status — one-directional: none→pending→transcribing→done/failed.
+   */
+  transcription_status?: "none" | "pending" | "transcribing" | "done" | "failed";
+  /**
+   * Fehlermeldung wenn transcription_status='failed'. Nur auf Recording (nicht RecordingMeta).
+   */
+  transcription_error?: string | null;
 }
 
 export const Recording = z.object({
@@ -358,9 +448,13 @@ export const Recording = z.object({
   status: z.enum(["active", "stopped"]),
   started_at_ms: z.number().int(),
   ended_at_ms: z.number().int().nullable().optional().default(null),
-  entries: z.array(z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry, AssertionEntry])).optional(),
+  entries: z.array(z.discriminatedUnion("kind", [PageEventEntry, PickRefEntry, RegionRefEntry, RelationRefEntry, NavigationEntry, AssertionEntry, TranscriptSegmentEntry])).optional(),
   parameters: z.array(ParameterDeclaration).optional(),
   origin_session: z.string().nullable().optional().default(null),
+  has_voice_over: z.boolean().default(false),
+  audio_path: z.string().nullable().optional().default(null),
+  transcription_status: z.enum(["none", "pending", "transcribing", "done", "failed"]).default("none"),
+  transcription_error: z.string().nullable().optional().default(null),
 });
 
 export type ReplayStatus = "completed" | "failed" | "aborted";
@@ -507,6 +601,154 @@ export const RecordingsState = z.object({
   active_replay_progress: ReplayProgress.nullable().optional().default(null),
 });
 
+export type TranscriptionStatus = "none" | "pending" | "transcribing" | "done" | "failed";
+
+export const TranscriptionStatus = z.union([z.literal("none"), z.literal("pending"), z.literal("transcribing"), z.literal("done"), z.literal("failed")]);
+
+/**
+ * Ein einzelnes Eingabegerät aus dem sounddevice-Katalog.
+ *
+ * ``device_id`` ist der sounddevice-Index — stabil innerhalb einer laufenden
+ * Sitzung, kann aber nach einem Geräte-Reconnect anders sein.
+ */
+export interface MicrophoneDevice {
+  /**
+   * sounddevice-Index des Mikrofons.
+   */
+  device_id: number;
+  /**
+   * Anzeigename des Geräts.
+   */
+  name: string;
+  /**
+   * Maximale Anzahl der Eingangskanäle.
+   */
+  channels: number;
+  /**
+   * Standard-Samplerate in Hz.
+   */
+  default_sample_rate: number;
+}
+
+export const MicrophoneDevice = z.object({
+  device_id: z.number().int(),
+  name: z.string(),
+  channels: z.number().int(),
+  default_sample_rate: z.number(),
+});
+
+/**
+ * Aktueller Zustand der Mikrofon-Enumeration.
+ *
+ * ``devices`` und ``system_default_device_id`` sind In-Process-State —
+ * re-enumeriert durch den Mic-Watcher-Task bei Topologie-Änderungen.
+ * ``selected_device_id`` ist die dauerhafte User-Präferenz — persistiert
+ * via ``StateManager.set_mic_device(device_id)`` in der ``settings``-Tabelle.
+ *
+ * Initial (vor dem ersten Watcher-Cycle): devices=[] ist valid.
+ */
+export interface MicrophoneState {
+  /**
+   * Alle verfügbaren Eingangsgeräte (leer bis erster Watcher-Cycle).
+   */
+  devices?: MicrophoneDevice[];
+  /**
+   * User-gewähltes Gerät (None = System-Default). Durable — Settings-Tabelle.
+   */
+  selected_device_id?: number | null;
+  /**
+   * Aktuelles System-Default-Gerät von sounddevice. Nicht durable.
+   */
+  system_default_device_id?: number | null;
+}
+
+export const MicrophoneState = z.object({
+  devices: z.array(MicrophoneDevice).optional(),
+  selected_device_id: z.number().int().nullable().optional().default(null),
+  system_default_device_id: z.number().int().nullable().optional().default(null),
+});
+
+/**
+ * Dauerhafte User-Einstellungen für das Voice-Over-Feature.
+ *
+ * Alle Felder sind durable — persistiert in der ``settings``-Key-Value-Tabelle.
+ * ``selected_mic_device_id`` lebt NICHT hier sondern in
+ * :class:`MicrophoneState`.selected_device_id (co-location von Mic-Concerns).
+ */
+export interface SettingsState {
+  /**
+   * Voice-Over-Feature aktiviert (User-Opt-In).
+   */
+  voice_over_enabled?: boolean;
+  /**
+   * Gewähltes Backend (None = Auto — erstes 'ready'-Backend).
+   */
+  selected_transcription_backend_id?: string | null;
+}
+
+export const SettingsState = z.object({
+  voice_over_enabled: z.boolean().default(false),
+  selected_transcription_backend_id: z.string().nullable().optional().default(null),
+});
+
+export type TranscriptionBackendStatus = "unavailable" | "missing_dep" | "needs_download" | "downloading" | "ready" | "error";
+
+export const TranscriptionBackendStatus = z.union([z.literal("unavailable"), z.literal("missing_dep"), z.literal("needs_download"), z.literal("downloading"), z.literal("ready"), z.literal("error")]);
+
+/**
+ * Status-Info für ein Transkriptions-Backend (z.B. mlx_whisper).
+ *
+ * ``download_progress`` ist ephemer (In-Process, nicht in SQLite).
+ * Das Overlay rendert eine Fortschrittsanzeige während des Downloads.
+ */
+export interface TranscriptionBackendInfo {
+  /**
+   * Backend-Bezeichner (z.B. 'mlx_whisper').
+   */
+  backend_id: string;
+  /**
+   * Lesbares Label (z.B. 'mlx-whisper (Apple Silicon)').
+   */
+  display_name: string;
+  /**
+   * Aktueller Verfügbarkeitsstatus.
+   */
+  status: "unavailable" | "missing_dep" | "needs_download" | "downloading" | "ready" | "error";
+  /**
+   * 0.0–1.0 während Download; None sonst. Ephemer (nicht persistiert).
+   */
+  download_progress?: number | null;
+  /**
+   * Fehlermeldung bei status='error'.
+   */
+  error_message?: string | null;
+}
+
+export const TranscriptionBackendInfo = z.object({
+  backend_id: z.string(),
+  display_name: z.string(),
+  status: z.enum(["unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"]),
+  download_progress: z.number().nullable().optional().default(null),
+  error_message: z.string().nullable().optional().default(null),
+});
+
+/**
+ * Aggregierter Status aller bekannten Transkriptions-Backends.
+ *
+ * Python-authoritative — Backend bestimmt Verfügbarkeit via probe_status().
+ * Nicht in SQLite persistiert (Neustart → erneutes Probing korrekt).
+ */
+export interface TranscriptionState {
+  /**
+   * Liste aller bekannten Backends mit ihrem Status.
+   */
+  backends?: TranscriptionBackendInfo[];
+}
+
+export const TranscriptionState = z.object({
+  backends: z.array(TranscriptionBackendInfo).optional(),
+});
+
 /**
  * User klickte "Start Recording" im Recordings-Tab — neue Aufnahme beginnen.
  *
@@ -515,6 +757,13 @@ export const RecordingsState = z.object({
  * erstellt ein neues :class:`~frontprompt.state.state.Recording`-Aggregat
  * (uuid4 vom Client, status=active) + broadcastet snapshot.
  * **Atomicity**: eine Mutation (add-to-list + active_recording_id = new id).
+ *
+ * **Voice-Over-Extension (Schema 0.10.0, additive, backward-compat)**:
+ * Wenn ``with_voice_over=True``, startet der Server zusätzlich den
+ * :class:`~frontprompt.voice.audio_capture.AudioCaptureManager` und fängt
+ * das Mikrofon-Audio in eine WAV-Datei. ``mic_device_id=None`` bedeutet
+ * System-Default. Beide Felder haben Defaults — alte Overlays ohne Voice-Over
+ * senden sie nicht und bekommen trotzdem das gewohnte Verhalten.
  */
 export interface RecordingStartRequested {
   kind?: "recording_start_requested";
@@ -527,13 +776,23 @@ export interface RecordingStartRequested {
    * Optionale Beschreibung der Aufnahme.
    */
   description?: string;
+  /**
+   * True = Voice-Over-Aufnahme starten (Mikrofon-Capture + Transkription).
+   */
+  with_voice_over?: boolean;
+  /**
+   * sounddevice-Index des zu verwendenden Mikrofons. None = System-Default.
+   */
+  mic_device_id?: number | null;
 }
 
 export const RecordingStartRequested = z.object({
   kind: z.literal("recording_start_requested").default("recording_start_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   name: z.string().default("New Recording"),
   description: z.string().default(""),
+  with_voice_over: z.boolean().default(false),
+  mic_device_id: z.number().int().nullable().optional().default(null),
 });
 
 /**
@@ -557,7 +816,7 @@ export interface RecordingStopRequested {
 
 export const RecordingStopRequested = z.object({
   kind: z.literal("recording_stop_requested").default("recording_stop_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
 });
 
@@ -588,7 +847,7 @@ export interface RecordingRenameRequested {
 
 export const RecordingRenameRequested = z.object({
   kind: z.literal("recording_rename_requested").default("recording_rename_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
   name: z.string(),
   description: z.string(),
@@ -614,7 +873,7 @@ export interface RecordingSelectedRequested {
 
 export const RecordingSelectedRequested = z.object({
   kind: z.literal("recording_selected_requested").default("recording_selected_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string().nullable(),
 });
 
@@ -645,7 +904,7 @@ export interface RecordedEventCapturedRequested {
 
 export const RecordedEventCapturedRequested = z.object({
   kind: z.literal("recorded_event_captured_requested").default("recorded_event_captured_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
   entry: PageEventEntry,
 });
@@ -685,7 +944,7 @@ export interface AssertionAddedToRecordingRequested {
 
 export const AssertionAddedToRecordingRequested = z.object({
   kind: z.literal("assertion_added_to_recording_requested").default("assertion_added_to_recording_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
   assertion: z.object({}),
   insert_after_seq: z.number().int().nullable().optional().default(null),
@@ -715,7 +974,7 @@ export interface AssertionDeletedRequested {
 
 export const AssertionDeletedRequested = z.object({
   kind: z.literal("assertion_deleted_requested").default("assertion_deleted_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
   assertion_id: z.string(),
 });
@@ -761,11 +1020,87 @@ export interface AssertionUpdatedRequested {
 
 export const AssertionUpdatedRequested = z.object({
   kind: z.literal("assertion_updated_requested").default("assertion_updated_requested"),
-  schema_version: z.string().default("0.9.0"),
+  schema_version: z.string().default("0.10.0"),
   recording_id: z.string(),
   assertion_id: z.string(),
   assertion_type: z.enum(["selector_exists", "text_equals", "text_contains", "visible", "url_equals"]).nullable().optional().default(null),
   target: z.string().nullable().optional().default(null),
   expected: z.string().nullable().optional().default(null),
   description: z.string().nullable().optional().default(null),
+});
+
+/**
+ * User wählte ein Mikrofon in den Settings — dauerhaft persistieren.
+ *
+ * **User-Trigger**: Auswahl eines Mikrofons im :svelte:`SettingsTab` (MicrophoneSelector).
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.set_mic_device`
+ * persistiert ``selected_device_id`` in der ``settings``-Tabelle + broadcastet
+ * ein Update von ``microphone_state.selected_device_id`` im nächsten Snapshot.
+ * **Semantik**: ``mic_device_id=None`` bedeutet "System-Default verwenden" (User-
+ * Reset auf die automatische Auswahl). Eine integer ID ist ein sounddevice-Index.
+ */
+export interface SetMicDeviceRequested {
+  kind?: "set_mic_device_requested";
+  schema_version?: string;
+  /**
+   * sounddevice-Index des zu setzenden Mikrofons. None = System-Default.
+   */
+  mic_device_id: number | null;
+}
+
+export const SetMicDeviceRequested = z.object({
+  kind: z.literal("set_mic_device_requested").default("set_mic_device_requested"),
+  schema_version: z.string().default("0.10.0"),
+  mic_device_id: z.number().int().nullable(),
+});
+
+/**
+ * User wählte ein Transkriptions-Backend in den Settings — dauerhaft persistieren.
+ *
+ * **User-Trigger**: Auswahl eines Backends im :svelte:`SettingsTab` (BackendSelector).
+ * **Server-Wirkung**: :meth:`~frontprompt.state.StateManager.set_settings`
+ * persistiert ``selected_transcription_backend_id`` in der ``settings``-Tabelle
+ * + broadcastet ein Update von ``settings_state`` im nächsten Snapshot.
+ * **Semantik**: ``backend_id=None`` bedeutet "Auto" (erstes ``ready``-Backend).
+ * Ein String ist der ``backend_id`` eines :class:`~frontprompt.state.state.TranscriptionBackendInfo`.
+ */
+export interface SetTranscriptionBackendRequested {
+  kind?: "set_transcription_backend_requested";
+  schema_version?: string;
+  /**
+   * Backend-ID (z.B. 'mlx_whisper'). None = Auto (erstes 'ready'-Backend).
+   */
+  backend_id: string | null;
+}
+
+export const SetTranscriptionBackendRequested = z.object({
+  kind: z.literal("set_transcription_backend_requested").default("set_transcription_backend_requested"),
+  schema_version: z.string().default("0.10.0"),
+  backend_id: z.string().nullable(),
+});
+
+/**
+ * User clickte "Download" für ein Transkriptions-Backend — Modell-Download starten.
+ *
+ * **User-Trigger**: Click auf den Download-Button eines Backends im :svelte:`SettingsTab`.
+ * **Server-Wirkung**: :meth:`~frontprompt.show_session.ShowSession._on_trigger_model_download`
+ * startet ``TranscriptionBackend.ensure(progress_cb)`` als ``tg.start_soon``-Task.
+ * ``ensure()`` spiegelt die ``ensure_chromium``-Pattern: probe-first, download-only-if-needed.
+ * Fortschritt reist via ``StateManager.update_transcription_backend_status()`` → Snapshot-Broadcast.
+ * **Semantik**: ``backend_id`` ist ein Pflicht-String — der User klickt auf ein spezifisches
+ * Backend, kein Auto-Mode. Unbekannte ``backend_id`` → silent ignore + warning-log.
+ */
+export interface TriggerModelDownloadRequested {
+  kind?: "trigger_model_download_requested";
+  schema_version?: string;
+  /**
+   * Backend-ID für den Modell-Download (z.B. 'mlx_whisper'). Pflicht — kein None.
+   */
+  backend_id: string;
+}
+
+export const TriggerModelDownloadRequested = z.object({
+  kind: z.literal("trigger_model_download_requested").default("trigger_model_download_requested"),
+  schema_version: z.string().default("0.10.0"),
+  backend_id: z.string(),
 });

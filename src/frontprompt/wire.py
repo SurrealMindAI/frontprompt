@@ -37,14 +37,20 @@ Replay-Assertion-Authoring (Overlay → Python, Schema 0.9.0):
     :class:`AssertionDeletedRequested`          Assertion aus Aufnahme entfernen.
     :class:`AssertionUpdatedRequested`          Assertion-Felder patchen.
 
+Voice-Over-Mutations (Overlay → Python, Schema 0.10.0):
+    :class:`SetMicDeviceRequested`              User-gewähltes Mikrofon setzen.
+    :class:`SetTranscriptionBackendRequested`   User-gewähltes Backend setzen.
+    :class:`TriggerModelDownloadRequested`      Modell-Download starten.
+
 Timeline-Entry-Varianten:
-    :class:`PageEventEntry`     Page-Interaktion (click/pointerdown/keydown).
-    :class:`PickRefEntry`       Referenz auf einen erstellten Pick.
-    :class:`RegionRefEntry`     Referenz auf eine gezeichnete Region.
-    :class:`RelationRefEntry`   Referenz auf eine erstellte Relation.
-    :class:`NavigationEntry`    Page-Navigation (Python-seitig erfasst).
-    :class:`AssertionEntry`     Assertion-Checkpoint (replay sub-plan 01).
-    :data:`TimelineEntry`       Discriminated union aller Entry-Typen.
+    :class:`PageEventEntry`         Page-Interaktion (click/pointerdown/keydown).
+    :class:`PickRefEntry`           Referenz auf einen erstellten Pick.
+    :class:`RegionRefEntry`         Referenz auf eine gezeichnete Region.
+    :class:`RelationRefEntry`       Referenz auf eine erstellte Relation.
+    :class:`NavigationEntry`        Page-Navigation (Python-seitig erfasst).
+    :class:`AssertionEntry`         Assertion-Checkpoint (replay sub-plan 01).
+    :class:`TranscriptSegmentEntry` Transkribiertes Sprachsegment (voice-over sub-plan 01).
+    :data:`TimelineEntry`           Discriminated union aller Entry-Typen.
 
 State-Typen:
     :class:`RecordingMeta`      Lightweight summary (für Listen-Ansicht).
@@ -59,6 +65,15 @@ Replay-State-Typen (sub-plan 01/02):
     :class:`ReplayStepResult`       Per-Step-Ergebnis im ReplayReport.
     :class:`ReplayReport`           Vollständiges Replay-Ergebnis.
     :class:`ReplayProgress`         Lightweight Progress-Snapshot (live im State).
+
+Voice-Over-State-Typen (sub-plan 01):
+    :class:`MicrophoneDevice`           Ein einzelnes Eingabegerät.
+    :class:`MicrophoneState`            Mikrofon-Enumeration + User-Präferenz.
+    :class:`SettingsState`              Dauerhafte Voice-Over-Einstellungen.
+    :data:`TranscriptionBackendStatus`  Verfügbarkeitsstatus eines Backends.
+    :class:`TranscriptionBackendInfo`   Status-Info pro Backend (inkl. Download-Progress).
+    :class:`TranscriptionState`         Aggregierter Status aller Backends.
+    :data:`TranscriptionStatus`         Transkriptions-Status einer Recording.
 """
 
 from __future__ import annotations
@@ -68,6 +83,8 @@ from frontprompt.state.state import (
     AssertionComparator,
     AssertionEntry,
     AssertionType,
+    MicrophoneDevice,
+    MicrophoneState,
     NavigationEntry,
     PageEventEntry,
     ParameterDeclaration,
@@ -82,8 +99,14 @@ from frontprompt.state.state import (
     ReplayReport,
     ReplayStatus,
     ReplayStepResult,
+    SettingsState,
     TimelineEntry,
     TimelineEntryKind,
+    TranscriptionBackendInfo,
+    TranscriptionBackendStatus,
+    TranscriptionState,
+    TranscriptSegmentEntry,
+    TranscriptionStatus,
 )
 
 # Re-exports from bridge messages SSoT
@@ -96,6 +119,9 @@ from frontprompt.bridge.messages import (
     RecordingSelectedRequested,
     RecordingStartRequested,
     RecordingStopRequested,
+    SetMicDeviceRequested,
+    SetTranscriptionBackendRequested,
+    TriggerModelDownloadRequested,
 )
 
 # ============================================================================
@@ -119,6 +145,8 @@ __codegen_roots__ = [
     "AssertionType",
     "AssertionComparator",
     "AssertionEntry",
+    # Voice-over timeline entry variant (voice-over sub-plan 01)
+    "TranscriptSegmentEntry",
     # TimelineEntry discriminated union
     "TimelineEntry",
     # Recording domain aggregates
@@ -130,6 +158,14 @@ __codegen_roots__ = [
     "ReplayStepResult",
     "ReplayProgress",
     "RecordingsState",
+    # Voice-over state types (voice-over sub-plan 01)
+    "TranscriptionStatus",
+    "MicrophoneDevice",
+    "MicrophoneState",
+    "SettingsState",
+    "TranscriptionBackendStatus",
+    "TranscriptionBackendInfo",
+    "TranscriptionState",
     # Outbound bridge messages (Overlay → Python) for recording feature
     "RecordingStartRequested",
     "RecordingStopRequested",
@@ -140,10 +176,14 @@ __codegen_roots__ = [
     "AssertionAddedToRecordingRequested",
     "AssertionDeletedRequested",
     "AssertionUpdatedRequested",
+    # Outbound bridge messages — Voice-Over-Mutations (Schema 0.10.0)
+    "SetMicDeviceRequested",
+    "SetTranscriptionBackendRequested",
+    "TriggerModelDownloadRequested",
 ]
 
 __all__ = [
-    # State types
+    # State types — core
     "AssertionComparator",
     "AssertionEntry",
     "AssertionType",
@@ -163,6 +203,15 @@ __all__ = [
     "ReplayStepResult",
     "TimelineEntry",
     "TimelineEntryKind",
+    # State types — voice-over (Schema 0.10.0)
+    "MicrophoneDevice",
+    "MicrophoneState",
+    "SettingsState",
+    "TranscriptionBackendInfo",
+    "TranscriptionBackendStatus",
+    "TranscriptionState",
+    "TranscriptSegmentEntry",
+    "TranscriptionStatus",
     # Bridge messages — Recording
     "RecordedEventCapturedRequested",
     "RecordingRenameRequested",
@@ -173,4 +222,8 @@ __all__ = [
     "AssertionAddedToRecordingRequested",
     "AssertionDeletedRequested",
     "AssertionUpdatedRequested",
+    # Bridge messages — Voice-Over-Mutations (Schema 0.10.0)
+    "SetMicDeviceRequested",
+    "SetTranscriptionBackendRequested",
+    "TriggerModelDownloadRequested",
 ]

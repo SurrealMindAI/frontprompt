@@ -93,7 +93,7 @@ describe('Dashboard', () => {
 
   test('2: shows schema version (real SCHEMA_VERSION from schema-version.ts)', () => {
     const { container } = render(Dashboard);
-    expect(container.textContent).toContain('0.9.0');
+    expect(container.textContent).toContain('0.10.0');
   });
 
   test('3: shows BUILD_GIT_SHA from build-info', () => {
@@ -148,7 +148,7 @@ describe('Dashboard', () => {
     // Dashboard should have info/version section and state/counts section
     expect(text.length).toBeGreaterThan(50);
     // Build info section
-    expect(text).toContain('0.9.0');
+    expect(text).toContain('0.10.0');
   });
 
   test('11: state section notes panels suppressed on about:blank', () => {
