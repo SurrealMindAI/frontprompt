@@ -1,14 +1,13 @@
-"""Deterministic mock transcription backend for testing only.
+"""Deterministic mock transcription backend — test tree only.
 
-Registered in the show-child subprocess when the env var
-``FRONTPROMPT_TRANSCRIPTION_BACKEND=mock`` is active (wired in
-``show_session.py:_run_browser``).
+Used exclusively by ``tests/_subprocess_bootstrap/sitecustomize.py`` when
+voice-over e2e tests spawn the ``frontprompt show`` child subprocess.
 
 Returns 2 fixed segments regardless of input WAV content — designed so e2e
 tests can assert exact segment indexing without installing mlx_whisper or
 having real audio hardware.
 
-NOT imported or registered in production code paths.
+This file intentionally lives in the test tree, NOT in src/.
 """
 
 from __future__ import annotations

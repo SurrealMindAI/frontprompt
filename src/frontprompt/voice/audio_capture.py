@@ -17,23 +17,20 @@ Design constraints:
 
 WAV format: 16 kHz mono 16-bit PCM (mlx-whisper's expected input format).
 
-Test-injection seam (FRONTPROMPT_AUDIO_FIXTURE):
-    When the env var ``FRONTPROMPT_AUDIO_FIXTURE=<path>`` is set in the process
-    environment, ``start()`` enters *fixture mode*: it copies the file at <path>
-    to ``wav_path`` and returns ``True`` without opening a real sounddevice stream.
-    ``stop()`` in fixture mode returns ``wav_path`` immediately (no drainer wait).
+Capture source extension seam:
+    The module-level ``capture_source_override`` variable (default: ``None``) provides
+    an extension point for alternative WAV sources. When set to an async callable with
+    signature ``(recording_id: str, device_id: int | None, wav_path: Path) -> bool``,
+    ``start()`` delegates to it instead of opening a real sounddevice stream.
+    ``stop()`` in override mode returns ``wav_path`` immediately (no drainer wait).
 
-    This seam is used by ``tests/browser/test_voice_over_e2e.py`` to supply a
-    deterministic WAV to the PostProcessor without real microphone hardware or the
-    ``[voice]`` optional extra installed. It is a pure bypass — production paths are
-    unchanged when the env var is absent.
+    Production code must never set this variable. See
+    ``tests/_subprocess_bootstrap/sitecustomize.py`` for the test-tree injection pattern.
 """
 
 from __future__ import annotations
 
-import os
 import queue
-import shutil
 import threading
 import wave
 from pathlib import Path
@@ -53,6 +50,15 @@ _LOG = structlog.get_logger("frontprompt.voice.audio_capture")
 _SAMPLE_RATE: int = 16_000
 _CHANNELS: int = 1
 _SAMPLE_WIDTH: int = 2  # bytes — 16-bit PCM
+
+# ---------------------------------------------------------------------------
+# Capture source override — extension seam for alternative WAV providers.
+# Production code must leave this as None.
+# When set: async callable (recording_id: str, device_id: int | None, wav_path: Path) → bool.
+# The callable must create the WAV file at wav_path before returning True.
+# See tests/_subprocess_bootstrap/sitecustomize.py for the test-tree injection pattern.
+# ---------------------------------------------------------------------------
+capture_source_override: object = None
 
 
 class AudioCaptureManager:
@@ -92,8 +98,8 @@ class AudioCaptureManager:
         self._drain_complete: anyio.Event | None = None
         self._current_recording_id: str | None = None
         self._current_wav_path: Path | None = None
-        # Fixture mode flag — set when FRONTPROMPT_AUDIO_FIXTURE seam is active
-        self._fixture_mode: bool = False
+        # Alternative source mode — set when capture_source_override was used
+        self._alternative_source_active: bool = False
 
     async def start(
         self,
@@ -115,35 +121,23 @@ class AudioCaptureManager:
         Note:
             ``import sounddevice`` is lazy — only executed inside this method (COL-2).
 
-            Fixture mode: if ``FRONTPROMPT_AUDIO_FIXTURE=<path>`` env var is set,
-            copies the fixture file to ``wav_path`` and returns ``True`` immediately
-            without opening a real sounddevice stream (test-injection seam).
+            When ``capture_source_override`` is set (non-None), delegates to it and
+            returns without opening a real sounddevice stream.
         """
-        # Test-injection seam: fixture mode bypasses real audio hardware.
-        # Production code is unchanged when the env var is absent.
-        fixture_src = os.environ.get("FRONTPROMPT_AUDIO_FIXTURE")
-        if fixture_src:
-            fixture_path = Path(fixture_src)
-            if fixture_path.is_file():
-                wav_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(fixture_path, wav_path)
+        # Extension seam: alternative capture source (set from test-tree bootstrap only).
+        # Production code must never set capture_source_override. See tests/_subprocess_bootstrap/.
+        if capture_source_override is not None:
+            started: bool = await capture_source_override(recording_id, device_id, wav_path)  # type: ignore[misc]
+            if started:
                 self._current_recording_id = recording_id
                 self._current_wav_path = wav_path
-                self._fixture_mode = True
+                self._alternative_source_active = True
                 _LOG.info(
-                    "voice.audio_capture.fixture_mode_started",
+                    "voice.audio_capture.alternative_source_started",
                     recording_id=recording_id,
-                    fixture_src=str(fixture_src),
                     wav_path=str(wav_path),
                 )
-                return True
-            else:
-                _LOG.warning(
-                    "voice.audio_capture.fixture_not_found",
-                    recording_id=recording_id,
-                    path=str(fixture_src),
-                )
-                # Fall through to real sounddevice path (will fail if not installed)
+            return started
 
         try:
             import sounddevice as sd  # COL-2: lazy import
@@ -254,16 +248,16 @@ class AudioCaptureManager:
             (COL-5) so the WAV header frame count is never corrupted by a premature
             close while frames are still in the drainer queue.
 
-            Fixture mode: if started in fixture mode, returns ``wav_path`` immediately
-            without waiting for a drainer (no stream was opened).
+            When started via ``capture_source_override``, returns ``wav_path``
+            immediately without waiting for a drainer (no stream was opened).
         """
-        # Fixture mode fast-path: no stream teardown needed
-        if self._fixture_mode and self._current_recording_id == recording_id:
+        # Alternative source fast-path: no stream teardown needed.
+        if self._alternative_source_active and self._current_recording_id == recording_id:
             wav_path = self._current_wav_path
-            self._fixture_mode = False
+            self._alternative_source_active = False
             self._reset_state()
             _LOG.info(
-                "voice.audio_capture.fixture_mode_stopped",
+                "voice.audio_capture.alternative_source_stopped",
                 recording_id=recording_id,
                 wav_path=str(wav_path),
             )

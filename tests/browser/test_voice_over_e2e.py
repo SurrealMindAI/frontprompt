@@ -3,14 +3,18 @@
 Uses LazyBrowserSessionProvider (real frontprompt show subprocess) + the served
 playground HTTP fixture from conftest.py (playground_server / playground_url).
 
-Test-injection seams (documented in voice/audio_capture.py + show_session.py):
-    - ``FRONTPROMPT_TRANSCRIPTION_BACKEND=mock``: the show-child subprocess registers
-      ``MockTranscriptionBackend`` in ``REGISTERED_BACKENDS`` — no real mlx-whisper.
-    - ``FRONTPROMPT_AUDIO_FIXTURE=<wav>``: ``AudioCaptureManager.start()`` copies the
-      fixture WAV to the session dir instead of opening a real sounddevice stream.
+Test-injection mechanism (test-tree only — zero production env-checks):
+    Before spawning the child ``frontprompt show`` subprocess, the module fixture:
+    - Prepends ``tests/_subprocess_bootstrap/`` to PYTHONPATH (inherited by child)
+    - Sets ``FRONTPROMPT_E2E_VOICE_INJECT=<wav>`` (inherited by child)
 
-Both env vars are set in the parent test process before spawning the child, inherited
-via ``anyio.open_process`` which inherits the parent environment.
+    At child interpreter startup, Python auto-imports ``sitecustomize`` from PYTHONPATH.
+    ``tests/_subprocess_bootstrap/sitecustomize.py`` activates when the marker env var
+    is set and:
+    - Appends ``MockTranscriptionBackend`` to ``REGISTERED_BACKENDS``
+    - Sets ``audio_capture.capture_source_override`` to copy the fixture WAV
+
+Both mechanisms are entirely in the test tree; production source has no env branches.
 
 Scenarios:
     V1 — Full voice-over round-trip:
@@ -105,32 +109,42 @@ _playground_base: str = ""  # set by _setup_provider
 # Sentinel used to detect "env var was never set" vs "env var was set to None"
 _sentinel: object = object()
 
-# Env vars saved/restored across the module (object | str | None)
-_saved_backend_env: object = _sentinel
-_saved_fixture_env: object = _sentinel
+# Env state saved/restored across the module (object | str | None)
+_saved_inject_env: object = _sentinel
+_saved_pythonpath_env: object = _sentinel
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _setup_provider(playground_server: str) -> Iterator[None]:
     """Spawn one frontprompt show subprocess for the whole module.
 
-    Sets env vars so the child inherits the mock backend + audio fixture seam.
-    The child is spawned on first ``_provider.get()`` call (lazy), so env vars
+    Prepends ``tests/_subprocess_bootstrap/`` to PYTHONPATH and sets
+    ``FRONTPROMPT_E2E_VOICE_INJECT`` so the child inherits both and
+    ``sitecustomize.py`` activates at child interpreter startup.
+    The child is spawned on first ``_provider.get()`` call (lazy), so these
     are active at spawn time.
     """
     global _provider, _tmp_dir, _playground_base
-    global _saved_backend_env, _saved_fixture_env
+    global _saved_inject_env, _saved_pythonpath_env
 
     assert _FIXTURE_WAV.is_file(), (
         f"Fixture WAV missing: {_FIXTURE_WAV}. "
         f"Generate with: python -c \"import wave, struct, math; ...\" (see sub-plan 06)"
     )
 
-    # Inject seams: set env vars in the parent process before spawning child
-    _saved_backend_env = os.environ.get("FRONTPROMPT_TRANSCRIPTION_BACKEND")
-    _saved_fixture_env = os.environ.get("FRONTPROMPT_AUDIO_FIXTURE")
-    os.environ["FRONTPROMPT_TRANSCRIPTION_BACKEND"] = "mock"
-    os.environ["FRONTPROMPT_AUDIO_FIXTURE"] = str(_FIXTURE_WAV)
+    # Compute the bootstrap dir path (tests/_subprocess_bootstrap/)
+    _bootstrap_dir = str(Path(__file__).parent.parent / "_subprocess_bootstrap")
+    _existing_pythonpath = os.environ.get("PYTHONPATH", "")
+
+    # Save current env state
+    _saved_inject_env = os.environ.get("FRONTPROMPT_E2E_VOICE_INJECT")
+    _saved_pythonpath_env = os.environ.get("PYTHONPATH")
+
+    # Inject: PYTHONPATH prepended + marker set (both inherited by child)
+    os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = str(_FIXTURE_WAV)
+    os.environ["PYTHONPATH"] = (
+        _bootstrap_dir + (":" + _existing_pythonpath if _existing_pythonpath else "")
+    )
 
     _tmp_dir = Path(tempfile.mkdtemp(prefix="fp-e2e-voiceover-", dir="/tmp"))
     _playground_base = playground_server
@@ -138,7 +152,7 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
 
     yield
 
-    # Teardown: close provider + restore env vars
+    # Teardown: close provider + restore env state
     import asyncio as _asyncio
 
     if _provider is not None:
@@ -151,16 +165,17 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
     if _tmp_dir is not None:
         shutil.rmtree(_tmp_dir, ignore_errors=True)
 
-    # Restore env vars
-    if _saved_backend_env is None:
-        os.environ.pop("FRONTPROMPT_TRANSCRIPTION_BACKEND", None)
-    elif _saved_backend_env is not _sentinel:
-        os.environ["FRONTPROMPT_TRANSCRIPTION_BACKEND"] = str(_saved_backend_env)
+    # Restore FRONTPROMPT_E2E_VOICE_INJECT
+    if _saved_inject_env is None:
+        os.environ.pop("FRONTPROMPT_E2E_VOICE_INJECT", None)
+    elif _saved_inject_env is not _sentinel:
+        os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = str(_saved_inject_env)
 
-    if _saved_fixture_env is None:
-        os.environ.pop("FRONTPROMPT_AUDIO_FIXTURE", None)
-    elif _saved_fixture_env is not _sentinel:
-        os.environ["FRONTPROMPT_AUDIO_FIXTURE"] = str(_saved_fixture_env)
+    # Restore PYTHONPATH
+    if _saved_pythonpath_env is None:
+        os.environ.pop("PYTHONPATH", None)
+    elif _saved_pythonpath_env is not _sentinel:
+        os.environ["PYTHONPATH"] = str(_saved_pythonpath_env)
 
 
 async def _get_socket() -> Path:
@@ -428,20 +443,18 @@ async def test_voice_over_full_round_trip(anyio_backend: str) -> None:
 @pytest.mark.anyio
 @_SKIP
 async def test_voice_over_degradation_when_no_audio_capture(anyio_backend: str) -> None:
-    """V2: with_voice_over=true but audio fixture env var cleared → capture degrades gracefully.
+    """V2: with_voice_over=true but voice injection absent → capture degrades gracefully.
 
-    AudioCaptureManager.start() returns False when FRONTPROMPT_AUDIO_FIXTURE is absent
+    AudioCaptureManager.start() returns False when capture_source_override is None
     and sounddevice is not installed. The recording starts but has_voice_over stays False
     and no PostProcessor is dispatched.
 
-    This test temporarily clears the FRONTPROMPT_AUDIO_FIXTURE env var in the PARENT
-    process; but the child process has already inherited the original env at spawn time.
-    So V2 uses a DIFFERENT LazyBrowserSessionProvider spawned without the fixture seam.
+    This test temporarily removes the FRONTPROMPT_E2E_VOICE_INJECT marker before
+    spawning a NEW provider, so its child gets no voice injection (sitecustomize.py
+    won't activate). PYTHONPATH keeps the bootstrap dir — inactive without the marker.
     """
-    # Spawn a separate provider without the audio fixture env var
-    saved = os.environ.pop("FRONTPROMPT_AUDIO_FIXTURE", None)
-    # Also remove mock backend since we're testing the degrade path independently
-    saved_backend = os.environ.pop("FRONTPROMPT_TRANSCRIPTION_BACKEND", None)
+    # Temporarily remove the injection marker so the V2 child spawns without seams
+    saved_inject = os.environ.pop("FRONTPROMPT_E2E_VOICE_INJECT", None)
 
     provider_v2: LazyBrowserSessionProvider | None = None
     try:
@@ -509,11 +522,9 @@ async def test_voice_over_degradation_when_no_audio_capture(anyio_backend: str) 
                 await provider_v2.close()
             except Exception:
                 pass
-        # Restore env vars
-        if saved is not None:
-            os.environ["FRONTPROMPT_AUDIO_FIXTURE"] = saved
-        if saved_backend is not None:
-            os.environ["FRONTPROMPT_TRANSCRIPTION_BACKEND"] = saved_backend
+        # Restore the injection marker for other tests
+        if saved_inject is not None:
+            os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = saved_inject
 
 
 # ---------------------------------------------------------------------------
@@ -601,24 +612,17 @@ async def test_voice_over_transcription_failure_path(anyio_backend: str) -> None
     """
     sock = await _get_socket()
 
-    # Patch the mock backend in the CHILD process via a second module-level env var
-    # is impractical. Instead, we verify the failure path using a separate provider
-    # whose child process has FRONTPROMPT_TRANSCRIPTION_BACKEND=mock_fail.
-    # Since we can't easily change the child's runtime state, we test the failure path
-    # at the unit level (test_pipeline_failure_sets_failed_status in test_voice_over_pipeline.py)
-    # and here we verify the state persists correctly by manually calling the IPC path.
+    # Patching the mock backend to a failing variant inside the already-running child
+    # subprocess is impractical from the e2e level. The failure path is fully covered
+    # at unit level (test_pipeline_failure_sets_failed_status in test_voice_over_pipeline.py)
+    # with a real StateManager + failing mock backend.
     #
-    # Alternative: use the main provider and directly set transcription_status via a
-    # StateManager method — but that bypasses the PostProcessor.
-    # The cleanest approach for V4 in E2E is to start a voice-over recording with the
-    # mock backend, then trigger the failure by patching INSIDE the already-running process.
-    # Since we can't easily do that, we mark this test as xfail with a clear explanation
-    # and note that unit coverage exists in test_voice_over_pipeline.py.
+    # E2E-level failure injection would require a second sitecustomize bootstrap that
+    # registers a failing backend variant — this is out of scope for the current refactor.
     pytest.xfail(
         "V4 transcription failure path is fully covered in tests/voice/test_voice_over_pipeline.py "
         "::test_pipeline_failure_sets_failed_status (real StateManager + failing mock backend). "
-        "E2E-level failure injection requires patching the child subprocess's transcription backend "
-        "at runtime, which requires a separate FRONTPROMPT_TRANSCRIPTION_BACKEND env value that "
-        "triggers a failing mock. This seam is out of scope for sub-plan 06 — the unit coverage "
-        "already verifies the failure path (status='failed', error saved, recording readable)."
+        "E2E-level failure injection requires a second sitecustomize bootstrap registering a "
+        "failing mock variant — out of scope. Unit coverage already verifies the failure path "
+        "(status='failed', error saved, recording readable)."
     )
