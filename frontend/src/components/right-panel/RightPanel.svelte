@@ -11,10 +11,12 @@
   import { backendState } from '../../backend-state/backend-state.svelte';
   import CommentEditor from './CommentEditor.svelte';
   import PickDetails from './PickDetails.svelte';
+  import RecordingDetails from './RecordingDetails.svelte';
   import RegionDetails from './RegionDetails.svelte';
 
   const activePick = $derived(backendState.inspector.activePick);
   const activeRegion = $derived(backendState.inspector.activeRegion);
+  const activeDetailRecording = $derived(backendState.recordings.detailRecording);
 </script>
 
 <div class="right-panel">
@@ -23,6 +25,8 @@
     <CommentEditor pickId={activePick.pick_id} initialComment={activePick.comment ?? ''} />
   {:else if activeRegion}
     <RegionDetails region={activeRegion} />
+  {:else if activeDetailRecording}
+    <RecordingDetails recording={activeDetailRecording} />
   {:else}
     <div class="empty">
       <p class="empty__hint">Nichts selektiert.</p>

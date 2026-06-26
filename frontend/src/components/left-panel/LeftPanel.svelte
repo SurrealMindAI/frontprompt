@@ -19,6 +19,7 @@
   import LeftPanelTools from './LeftPanelTools.svelte';
   import EventsTab from './tabs/EventsTab.svelte';
   import PicksTab from './tabs/PicksTab.svelte';
+  import RecordingsTab from './tabs/RecordingsTab.svelte';
   import RegionsTab from './tabs/RegionsTab.svelte';
   import RelationsTab from './tabs/RelationsTab.svelte';
 
@@ -29,6 +30,10 @@
   );
   const currentHostname = $derived(overlayContext.hostname() ?? '');
   const currentSessionId = $derived(overlayContext.currentSessionId);
+
+  // Recordings count + active indicator for the Recordings tab label.
+  const recordingsCount = $derived(backendState.recordings.recordings.length);
+  const hasActiveRecording = $derived(backendState.recordings.activeRecordingId !== null);
 
   // Tab-labels with visible counts — must reflect what each tab actually renders
   // (domain-scoped: own = all, foreign = current-hostname only).
@@ -58,6 +63,12 @@
       })})`,
     },
     { id: 'events' as const, label: 'Events' },
+    {
+      id: 'recordings' as const,
+      label: recordingsCount > 0
+        ? `Recordings (${recordingsCount})${hasActiveRecording ? ' ●' : ''}`
+        : `Recordings${hasActiveRecording ? ' ●' : ''}`,
+    },
   ]);
 </script>
 
@@ -80,6 +91,8 @@
           <RelationsTab />
         {:else if activeId === 'events'}
           <EventsTab />
+        {:else if activeId === 'recordings'}
+          <RecordingsTab />
         {/if}
       {/snippet}
     </TabbedPanel>
