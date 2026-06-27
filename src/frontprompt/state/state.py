@@ -943,6 +943,25 @@ class MicrophoneState(BaseModel):
     )
 
 
+class TranscriptionModelSpec(BaseModel):
+    """Statischer Katalog-Eintrag für ein mlx-whisper Modell.
+
+    Lebt in :class:`TranscriptionBackendInfo`.available_models — nicht persisted
+    (Katalog ist statischer Code). ``default=True`` markiert das Modell das
+    verwendet wird wenn kein User-Selection vorhanden ist.
+
+    Cache-Subdir-Pfad wird zur Laufzeit aus ``hf_repo_id`` abgeleitet
+    (``models--`` Prefix + ``/`` → ``--`` Substitution) — nicht gespeichert.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    model_id: str = Field(description="Stabiler machine-readable Bezeichner (z.B. 'whisper-base-mlx').")
+    display_name: str = Field(description="Anzeigename in der UI (z.B. 'Whisper Base (MLX)').")
+    hf_repo_id: str = Field(description="HuggingFace Repo-ID (z.B. 'mlx-community/whisper-base-mlx').")
+    default: bool = Field(description="True für das Standard-Modell (genau eines je Katalog).")
+
+
 class SettingsState(BaseModel):
     """Dauerhafte User-Einstellungen für das Voice-Over-Feature.
 
@@ -960,6 +979,13 @@ class SettingsState(BaseModel):
     selected_transcription_backend_id: str | None = Field(
         default=None,
         description="Gewähltes Backend (None = Auto — erstes 'ready'-Backend).",
+    )
+    mlx_whisper_model_id: str | None = Field(
+        default=None,
+        description=(
+            "Gewähltes mlx-whisper Modell (None = Standard-Modell aus MODEL_CATALOG). "
+            "Persistiert in der settings-Tabelle. Schema 0.11.0+."
+        ),
     )
 
 
@@ -982,6 +1008,11 @@ class TranscriptionBackendInfo(BaseModel):
 
     ``download_progress`` ist ephemer (In-Process, nicht in SQLite).
     Das Overlay rendert eine Fortschrittsanzeige während des Downloads.
+
+    ``available_models`` enthält den statischen Modell-Katalog dieses Backends
+    (aus MODEL_CATALOG in :mod:`frontprompt.voice.backends.mlx_whisper`).
+    ``selected_model_id`` ist die aktuell gewählte Modell-ID (aus persistierter
+    Settings oder Default-Modell). Beide Felder sind In-Process-State (Schema 0.11.0+).
     """
 
     model_config = ConfigDict(frozen=False)
@@ -996,6 +1027,21 @@ class TranscriptionBackendInfo(BaseModel):
     error_message: str | None = Field(
         default=None,
         description="Fehlermeldung bei status='error'.",
+    )
+    available_models: list[TranscriptionModelSpec] = Field(
+        default_factory=list,
+        description=(
+            "Statischer Modell-Katalog dieses Backends (Schema 0.11.0+). "
+            "In-Process-State — rebuilt from catalog on each session start. Nicht persistiert."
+        ),
+    )
+    selected_model_id: str | None = Field(
+        default=None,
+        description=(
+            "Aktuell gewählte Modell-ID (Schema 0.11.0+). "
+            "Derived at session start from settings_state.mlx_whisper_model_id. "
+            "In-Process-State — nicht separat persistiert."
+        ),
     )
 
 
@@ -1053,6 +1099,11 @@ class StateSnapshot(BaseModel):
           Neue StateSnapshot-Felder: ``microphone_state``, ``settings_state``,
           ``transcription_state`` (alle additive mit default_factory — backward-compat
           mit alten Overlays die unbekannte Felder ignorieren).
+        - 0.11.0: + ``TranscriptionModelSpec`` (model catalog entry). Neues Feld
+          ``SettingsState.mlx_whisper_model_id`` (durable User-Modell-Selektion).
+          Neue Felder auf ``TranscriptionBackendInfo``: ``available_models`` und
+          ``selected_model_id`` (beide additive, In-Process-State). Ermöglicht
+          modell-wechsel zur Laufzeit ohne Neustart.
     """
 
     # Read-only wire-payload — constructed by snapshot(), never mutated after construction.
@@ -1060,7 +1111,7 @@ class StateSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     schema_version: str = Field(
-        default="0.10.0",
+        default="0.11.0",
         description="Forward-compat tag — bump bei breaking changes.",
     )
     panel_state: PanelStateView = Field(description="Aktueller authoritative panel-state.")
@@ -1247,6 +1298,8 @@ __codegen_roots__ = [
     "TranscriptionBackendStatus",
     "TranscriptionBackendInfo",
     "TranscriptionState",
+    # Model catalog (Schema 0.11.0, sub-plan 01)
+    "TranscriptionModelSpec",
 ]
 
 __all__ = [
@@ -1300,6 +1353,7 @@ __all__ = [
     "TranscriptSegmentEntry",
     "TranscriptionBackendInfo",
     "TranscriptionBackendStatus",
+    "TranscriptionModelSpec",
     "TranscriptionState",
     "TranscriptionStatus",
     "Viewport",

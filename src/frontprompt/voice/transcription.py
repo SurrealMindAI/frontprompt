@@ -113,6 +113,18 @@ class TranscriptionBackend(Protocol):
         """
         ...
 
+    def set_model(self, model_id: str | None) -> None:
+        """Set the active model by model_id. No-op default — backends that support
+        multiple models override this; backends that don't gain the method for free.
+
+        ``model_id=None`` reverts to the backend's default model (the entry with
+        ``default=True`` in its MODEL_CATALOG). Callers never guard with
+        ``hasattr``/``getattr`` — the default body handles unsupported backends
+        silently. (COL-6: single caller is StateManager.set_mlx_whisper_model).
+        """
+        # Default no-op — backends that only have one model inherit this.
+        return  # type: ignore[return-value]
+
     async def ensure(self, progress_cb: ProgressCallback) -> None:
         """Ensure the backend is ready (download model if needed).
 

@@ -230,9 +230,9 @@ def test_recording_status_remains_compatible() -> None:
 
 
 def test_state_snapshot_schema_version_is_0_10_0() -> None:
-    """StateSnapshot default schema_version is 0.10.0 after voice-over extension."""
+    """StateSnapshot default schema_version is 0.11.0 after model-catalog extension (sub-plan 01)."""
     snap = StateSnapshot(panel_state=_panel_state())
-    assert snap.schema_version == "0.10.0"
+    assert snap.schema_version == "0.11.0"
 
 
 def test_state_snapshot_includes_microphone_state() -> None:

@@ -59,6 +59,7 @@ from frontprompt.state.state import (
     TranscriptionState,
     hostname_for_url,
 )
+from frontprompt.voice.transcription import TranscriptionBackend
 
 _LOG = structlog.get_logger(__name__)
 
@@ -1479,6 +1480,60 @@ class StateManager:
                 backend=settings.selected_transcription_backend_id,
             )
             snap = self._post_mutate_locked(lambda: self._persistence.save_settings(settings))
+        return await self._notify_and_return(snap)
+
+    # ----- Mutation API: Model selection (single-writer) -----------------
+
+    async def set_mlx_whisper_model(
+        self,
+        model_id: str | None,
+        backend: TranscriptionBackend,
+    ) -> StateSnapshot:
+        """Set the active mlx-whisper model. Persists, updates backend, re-probes, broadcasts.
+
+        This is the SINGLE caller of ``backend.set_model()`` (COL-6).
+
+        Inside a single anyio.Lock scope (ADR-011), in order:
+          (a) Persist model_id to the settings key-value store.
+          (b) Update SettingsState.mlx_whisper_model_id in the snapshot.
+          (c) Call ``backend.set_model(model_id)`` — COL-6 single caller.
+          (d) COL-2: Re-probe ``backend.probe_status()`` and update the matching
+              TranscriptionBackendInfo.status (mic-on gate reflects new model state).
+          (e) COL-3: Set selected_model_id on the matching TranscriptionBackendInfo.
+          (f) Broadcast once.
+
+        Args:
+            model_id: Model id to activate, or None to revert to the backend's default.
+            backend: The TranscriptionBackend instance to configure. Typed as the
+                Protocol (COL-8 — accepts any REGISTERED_BACKENDS entry without mypy
+                variance error; not restricted to MlxWhisperBackend).
+        """
+        async with self._lock:
+            # (a) Persist
+            self._persistence.save_mlx_whisper_model_id(model_id)
+
+            # (b) Update SettingsState
+            self._settings_state.mlx_whisper_model_id = model_id
+
+            # (c) COL-6: single caller of set_model
+            backend.set_model(model_id)
+
+            # (d) COL-2: Re-probe + update matching TranscriptionBackendInfo.status
+            new_status = backend.probe_status()
+            for backend_info in self._transcription_state.backends:
+                if backend_info.backend_id == backend.backend_id:
+                    backend_info.status = new_status
+                    # (e) COL-3: Update selected_model_id on the backend info
+                    backend_info.selected_model_id = model_id
+                    break
+
+            self._log.info(
+                "state.manager.set_mlx_whisper_model",
+                model_id=model_id,
+                backend_id=backend.backend_id,
+                new_status=new_status,
+            )
+            snap = self._post_mutate_locked()
         return await self._notify_and_return(snap)
 
     # ----- Mutation API: TranscriptionState (single-writer) -----------------

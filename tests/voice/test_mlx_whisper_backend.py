@@ -276,7 +276,9 @@ def test_transcribe_integration_returns_segments(tmp_path: Path) -> None:
     import anyio
 
     backend = MlxWhisperBackend()
-    segments = anyio.from_thread.run_sync(lambda: anyio.run(backend.transcribe, wav_path))
+    # transcribe() is an async method; run it in a fresh event loop from this sync
+    # test. (anyio.from_thread.run_sync only works inside an anyio worker thread.)
+    segments = anyio.run(backend.transcribe, wav_path)
     assert isinstance(segments, list)
     for seg in segments:
         assert isinstance(seg, TranscriptSegment)

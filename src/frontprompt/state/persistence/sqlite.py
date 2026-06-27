@@ -749,6 +749,34 @@ class SqlitePersistence:
             self._log.warning("state.persistence.sqlite.load_mic_device_id.invalid_value", raw=row[0])
             return None
 
+    def save_mlx_whisper_model_id(self, model_id: str | None) -> None:
+        """Persist selected mlx-whisper model id to the settings key-value table.
+
+        ``None`` clears the preference (reverts to default model).
+        Idempotent. Write failures are swallowed with a warning.
+        Schema 0.11.0+.
+        """
+        value = model_id if model_id is not None else ""
+        try:
+            with self._conn:
+                self._conn.execute(self._UPSERT_SETTING, ("mlx_whisper_model_id", value))
+        except sqlite3.Error as exc:
+            self._log.warning("state.persistence.save.failed", method="save_mlx_whisper_model_id", error=str(exc))
+            return
+        self._log.debug("state.persistence.sqlite.save_mlx_whisper_model_id.ok", model_id=model_id)
+
+    def load_mlx_whisper_model_id(self) -> str | None:
+        """Load persisted mlx-whisper model id. Returns None when not set.
+
+        Schema 0.11.0+.
+        """
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = 'mlx_whisper_model_id'"
+        ).fetchone()
+        if row is None or not row[0]:
+            return None
+        return row[0]
+
     # ------------------------------------------------------------------
     # Replay-report domain (sub-plan 01)
     # ------------------------------------------------------------------

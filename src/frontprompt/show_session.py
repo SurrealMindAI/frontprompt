@@ -87,7 +87,9 @@ if TYPE_CHECKING:
 _LOG = structlog.get_logger("frontprompt.show_session")
 
 
-def build_initial_transcription_state() -> TranscriptionState:
+def build_initial_transcription_state(
+    mlx_whisper_model_id: str | None = None,
+) -> TranscriptionState:
     """Build the initial :class:`TranscriptionState` by probing every registered backend.
 
     BUG 2 fix: transcription backends self-register into
@@ -105,9 +107,17 @@ def build_initial_transcription_state() -> TranscriptionState:
     Backend *construction* must never require heavy optional deps:
     ``MlxWhisperBackend`` lazy-imports ``mlx`` inside its methods, so importing the
     package is safe even where the ``voice`` extra is absent.
+
+    Schema 0.11.0+: populates ``TranscriptionBackendInfo.available_models``
+    (from MODEL_CATALOG for mlx_whisper) and ``selected_model_id``
+    (from ``mlx_whisper_model_id`` persisted settings).
+
+    Args:
+        mlx_whisper_model_id: Persisted model id from settings, or None for default.
     """
     try:
         from frontprompt.voice.backends import register_builtin_backends
+        from frontprompt.voice.backends.mlx_whisper import MODEL_CATALOG
         from frontprompt.voice.transcription import REGISTERED_BACKENDS
 
         # Idempotent + reload-robust: guarantees the registry is populated even if
@@ -117,14 +127,21 @@ def build_initial_transcription_state() -> TranscriptionState:
         _LOG.warning("show_session.transcription_state.import_failed", error=str(exc))
         return TranscriptionState()
 
-    backends = [
-        TranscriptionBackendInfo(
-            backend_id=backend.backend_id,
-            display_name=backend.display_name,
-            status=backend.probe_status(),
+    backends = []
+    for backend in REGISTERED_BACKENDS:
+        # Populate available_models for mlx_whisper from its static catalog.
+        available_models = MODEL_CATALOG if backend.backend_id == "mlx_whisper" else []
+        # selected_model_id: use persisted setting for mlx_whisper, None for others.
+        selected = mlx_whisper_model_id if backend.backend_id == "mlx_whisper" else None
+        backends.append(
+            TranscriptionBackendInfo(
+                backend_id=backend.backend_id,
+                display_name=backend.display_name,
+                status=backend.probe_status(),
+                available_models=list(available_models),
+                selected_model_id=selected,
+            )
         )
-        for backend in REGISTERED_BACKENDS
-    ]
     _LOG.info("show_session.transcription_state.built", backend_count=len(backends))
     return TranscriptionState(backends=backends)
 

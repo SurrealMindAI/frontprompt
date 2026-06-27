@@ -76,6 +76,9 @@ class _FakeBackend:
     async def transcribe(self, audio_path: Path) -> list[object]:
         return []
 
+    def set_model(self, model_id: str | None) -> None:
+        pass
+
 
 def test_fake_backend_satisfies_protocol() -> None:
     """A fake backend implementing the Protocol is accepted by the runtime check."""
@@ -140,15 +143,17 @@ def test_progress_callback_alias_is_callable() -> None:
 
 def test_transcription_module_does_not_import_mlx_whisper_at_load() -> None:
     """Importing frontprompt.voice.transcription does NOT pull mlx_whisper into sys.modules."""
-    # Remove from sys.modules if present to ensure clean state
-    mlx_keys_before = [k for k in sys.modules if k.startswith("mlx")]
-    # (Re-)import the transcription module
     import importlib
+
+    # Drop any mlx_whisper modules a PRIOR test (e.g. the real-transcribe integration
+    # test) left in sys.modules, so we measure ONLY what reloading the transcription
+    # module itself pulls in — order-independent.
+    for key in [k for k in sys.modules if k.startswith("mlx_whisper")]:
+        del sys.modules[key]
 
     import frontprompt.voice.transcription
 
     importlib.reload(frontprompt.voice.transcription)
-    # Check mlx_whisper is still not imported
+    # The transcription module's load must not (re-)import mlx_whisper (lazy-import discipline).
     mlx_keys_after = [k for k in sys.modules if k.startswith("mlx_whisper")]
     assert not mlx_keys_after, f"mlx_whisper was imported at module load: {mlx_keys_after}"
-    _ = mlx_keys_before  # silence unused warning

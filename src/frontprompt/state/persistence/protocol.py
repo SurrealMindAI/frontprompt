@@ -151,6 +151,22 @@ class StatePersistence(Protocol):
         """Load the persisted microphone device id. Returns None when not set."""
         ...
 
+    def save_mlx_whisper_model_id(self, model_id: str | None) -> None:
+        """Persist selected mlx-whisper model id to the settings key-value table.
+
+        ``None`` = revert to default model. Idempotent. Separate from
+        :meth:`save_settings` because the model selection is a per-backend concern.
+        Schema 0.11.0+.
+        """
+        ...
+
+    def load_mlx_whisper_model_id(self) -> str | None:
+        """Load the persisted mlx-whisper model id. Returns None when not set.
+
+        Schema 0.11.0+.
+        """
+        ...
+
     # ----- Replay-report write-through (sub-plan 01) -------------------------
 
     def save_replay_report(self, report: "ReplayReport") -> None:

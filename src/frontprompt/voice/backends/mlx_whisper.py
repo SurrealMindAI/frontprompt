@@ -29,16 +29,51 @@ from typing import ClassVar
 
 import structlog
 
+from frontprompt.state.state import TranscriptionModelSpec
 from frontprompt.voice.transcription import ProgressCallback, TranscriptSegment, TranscriptionBackendStatus
 
 _LOG = structlog.get_logger(__name__)
 
-# HuggingFace repo ID for the mlx-whisper base model
-_HF_REPO_ID = "mlx-community/whisper-base-mlx"
+# ---------------------------------------------------------------------------
+# MODEL_CATALOG — static curated list of supported mlx-whisper models.
+# Each entry is a TranscriptionModelSpec. Exactly one entry has default=True.
+#
+# HF repo IDs are mlx-community models — all support the mlx_whisper.transcribe(
+# path_or_hf_repo=...) API. Exactly one entry has default=True.
+# ---------------------------------------------------------------------------
 
-# The local HF Hub cache directory name for this model repo
-# (HF Hub converts "/" → "--" and prefixes with "models--")
-_HF_MODEL_CACHE_SUBDIR = "models--mlx-community--whisper-base-mlx"
+MODEL_CATALOG: list[TranscriptionModelSpec] = [
+    TranscriptionModelSpec(
+        model_id="whisper-base-mlx",
+        display_name="Whisper Base (MLX) — fast, small",
+        hf_repo_id="mlx-community/whisper-base-mlx",
+        default=True,
+    ),
+    TranscriptionModelSpec(
+        model_id="whisper-large-v3-turbo",
+        display_name="Whisper Large v3 Turbo (MLX) — accurate, larger",
+        hf_repo_id="mlx-community/whisper-large-v3-turbo",
+        default=False,
+    ),
+    TranscriptionModelSpec(
+        model_id="whisper-large-v3-turbo-german",
+        display_name="Whisper Large v3 Turbo — German (MLX)",
+        hf_repo_id="mlx-community/whisper-large-v3-turbo-german-f16",
+        default=False,
+    ),
+]
+"""Curated list of mlx-whisper models. Exactly one entry has ``default=True``."""
+
+_DEFAULT_MODEL: TranscriptionModelSpec = next(m for m in MODEL_CATALOG if m.default)
+
+
+def _hf_cache_subdir(hf_repo_id: str) -> str:
+    """Derive HuggingFace Hub cache subdirectory name from a repo ID.
+
+    HF Hub convention: ``models--`` prefix + ``/`` → ``--`` substitution.
+    Example: ``mlx-community/whisper-base-mlx`` → ``models--mlx-community--whisper-base-mlx``.
+    """
+    return "models--" + hf_repo_id.replace("/", "--")
 
 
 class MlxWhisperBackend:
@@ -61,15 +96,54 @@ class MlxWhisperBackend:
     display_name: ClassVar[str] = "mlx-whisper (Apple Silicon)"
     """Human-readable label shown in the Settings tab."""
 
+    def __init__(self) -> None:
+        # In-process ephemeral state: the currently selected model id.
+        # None = use DEFAULT_MODEL. Updated by set_model(); not part of StateSnapshot.
+        self._selected_model_id: str | None = None
+
+    def set_model(self, model_id: str | None) -> None:
+        """Select the active model by model_id.
+
+        ``model_id=None`` reverts to the default model (``default=True`` in MODEL_CATALOG).
+        Unknown model_ids log a warning and keep the current selection.
+        (COL-6: called ONLY by StateManager.set_mlx_whisper_model — no direct callers.)
+        """
+        if model_id is not None:
+            known = {m.model_id for m in MODEL_CATALOG}
+            if model_id not in known:
+                _LOG.warning("mlx_whisper.set_model.unknown_id", model_id=model_id)
+                return
+        self._selected_model_id = model_id
+        _LOG.info("mlx_whisper.set_model", model_id=model_id)
+
+    @property
+    def _active_model(self) -> TranscriptionModelSpec:
+        """Return the currently active TranscriptionModelSpec.
+
+        Resolves _selected_model_id against MODEL_CATALOG, falling back to the
+        default model if the id is None or not found.
+        """
+        if self._selected_model_id is not None:
+            for m in MODEL_CATALOG:
+                if m.model_id == self._selected_model_id:
+                    return m
+        return _DEFAULT_MODEL
+
+    @property
+    def _active_hf_repo_id(self) -> str:
+        """HuggingFace repo ID for the currently active model. (COL-7 single read point.)"""
+        return self._active_model.hf_repo_id
+
     @property
     def _model_cache_dir(self) -> Path:
-        """Path to the HuggingFace hub model cache directory for whisper-base-mlx.
+        """Path to the HuggingFace hub model cache directory for the active model.
 
         This is the canonical probe target for :meth:`probe_status`. Exposed as a
         property so tests can patch it without touching the filesystem.
+        COL-7: derives from active model's hf_repo_id, not a hardcoded constant.
         """
         hf_home = Path.home() / ".cache" / "huggingface" / "hub"
-        return hf_home / _HF_MODEL_CACHE_SUBDIR
+        return hf_home / _hf_cache_subdir(self._active_hf_repo_id)
 
     def probe_status(self) -> TranscriptionBackendStatus:
         """Check backend availability (synchronous, no I/O, no network).
@@ -113,7 +187,8 @@ class MlxWhisperBackend:
             _LOG.info("mlx_whisper.ensure.skipped", status=status)
             return
 
-        _LOG.info("mlx_whisper.ensure.start", repo_id=_HF_REPO_ID)
+        active_repo_id = self._active_hf_repo_id
+        _LOG.info("mlx_whisper.ensure.start", repo_id=active_repo_id)
 
         # Build a tqdm-compatible wrapper that translates byte progress → fraction
         progress_cb_ref = progress_cb  # capture for closure
@@ -194,7 +269,7 @@ class MlxWhisperBackend:
             await _call_cb(0.0)
 
             _hf_hub.snapshot_download(
-                repo_id=_HF_REPO_ID,
+                repo_id=active_repo_id,
                 tqdm_class=_ProgressTqdmCollecting,  # type: ignore[arg-type]
             )
 
@@ -211,10 +286,10 @@ class MlxWhisperBackend:
             await _call_cb(0.0)
             import huggingface_hub as _hf_hub
 
-            _hf_hub.snapshot_download(repo_id=_HF_REPO_ID)
+            _hf_hub.snapshot_download(repo_id=active_repo_id)
             await _call_cb(1.0)
 
-        _LOG.info("mlx_whisper.ensure.done", repo_id=_HF_REPO_ID)
+        _LOG.info("mlx_whisper.ensure.done", repo_id=active_repo_id)
 
     async def transcribe(self, audio_path: Path) -> list[TranscriptSegment]:
         """Transcribe the WAV file at ``audio_path`` using mlx_whisper.
@@ -236,10 +311,11 @@ class MlxWhisperBackend:
 
         _LOG.info("mlx_whisper.transcribe.start", audio_path=str(audio_path))
 
+        active_repo_id = self._active_hf_repo_id
         try:
             result = mlx_whisper.transcribe(
                 str(audio_path),
-                path_or_hf_repo=_HF_REPO_ID,
+                path_or_hf_repo=active_repo_id,
             )
         except Exception as exc:
             _LOG.exception("mlx_whisper.transcribe.failed", error=str(exc))

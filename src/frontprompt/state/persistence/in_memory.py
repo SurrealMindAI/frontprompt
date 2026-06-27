@@ -44,6 +44,8 @@ class InMemoryPersistence:
         self._recordings: dict[str, "Recording"] = {}
         # Replay report in-memory store: replay_id -> ReplayReport
         self._replay_reports: dict[str, "ReplayReport"] = {}
+        # Model selection in-memory store (Schema 0.11.0+)
+        self._mlx_whisper_model_id: str | None = None
 
     def load_panel_state(self) -> PanelStateView | None:
         self._log.info("state.persistence.load_panel.in_memory_no_op")
@@ -158,6 +160,16 @@ class InMemoryPersistence:
         """Returns None — no persistent mic device id in InMemoryPersistence."""
         self._log.debug("state.persistence.load_mic_device_id.in_memory_no_op")
         return None
+
+    def save_mlx_whisper_model_id(self, model_id: str | None) -> None:
+        """Persist mlx-whisper model id in-memory. Schema 0.11.0+."""
+        self._mlx_whisper_model_id = model_id
+        self._log.debug("state.persistence.save_mlx_whisper_model_id.in_memory", model_id=model_id)
+
+    def load_mlx_whisper_model_id(self) -> str | None:
+        """Return in-memory mlx-whisper model id (None when not set). Schema 0.11.0+."""
+        self._log.debug("state.persistence.load_mlx_whisper_model_id.in_memory")
+        return self._mlx_whisper_model_id
 
     # ----- Replay-report write-through (sub-plan 01) --- in-memory dict store -----
 
