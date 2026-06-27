@@ -51,16 +51,17 @@ def _make_mock_audio_capture(start_returns: bool = True) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-def test_show_session_handler_count_is_28() -> None:
-    """Sub-plan 05 adds 3 voice-over settings handlers — handler_count must be 28.
+def test_show_session_handler_count_is_29() -> None:
+    """Sub-plan 06 adds 1 transcription model handler — handler_count must be 29.
 
     +3 new handlers (SetMicDevice, SetTranscriptionBackend, TriggerModelDownload)
     land in sub-plan 05, bumping the count from 25 → 28.
+    +1 new handler (SetTranscriptionModelRequested) lands in sub-plan 06, bumping 28 → 29.
     """
     from frontprompt.show_session import ShowSession
 
     s = ShowSession(url="https://example.com")
-    assert s.handler_count() == 28
+    assert s.handler_count() == 29
 
 
 # ---------------------------------------------------------------------------

@@ -62,6 +62,7 @@ from frontprompt.bridge.messages import (
     RelationUpdatedRequested,
     SetMicDeviceRequested,
     SetTranscriptionBackendRequested,
+    SetTranscriptionModelRequested,
     StateSnapshotMessage,
     TriggerModelDownloadRequested,
 )
@@ -196,7 +197,7 @@ class ShowSession:
 
     def handler_count(self) -> int:
         """Return the number of bridge handler types this session registers."""
-        # 28 handler types:
+        # 29 handler types:
         # OverlayReady, PanelToggleRequested, PanelResizeRequested, HideAllPanelsRequested,
         # InspectorActivateRequested, InspectorCanceledRequested, InspectorPickMadeRequested,
         # PickSelectedRequested, PickCommentUpdatedRequested, PickDeletedRequested,
@@ -209,7 +210,9 @@ class ShowSession:
         # AssertionAddedToRecordingRequested, AssertionDeletedRequested, AssertionUpdatedRequested
         # + 3 voice-over settings handlers (voice-over sub-plan 05):
         # SetMicDeviceRequested, SetTranscriptionBackendRequested, TriggerModelDownloadRequested
-        return 28
+        # + 1 transcription model selection handler (voiceover-models sub-plan 06):
+        # SetTranscriptionModelRequested
+        return 29
 
     @property
     def _sm(self) -> StateManager:
@@ -486,13 +489,18 @@ class ShowSession:
         await self._sm.set_mic_device(msg.mic_device_id)
 
     async def _on_set_transcription_backend(self, msg: SetTranscriptionBackendRequested) -> None:
-        """SetTranscriptionBackendRequested → persist selected transcription backend + broadcast."""
+        """SetTranscriptionBackendRequested → persist selected transcription backend + broadcast.
+
+        COL-1: forward mlx_whisper_model_id from current SettingsState so a backend switch
+        does not silently wipe the persisted model selection.
+        """
         from frontprompt.state.state import SettingsState
 
         current = self._sm.snapshot().settings_state
         updated = SettingsState(
             voice_over_enabled=current.voice_over_enabled,
             selected_transcription_backend_id=msg.backend_id,
+            mlx_whisper_model_id=current.mlx_whisper_model_id,  # COL-1: preserve model selection
         )
         await self._sm.set_settings(updated)
 
@@ -500,6 +508,28 @@ class ShowSession:
         """TriggerModelDownloadRequested → start model download task via tg.start_soon."""
         if self._tg is not None:
             self._tg.start_soon(self._trigger_download_task, msg.backend_id)
+
+    async def _on_set_transcription_model(self, msg: SetTranscriptionModelRequested) -> None:
+        """SetTranscriptionModelRequested → set active model on backend + broadcast.
+
+        COL-6: does NOT call backend.set_model() directly — that is the exclusive
+        responsibility of StateManager.set_mlx_whisper_model(). The single call to
+        set_model() inside set_mlx_whisper_model() covers status re-probe (COL-2)
+        and selected_model_id update (COL-3) in one lock scope.
+
+        Unknown backend_id → log warning and return without raising.
+        """
+        from frontprompt.voice.transcription import REGISTERED_BACKENDS
+
+        backend = next((b for b in REGISTERED_BACKENDS if b.backend_id == msg.backend_id), None)
+        if backend is None:
+            self._log.warning(
+                "show.voice_over.set_transcription_model.unknown_backend",
+                backend_id=msg.backend_id,
+            )
+            return
+
+        await self._sm.set_mlx_whisper_model(msg.model_id, backend)
 
     async def _trigger_download_task(self, backend_id: str) -> None:
         """Download task: calls backend.ensure(progress_cb) with status update callback."""
@@ -704,6 +734,8 @@ class ShowSession:
                             bridge.on(SetMicDeviceRequested, self._on_set_mic_device)
                             bridge.on(SetTranscriptionBackendRequested, self._on_set_transcription_backend)
                             bridge.on(TriggerModelDownloadRequested, self._on_trigger_model_download)
+                            # Transcription model selection handler (voiceover-models sub-plan 06)
+                            bridge.on(SetTranscriptionModelRequested, self._on_set_transcription_model)
 
                             # Broadcast after every authoritative mutation (include token)
                             self._sm.add_snapshot_listener(

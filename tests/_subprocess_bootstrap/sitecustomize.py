@@ -14,6 +14,11 @@ When active, injects two things into the child process:
     2. ``audio_capture.capture_source_override`` set to an async callable that
        copies the fixture WAV to ``wav_path`` instead of opening sounddevice.
 
+Optionally (``FRONTPROMPT_E2E_MIC_INJECT=1``):
+    3. Injects a fake sounddevice module so ``MicrophoneWatcher.run()`` returns
+       at least one fake input device — enables V7 mic-dropdown e2e test without
+       real audio hardware.
+
 Nothing here runs in the parent pytest process (PYTHONPATH is set AFTER pytest
 starts, and sitecustomize runs only at interpreter startup).
 """
@@ -59,3 +64,40 @@ if _fixture_wav_str:
         return True
 
     _ac.capture_source_override = _fixture_capture_start
+
+    # ------------------------------------------------------------------
+    # 3. Fake microphone devices (FRONTPROMPT_E2E_MIC_INJECT=1).
+    #    Injects a fake sounddevice module so MicrophoneWatcher.run()
+    #    returns at least one fake input device on every poll cycle —
+    #    ensures the mic dropdown test (V7) works without real hardware.
+    # ------------------------------------------------------------------
+    if os.environ.get("FRONTPROMPT_E2E_MIC_INJECT") == "1":
+        import sys
+        import types
+
+        # Build a minimal fake sounddevice module that replaces the real one.
+        # MicrophoneWatcher.run() only uses sd.query_devices() and sd.default.device.
+        _fake_sd = types.ModuleType("sounddevice")
+
+        class _FakePortAudioError(Exception):
+            pass
+
+        _FAKE_DEVICES = [
+            {
+                "index": 0,
+                "name": "Fake Microphone (e2e-test)",
+                "max_input_channels": 2,
+                "max_output_channels": 0,
+                "default_samplerate": 44100.0,
+            },
+        ]
+
+        _fake_sd.PortAudioError = _FakePortAudioError  # type: ignore[attr-defined]
+        _fake_sd.query_devices = lambda: _FAKE_DEVICES  # type: ignore[attr-defined]
+
+        class _FakeDefault:
+            device = (0, -1)  # (input_index, output_index)
+
+        _fake_sd.default = _FakeDefault()  # type: ignore[attr-defined]
+
+        sys.modules["sounddevice"] = _fake_sd

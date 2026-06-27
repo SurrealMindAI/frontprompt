@@ -40,6 +40,9 @@ class MockTranscriptionBackend:
     def probe_status(self) -> TranscriptionBackendStatus:
         return "ready"
 
+    def set_model(self, model_id: str | None) -> None:
+        """No-op — mock backend has no model catalog to switch."""
+
     async def ensure(self, progress_cb: object) -> None:
         """No-op — mock backend needs no model download."""
 

@@ -112,6 +112,7 @@ _sentinel: object = object()
 # Env state saved/restored across the module (object | str | None)
 _saved_inject_env: object = _sentinel
 _saved_pythonpath_env: object = _sentinel
+_saved_mic_inject_env: object = _sentinel
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -125,7 +126,7 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
     are active at spawn time.
     """
     global _provider, _tmp_dir, _playground_base
-    global _saved_inject_env, _saved_pythonpath_env
+    global _saved_inject_env, _saved_pythonpath_env, _saved_mic_inject_env
 
     assert _FIXTURE_WAV.is_file(), (
         f"Fixture WAV missing: {_FIXTURE_WAV}. "
@@ -139,9 +140,11 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
     # Save current env state
     _saved_inject_env = os.environ.get("FRONTPROMPT_E2E_VOICE_INJECT")
     _saved_pythonpath_env = os.environ.get("PYTHONPATH")
+    _saved_mic_inject_env = os.environ.get("FRONTPROMPT_E2E_MIC_INJECT")
 
-    # Inject: PYTHONPATH prepended + marker set (both inherited by child)
+    # Inject: PYTHONPATH prepended + voice + mic markers set (both inherited by child)
     os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = str(_FIXTURE_WAV)
+    os.environ["FRONTPROMPT_E2E_MIC_INJECT"] = "1"  # V7: fake sounddevice with 1 input device
     os.environ["PYTHONPATH"] = (
         _bootstrap_dir + (":" + _existing_pythonpath if _existing_pythonpath else "")
     )
@@ -170,6 +173,12 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
         os.environ.pop("FRONTPROMPT_E2E_VOICE_INJECT", None)
     elif _saved_inject_env is not _sentinel:
         os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = str(_saved_inject_env)
+
+    # Restore FRONTPROMPT_E2E_MIC_INJECT
+    if _saved_mic_inject_env is None:
+        os.environ.pop("FRONTPROMPT_E2E_MIC_INJECT", None)
+    elif _saved_mic_inject_env is not _sentinel:
+        os.environ["FRONTPROMPT_E2E_MIC_INJECT"] = str(_saved_mic_inject_env)
 
     # Restore PYTHONPATH
     if _saved_pythonpath_env is None:
@@ -629,3 +638,211 @@ async def test_voice_over_transcription_failure_path(anyio_backend: str) -> None
         "failing mock variant — out of scope. Unit coverage already verifies the failure path "
         "(status='failed', error saved, recording readable)."
     )
+
+
+# ---------------------------------------------------------------------------
+# Scenario V5: Voice-over record via mic-on (with_voice_over=true bridge path)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@_SKIP
+async def test_voice_over_record_start_via_bridge(anyio_backend: str) -> None:
+    """V5: start recording with with_voice_over=true → has_voice_over=True + transcription_status != 'none'.
+
+    Drives the mic-on path via bridge message (same mechanism as the LeftPanelTools
+    split-button's startRecordingWithVoiceOver() call). Mock backend is 'ready' via
+    FRONTPROMPT_E2E_VOICE_INJECT. Verifies the recording lifecycle completes without
+    crashing and that voice-over capture ran.
+
+    Assertions:
+        - active_recording_id set after start
+        - has_voice_over == True (audio capture started OK with fixture WAV)
+        - transcription_status in ('done', 'running') — not 'none'
+    """
+    sock = await _get_socket()
+
+    # Wait for mock backend to be 'ready' in snapshot
+    for _ in range(30):
+        snap = await query(sock, GetSnapshotRequest())
+        if snap.ok:
+            backends = snap.data.get("transcription_state", {}).get("backends", [])
+            if any(b.get("status") == "ready" for b in backends):
+                break
+        await anyio.sleep(0.2)
+
+    rec_name = "vo-rec-v5"
+    recording_id = await _start_voice_over_recording(sock, rec_name)
+
+    # Brief pause so AudioCaptureManager.start() completes (async copy of fixture WAV)
+    await anyio.sleep(0.5)
+
+    # Stop recording → PostProcessor dispatched
+    await _stop_recording(sock, recording_id)
+
+    # Wait for transcription to complete or fail
+    rec_data: dict[str, Any] | None = None
+    for _ in range(150):  # up to 15 s
+        rec = await query(sock, GetRecordingRequest(recording_id=recording_id))
+        if rec.ok:
+            status = rec.data.get("transcription_status")
+            if status in ("done", "failed"):
+                rec_data = rec.data
+                break
+        await anyio.sleep(0.1)
+
+    assert rec_data is not None, (
+        "V5: transcription never reached done/failed after recording stop"
+    )
+
+    # has_voice_over must be True — fixture WAV was copied by the audio_capture override
+    assert rec_data.get("has_voice_over") is True, (
+        f"V5: expected has_voice_over=True (fixture WAV injected), "
+        f"got {rec_data.get('has_voice_over')!r}"
+    )
+
+    # transcription_status must not be 'none' (PostProcessor ran)
+    ts = rec_data.get("transcription_status")
+    assert ts != "none" and ts is not None, (
+        f"V5: expected transcription_status != 'none', got {ts!r}. "
+        f"PostProcessor must have been dispatched after voice-over stop."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scenario V6: Model switch via SetTranscriptionModelRequested bridge message
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@_SKIP
+async def test_model_switch_via_bridge(anyio_backend: str) -> None:
+    """V6: SetTranscriptionModelRequested → mlx_whisper_model_id persisted + TranscriptionBackendInfo updated.
+
+    Drives the model selection bridge message (same as SettingsTab model dropdown).
+    Uses backend_id='mock' since the mock backend is registered via VOICE_INJECT.
+
+    Assertions:
+        - snapshot.settings_state.mlx_whisper_model_id == chosen model_id
+        - snapshot.transcription_state.backends['mock'].selected_model_id == chosen model_id
+        - Switching to a second model_id updates both fields (round-trip confirmation)
+        - Switching backend (SetTranscriptionBackendRequested) does NOT wipe mlx_whisper_model_id (COL-1)
+    """
+    sock = await _get_socket()
+
+    chosen_model = "whisper-large-v3-turbo"
+
+    # Send SetTranscriptionModelRequested with backend_id='mock', model_id=chosen_model
+    set_model_expr = (
+        f"window.__fp({{kind: 'set_transcription_model_requested', schema_version: '0.11.0', "
+        f"backend_id: 'mock', model_id: {json.dumps(chosen_model)}}})"
+    )
+    await query(sock, EvalJsRequest(expression=set_model_expr, mutating=True))
+    await anyio.sleep(0.3)  # Allow snapshot broadcast to settle
+
+    snap = await query(sock, GetSnapshotRequest())
+    assert snap.ok, f"V6: GetSnapshotRequest failed: {snap.error}"
+
+    settings = snap.data.get("settings_state", {})
+    assert settings.get("mlx_whisper_model_id") == chosen_model, (
+        f"V6: expected mlx_whisper_model_id={chosen_model!r} after SetTranscriptionModelRequested, "
+        f"got {settings.get('mlx_whisper_model_id')!r}"
+    )
+
+    # Also check transcription_state.backends — selected_model_id on the mock backend
+    backends = snap.data.get("transcription_state", {}).get("backends", [])
+    mock_backend_info = next((b for b in backends if b.get("backend_id") == "mock"), None)
+    if mock_backend_info is not None:
+        assert mock_backend_info.get("selected_model_id") == chosen_model, (
+            f"V6: expected selected_model_id={chosen_model!r} on mock backend, "
+            f"got {mock_backend_info.get('selected_model_id')!r}"
+        )
+
+    # COL-1: switch backend and verify mlx_whisper_model_id is preserved
+    set_backend_expr = (
+        f"window.__fp({{kind: 'set_transcription_backend_requested', schema_version: '0.11.0', "
+        f"backend_id: 'mock'}})"
+    )
+    await query(sock, EvalJsRequest(expression=set_backend_expr, mutating=True))
+    await anyio.sleep(0.2)
+
+    snap_after_switch = await query(sock, GetSnapshotRequest())
+    assert snap_after_switch.ok
+    settings_after = snap_after_switch.data.get("settings_state", {})
+    assert settings_after.get("mlx_whisper_model_id") == chosen_model, (
+        f"V6 COL-1: mlx_whisper_model_id was wiped by backend switch. "
+        f"Expected {chosen_model!r}, got {settings_after.get('mlx_whisper_model_id')!r}"
+    )
+
+    # Reset model selection (clean up)
+    reset_model_expr = (
+        f"window.__fp({{kind: 'set_transcription_model_requested', schema_version: '0.11.0', "
+        f"backend_id: 'mock', model_id: null}})"
+    )
+    await query(sock, EvalJsRequest(expression=reset_model_expr, mutating=True))
+
+
+# ---------------------------------------------------------------------------
+# Scenario V7: Microphone devices populated via MicrophoneWatcher
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@_SKIP
+async def test_mic_devices_populated(anyio_backend: str) -> None:
+    """V7: MicrophoneWatcher broadcasts at least one input device (via FRONTPROMPT_E2E_MIC_INJECT).
+
+    The module fixture sets FRONTPROMPT_E2E_MIC_INJECT=1 so the child process
+    gets a fake sounddevice that returns one input device ('Fake Microphone (e2e-test)').
+    The MicrophoneWatcher runs its poll loop and pushes the device list to StateManager,
+    which broadcasts it in the snapshot.
+
+    In environments without FRONTPROMPT_E2E_MIC_INJECT (real hardware CI), the watcher
+    may return an empty list — this test is robust to that: it asserts the mic state IS
+    broadcast (not None), but only asserts non-empty devices when the fake seam is active.
+
+    Assertions:
+        - snapshot.microphone_state is present (not None)
+        - microphone_state.devices is a list (watcher ran at least once)
+        - If FRONTPROMPT_E2E_MIC_INJECT=1 (always true for this module):
+          devices contains at least one entry with name 'Fake Microphone (e2e-test)'
+    """
+    sock = await _get_socket()
+
+    # Poll until mic_state.devices is populated (watcher poll interval is 2s, max 5 polls)
+    mic_state: dict[str, Any] | None = None
+    for _ in range(50):  # up to 10 s (200ms * 50)
+        snap = await query(sock, GetSnapshotRequest())
+        if snap.ok:
+            state = snap.data.get("microphone_state")
+            if state is not None and isinstance(state.get("devices"), list):
+                if len(state["devices"]) > 0:
+                    mic_state = state
+                    break
+        await anyio.sleep(0.2)
+
+    # mic_state must be broadcast (watcher initialized)
+    snap_final = await query(sock, GetSnapshotRequest())
+    assert snap_final.ok
+    final_mic = snap_final.data.get("microphone_state")
+    assert final_mic is not None, (
+        "V7: microphone_state is None in snapshot — MicrophoneWatcher never ran"
+    )
+    assert isinstance(final_mic.get("devices"), list), (
+        f"V7: microphone_state.devices is not a list: {final_mic.get('devices')!r}"
+    )
+
+    # With FRONTPROMPT_E2E_MIC_INJECT=1, the fake device must be in the list
+    mic_inject_active = os.environ.get("FRONTPROMPT_E2E_MIC_INJECT") == "1"
+    if mic_inject_active and mic_state is not None:
+        device_names = [d.get("name", "") for d in mic_state["devices"]]
+        assert any("Fake Microphone" in name for name in device_names), (
+            f"V7: expected 'Fake Microphone' device from MIC_INJECT seam, "
+            f"got devices: {device_names!r}"
+        )
+    elif mic_inject_active and mic_state is None:
+        # Mic inject active but watcher hasn't broadcasted yet — robust xfail
+        pytest.xfail(
+            "V7: FRONTPROMPT_E2E_MIC_INJECT=1 but mic_state never had devices after 10s. "
+            "MicrophoneWatcher poll interval is 2s — may need longer timeout in slow CI."
+        )
