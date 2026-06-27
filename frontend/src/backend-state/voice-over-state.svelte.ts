@@ -16,6 +16,7 @@
  *   4. Python broadcastet StateSnapshotMessage mit transcription_state
  *      → hydrateTranscription(transcription_state) aktualisiert Backend-Liste
  *   5. backends: alle registrierten TranscriptionBackendInfo (für SettingsTab)
+ *      Seit Schema 0.11.0 trägt jedes Backend available_models + selected_model_id.
  *
  * ADR-018: kein localState hier — alle Felder sind mirror von backendState.
  * PIT-037: kein duplicate $state parallel zu einem mirror.
@@ -24,6 +25,7 @@ import type {
   RecordingMeta,
   RecordingsState,
   TranscriptionBackendInfo,
+  TranscriptionModelSpec,
   TranscriptionState,
 } from '../_generated/state';
 
@@ -34,7 +36,8 @@ export class VoiceOverState {
   /** Mirror: recording_ids deren Transkription gerade läuft (transcription_status='transcribing'). */
   transcribingRecordingIds = $state<string[]>([]);
 
-  /** Mirror: Alle registrierten Transcription-Backends mit ihrem Status (aus transcription_state). */
+  /** Mirror: Alle registrierten Transcription-Backends mit ihrem Status (aus transcription_state).
+   * Seit Schema 0.11.0 trägt jedes Backend available_models (Modell-Katalog) + selected_model_id. */
   backends = $state<TranscriptionBackendInfo[]>([]);
 
   /**
@@ -57,8 +60,28 @@ export class VoiceOverState {
    * Called by backend-state/sync after every StateSnapshotMessage.
    *
    * Tolerant gegen fehlende Felder (forward-compat mit älteren Snapshots).
+   * Seit Schema 0.11.0: backends tragen available_models + selected_model_id.
    */
   hydrateTranscription(view: Partial<TranscriptionState>): void {
     if (view.backends !== undefined) this.backends = view.backends ?? [];
+  }
+
+  /**
+   * Returns the available_models list for a given backend by backend_id.
+   * Returns [] when the backend is not found or has no models (forward-compat with older snapshots).
+   * Convenience accessor for SettingsTab model dropdown (Schema 0.11.0+).
+   */
+  availableModelsFor(backendId: string): TranscriptionModelSpec[] {
+    const backend = this.backends.find((b) => b.backend_id === backendId);
+    return backend?.available_models ?? [];
+  }
+
+  /**
+   * Returns the selected_model_id for a given backend by backend_id.
+   * Returns null when not found or unset (forward-compat).
+   */
+  selectedModelIdFor(backendId: string): string | null {
+    const backend = this.backends.find((b) => b.backend_id === backendId);
+    return backend?.selected_model_id ?? null;
   }
 }

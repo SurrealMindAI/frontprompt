@@ -684,11 +684,16 @@ export interface SettingsState {
    * Gewähltes Backend (None = Auto — erstes 'ready'-Backend).
    */
   selected_transcription_backend_id?: string | null;
+  /**
+   * Gewähltes mlx-whisper Modell (None = Standard-Modell aus MODEL_CATALOG). Persistiert in der settings-Tabelle. Schema 0.11.0+.
+   */
+  mlx_whisper_model_id?: string | null;
 }
 
 export const SettingsState = z.object({
   voice_over_enabled: z.boolean().default(false),
   selected_transcription_backend_id: z.string().nullable().optional().default(null),
+  mlx_whisper_model_id: z.string().nullable().optional().default(null),
 });
 
 export type TranscriptionBackendStatus = "unavailable" | "missing_dep" | "needs_download" | "downloading" | "ready" | "error";
@@ -700,6 +705,11 @@ export const TranscriptionBackendStatus = z.union([z.literal("unavailable"), z.l
  *
  * ``download_progress`` ist ephemer (In-Process, nicht in SQLite).
  * Das Overlay rendert eine Fortschrittsanzeige während des Downloads.
+ *
+ * ``available_models`` enthält den statischen Modell-Katalog dieses Backends
+ * (aus MODEL_CATALOG in :mod:`frontprompt.voice.backends.mlx_whisper`).
+ * ``selected_model_id`` ist die aktuell gewählte Modell-ID (aus persistierter
+ * Settings oder Default-Modell). Beide Felder sind In-Process-State (Schema 0.11.0+).
  */
 export interface TranscriptionBackendInfo {
   /**
@@ -722,7 +732,50 @@ export interface TranscriptionBackendInfo {
    * Fehlermeldung bei status='error'.
    */
   error_message?: string | null;
+  /**
+   * Statischer Modell-Katalog dieses Backends (Schema 0.11.0+). In-Process-State — rebuilt from catalog on each session start. Nicht persistiert.
+   */
+  available_models?: TranscriptionModelSpec[];
+  /**
+   * Aktuell gewählte Modell-ID (Schema 0.11.0+). Derived at session start from settings_state.mlx_whisper_model_id. In-Process-State — nicht separat persistiert.
+   */
+  selected_model_id?: string | null;
 }
+/**
+ * Statischer Katalog-Eintrag für ein mlx-whisper Modell.
+ *
+ * Lebt in :class:`TranscriptionBackendInfo`.available_models — nicht persisted
+ * (Katalog ist statischer Code). ``default=True`` markiert das Modell das
+ * verwendet wird wenn kein User-Selection vorhanden ist.
+ *
+ * Cache-Subdir-Pfad wird zur Laufzeit aus ``hf_repo_id`` abgeleitet
+ * (``models--`` Prefix + ``/`` → ``--`` Substitution) — nicht gespeichert.
+ */
+export interface TranscriptionModelSpec {
+  /**
+   * Stabiler machine-readable Bezeichner (z.B. 'whisper-base-mlx').
+   */
+  model_id: string;
+  /**
+   * Anzeigename in der UI (z.B. 'Whisper Base (MLX)').
+   */
+  display_name: string;
+  /**
+   * HuggingFace Repo-ID (z.B. 'mlx-community/whisper-base-mlx').
+   */
+  hf_repo_id: string;
+  /**
+   * True für das Standard-Modell (genau eines je Katalog).
+   */
+  default: boolean;
+}
+
+export const TranscriptionModelSpec = z.object({
+  model_id: z.string(),
+  display_name: z.string(),
+  hf_repo_id: z.string(),
+  default: z.boolean(),
+});
 
 export const TranscriptionBackendInfo = z.object({
   backend_id: z.string(),
@@ -730,6 +783,8 @@ export const TranscriptionBackendInfo = z.object({
   status: z.enum(["unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"]),
   download_progress: z.number().nullable().optional().default(null),
   error_message: z.string().nullable().optional().default(null),
+  available_models: z.array(TranscriptionModelSpec).optional(),
+  selected_model_id: z.string().nullable().optional().default(null),
 });
 
 /**
@@ -788,7 +843,7 @@ export interface RecordingStartRequested {
 
 export const RecordingStartRequested = z.object({
   kind: z.literal("recording_start_requested").default("recording_start_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   name: z.string().default("New Recording"),
   description: z.string().default(""),
   with_voice_over: z.boolean().default(false),
@@ -816,7 +871,7 @@ export interface RecordingStopRequested {
 
 export const RecordingStopRequested = z.object({
   kind: z.literal("recording_stop_requested").default("recording_stop_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
 });
 
@@ -847,7 +902,7 @@ export interface RecordingRenameRequested {
 
 export const RecordingRenameRequested = z.object({
   kind: z.literal("recording_rename_requested").default("recording_rename_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
   name: z.string(),
   description: z.string(),
@@ -873,7 +928,7 @@ export interface RecordingSelectedRequested {
 
 export const RecordingSelectedRequested = z.object({
   kind: z.literal("recording_selected_requested").default("recording_selected_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string().nullable(),
 });
 
@@ -904,7 +959,7 @@ export interface RecordedEventCapturedRequested {
 
 export const RecordedEventCapturedRequested = z.object({
   kind: z.literal("recorded_event_captured_requested").default("recorded_event_captured_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
   entry: PageEventEntry,
 });
@@ -944,7 +999,7 @@ export interface AssertionAddedToRecordingRequested {
 
 export const AssertionAddedToRecordingRequested = z.object({
   kind: z.literal("assertion_added_to_recording_requested").default("assertion_added_to_recording_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
   assertion: z.object({}),
   insert_after_seq: z.number().int().nullable().optional().default(null),
@@ -974,7 +1029,7 @@ export interface AssertionDeletedRequested {
 
 export const AssertionDeletedRequested = z.object({
   kind: z.literal("assertion_deleted_requested").default("assertion_deleted_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
   assertion_id: z.string(),
 });
@@ -1020,7 +1075,7 @@ export interface AssertionUpdatedRequested {
 
 export const AssertionUpdatedRequested = z.object({
   kind: z.literal("assertion_updated_requested").default("assertion_updated_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   recording_id: z.string(),
   assertion_id: z.string(),
   assertion_type: z.enum(["selector_exists", "text_equals", "text_contains", "visible", "url_equals"]).nullable().optional().default(null),
@@ -1050,7 +1105,7 @@ export interface SetMicDeviceRequested {
 
 export const SetMicDeviceRequested = z.object({
   kind: z.literal("set_mic_device_requested").default("set_mic_device_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   mic_device_id: z.number().int().nullable(),
 });
 
@@ -1075,7 +1130,7 @@ export interface SetTranscriptionBackendRequested {
 
 export const SetTranscriptionBackendRequested = z.object({
   kind: z.literal("set_transcription_backend_requested").default("set_transcription_backend_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   backend_id: z.string().nullable(),
 });
 
@@ -1101,6 +1156,38 @@ export interface TriggerModelDownloadRequested {
 
 export const TriggerModelDownloadRequested = z.object({
   kind: z.literal("trigger_model_download_requested").default("trigger_model_download_requested"),
-  schema_version: z.string().default("0.10.0"),
+  schema_version: z.string().default("0.11.0"),
   backend_id: z.string(),
+});
+
+/**
+ * User wählte ein Transkriptions-Modell für ein Backend — dauerhaft persistieren.
+ *
+ * **User-Trigger**: Auswahl eines Modells im :svelte:`SettingsTab` (Model-Dropdown für ein Backend).
+ * **Server-Wirkung**: :meth:`~frontprompt.show_session.ShowSession._on_set_transcription_model`
+ * persistiert ``mlx_whisper_model_id`` in der ``settings``-Tabelle + ruft ``backend.set_model()``
+ * + broadcastet ein Update von ``transcription_state`` im nächsten Snapshot.
+ * **Semantik**: ``backend_id`` muss einem registrierten Backend entsprechen (z.B. ``'mlx_whisper'``).
+ * Unbekannte ``backend_id`` → silent ignore + warning-log. ``model_id=None`` bedeutet
+ * "Standard-Modell verwenden" (das mit ``default=True`` im Katalog). Ein String-Wert ist die
+ * ``model_id`` eines :class:`~frontprompt.state.state.TranscriptionModelSpec`.
+ */
+export interface SetTranscriptionModelRequested {
+  kind?: "set_transcription_model_requested";
+  schema_version?: string;
+  /**
+   * Backend-ID (z.B. 'mlx_whisper'). Pflicht — kein Auto-Mode für Modell-Selektion.
+   */
+  backend_id: string;
+  /**
+   * model_id des zu setzenden Modells (z.B. 'whisper-large-v3-turbo'). None = Standard-Modell (``default=True`` im Katalog).
+   */
+  model_id: string | null;
+}
+
+export const SetTranscriptionModelRequested = z.object({
+  kind: z.literal("set_transcription_model_requested").default("set_transcription_model_requested"),
+  schema_version: z.string().default("0.11.0"),
+  backend_id: z.string(),
+  model_id: z.string().nullable(),
 });

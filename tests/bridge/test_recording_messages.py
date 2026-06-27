@@ -43,11 +43,11 @@ def _make_page_event_entry(**kwargs: object) -> PageEventEntry:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_version_bumped_to_0_10_0() -> None:
-    """Schema 0.10.0 — + Voice-Over-Feature (voice-over sub-plan 02); 0.9.0 + Replay-Assertion-Authoring."""
+def test_schema_version_bumped_to_0_11_0() -> None:
+    """Schema 0.11.0 — + Transcription-Model-Selection (voiceover-models sub-plan 02); previously 0.10.0 + Voice-Over-Feature."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.10.0"
+    assert SCHEMA_VERSION == "0.11.0"
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def test_recording_start_requested_defaults() -> None:
     assert msg.kind == "recording_start_requested"
     assert msg.name == "New Recording"
     assert msg.description == ""
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_recording_start_requested_custom_fields() -> None:

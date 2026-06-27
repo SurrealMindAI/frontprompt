@@ -42,6 +42,9 @@ Voice-Over-Mutations (Overlay → Python, Schema 0.10.0):
     :class:`SetTranscriptionBackendRequested`   User-gewähltes Backend setzen.
     :class:`TriggerModelDownloadRequested`      Modell-Download starten.
 
+Transcription-Model-Selection (Overlay → Python, Schema 0.11.0):
+    :class:`SetTranscriptionModelRequested`     User-gewähltes Modell für ein Backend setzen.
+
 Timeline-Entry-Varianten:
     :class:`PageEventEntry`         Page-Interaktion (click/pointerdown/keydown).
     :class:`PickRefEntry`           Referenz auf einen erstellten Pick.
@@ -74,6 +77,9 @@ Voice-Over-State-Typen (sub-plan 01):
     :class:`TranscriptionBackendInfo`   Status-Info pro Backend (inkl. Download-Progress).
     :class:`TranscriptionState`         Aggregierter Status aller Backends.
     :data:`TranscriptionStatus`         Transkriptions-Status einer Recording.
+
+Transcription-Model-Catalog-Typen (voiceover-models sub-plan 01):
+    :class:`TranscriptionModelSpec`     Statischer Katalog-Eintrag (model_id, display_name, hf_repo_id, default).
 """
 
 from __future__ import annotations
@@ -104,6 +110,7 @@ from frontprompt.state.state import (
     TimelineEntryKind,
     TranscriptionBackendInfo,
     TranscriptionBackendStatus,
+    TranscriptionModelSpec,
     TranscriptionState,
     TranscriptSegmentEntry,
     TranscriptionStatus,
@@ -121,6 +128,7 @@ from frontprompt.bridge.messages import (
     RecordingStopRequested,
     SetMicDeviceRequested,
     SetTranscriptionBackendRequested,
+    SetTranscriptionModelRequested,
     TriggerModelDownloadRequested,
 )
 
@@ -166,6 +174,8 @@ __codegen_roots__ = [
     "TranscriptionBackendStatus",
     "TranscriptionBackendInfo",
     "TranscriptionState",
+    # Transcription-Model-Catalog (voiceover-models sub-plan 01)
+    "TranscriptionModelSpec",
     # Outbound bridge messages (Overlay → Python) for recording feature
     "RecordingStartRequested",
     "RecordingStopRequested",
@@ -180,6 +190,8 @@ __codegen_roots__ = [
     "SetMicDeviceRequested",
     "SetTranscriptionBackendRequested",
     "TriggerModelDownloadRequested",
+    # Outbound bridge messages — Transcription-Model-Selection (Schema 0.11.0)
+    "SetTranscriptionModelRequested",
 ]
 
 __all__ = [
@@ -209,6 +221,7 @@ __all__ = [
     "SettingsState",
     "TranscriptionBackendInfo",
     "TranscriptionBackendStatus",
+    "TranscriptionModelSpec",
     "TranscriptionState",
     "TranscriptSegmentEntry",
     "TranscriptionStatus",
@@ -226,4 +239,6 @@ __all__ = [
     "SetMicDeviceRequested",
     "SetTranscriptionBackendRequested",
     "TriggerModelDownloadRequested",
+    # Bridge messages — Transcription-Model-Selection (Schema 0.11.0)
+    "SetTranscriptionModelRequested",
 ]

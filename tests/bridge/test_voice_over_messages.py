@@ -32,11 +32,11 @@ def _outbound() -> TypeAdapter[object]:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_version_bumped_to_0_10_0() -> None:
-    """Bridge SCHEMA_VERSION is 0.10.0 after voice-over sub-plan 02."""
+def test_schema_version_bumped_to_0_11_0() -> None:
+    """Bridge SCHEMA_VERSION is 0.11.0 after voiceover-models sub-plan 02 (bumped from 0.10.0)."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.10.0"
+    assert SCHEMA_VERSION == "0.11.0"
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def test_recording_start_requested_with_voice_over_and_mic_device() -> None:
     assert msg.with_voice_over is True
     assert msg.mic_device_id == 3
     assert msg.kind == "recording_start_requested"
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_recording_start_requested_with_voice_over_json_roundtrip() -> None:
@@ -100,7 +100,7 @@ def test_set_mic_device_requested_with_none_system_default() -> None:
     msg = SetMicDeviceRequested(mic_device_id=None)
     assert msg.kind == "set_mic_device_requested"
     assert msg.mic_device_id is None
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_set_mic_device_requested_with_device_id_2() -> None:
@@ -163,7 +163,7 @@ def test_set_transcription_backend_requested_with_backend_id() -> None:
     msg = SetTranscriptionBackendRequested(backend_id="mlx_whisper")
     assert msg.kind == "set_transcription_backend_requested"
     assert msg.backend_id == "mlx_whisper"
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_set_transcription_backend_requested_with_none_auto() -> None:
@@ -230,7 +230,7 @@ def test_trigger_model_download_requested_with_backend_id() -> None:
     msg = TriggerModelDownloadRequested(backend_id="mlx_whisper")
     assert msg.kind == "trigger_model_download_requested"
     assert msg.backend_id == "mlx_whisper"
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_trigger_model_download_requested_json_roundtrip() -> None:

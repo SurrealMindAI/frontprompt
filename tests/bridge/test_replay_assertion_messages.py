@@ -31,11 +31,11 @@ def _outbound() -> TypeAdapter[object]:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_version_bumped_to_0_10_0() -> None:
-    """Bridge SCHEMA_VERSION is 0.10.0 after voice-over sub-plan 02 (bumped from 0.9.0)."""
+def test_schema_version_bumped_to_0_11_0() -> None:
+    """Bridge SCHEMA_VERSION is 0.11.0 after voiceover-models sub-plan 02 (bumped from 0.10.0)."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.10.0"
+    assert SCHEMA_VERSION == "0.11.0"
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ def test_assertion_deleted_roundtrip() -> None:
     assert msg.kind == "assertion_deleted_requested"
     assert msg.recording_id == "rec-1"
     assert msg.assertion_id == "asr-42"
-    assert msg.schema_version == "0.10.0"
+    assert msg.schema_version == "0.11.0"
 
 
 def test_assertion_deleted_routes_via_outbound() -> None:

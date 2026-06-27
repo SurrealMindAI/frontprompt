@@ -193,7 +193,10 @@ class StateManager:
         self._microphone_state: MicrophoneState = self._load_microphone_or_default()
         self._settings_state: SettingsState = self._load_settings_or_default()
         self._transcription_state: TranscriptionState = transcription_state or TranscriptionState()
-        self._microphone_topology_hash: frozenset[int] = frozenset()
+        # None sentinel: frozenset() would collide with the hash of an empty input-device list
+        # (no mics detected, e.g. Docker/CI/output-only) and suppress the first broadcast.
+        # None is a value no real frozenset hash can equal — first update ALWAYS broadcasts.
+        self._microphone_topology_hash: frozenset[int] | None = None
 
     def _load_panel_or_default(self) -> PanelStateView:
         loaded = self._persistence.load_panel_state()

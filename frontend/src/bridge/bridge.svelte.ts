@@ -53,6 +53,7 @@ import type {
   RelationUpdatedRequested,
   SetMicDeviceRequested,
   SetTranscriptionBackendRequested,
+  SetTranscriptionModelRequested,
   StateSnapshotMessage,
   TriggerModelDownloadRequested,
 } from '../_generated/schemas';
@@ -94,7 +95,9 @@ export type OutboundMessage =
   // Voice-Over-Mutations (Schema 0.10.0)
   | SetMicDeviceRequested
   | SetTranscriptionBackendRequested
-  | TriggerModelDownloadRequested;
+  | TriggerModelDownloadRequested
+  // Transcription-Model-Selection (Schema 0.11.0)
+  | SetTranscriptionModelRequested;
 
 /** Tagged union aller Inbound-Messages (Python → Overlay). */
 export type InboundMessage = Heartbeat | StateSnapshotMessage;

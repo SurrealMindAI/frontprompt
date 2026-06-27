@@ -82,6 +82,29 @@ export class RecordingState {
   }
 
   /**
+   * User clickt "Start Voice-Over Recording" — neue Aufnahme mit Mikrofon beginnen.
+   * Sendet recording_start_requested mit with_voice_over=true und der gewählten
+   * mic_device_id (null = System-Default).
+   *
+   * mic_device_id wird vom Caller übergeben (aus backendState.mic.selectedDeviceId)
+   * um eine Circular-Dependency zwischen recording-state + backend-state zu vermeiden.
+   */
+  startRecordingWithVoiceOver(
+    micDeviceId: number | null = null,
+    name: string = 'New Recording',
+    description: string = ''
+  ): void {
+    void bridge.send({
+      kind: 'recording_start_requested',
+      schema_version: SCHEMA_VERSION,
+      name,
+      description,
+      with_voice_over: true,
+      mic_device_id: micDeviceId,
+    });
+  }
+
+  /**
    * User clickt "Stop Recording" — aktive Aufnahme beenden.
    * Sendet recording_stop_requested mit der aktuell aktiven recording_id.
    * No-op wenn keine aktive Aufnahme.

@@ -13,8 +13,9 @@ Jede Envelope trägt ``schema_version: str`` — Breaking-Changes (Field
 rename/remove, kind rename) erfordern Bump + Codegen-Re-Run. Forward-compatible
 adds (neue *optional* Felder) ohne Bump zulässig.
 
-Aktuell: ``0.10.0`` (+ Voice-Over-Feature: RecordingStartRequested extended, 3 neue Outbound-Envelopes, sub-plan 02 voice-over-bundle).
-Vorherig: ``0.9.0`` (+ Replay-Assertion-Authoring: 3 neue Outbound-Envelopes, sub-plan 02 replay-bundle).
+Aktuell: ``0.11.0`` (+ Transcription-Model-Selection: SetTranscriptionModelRequested, sub-plan 02 voiceover-models).
+Vorherig: ``0.10.0`` (+ Voice-Over-Feature: RecordingStartRequested extended, 3 neue Outbound-Envelopes, sub-plan 02 voice-over-bundle).
+            ``0.9.0`` (+ Replay-Assertion-Authoring: 3 neue Outbound-Envelopes, sub-plan 02 replay-bundle).
             ``0.8.0`` (+ Recording-feature: 5 neue Outbound-Envelopes, sub-plan 02).
             ``0.7.0`` (+ origin_session on Pick/Region/Relation).
             ``0.6.0`` (Region.rect page-absolute + Viewport-snapshot).
@@ -82,6 +83,9 @@ OUTBOUND (Overlay → Python)
     :class:`SetTranscriptionBackendRequested`        User-gewähltes Transkriptions-Backend setzen (oder auf Auto).
     :class:`TriggerModelDownloadRequested`           Modell-Download für ein Transkriptions-Backend starten.
 
+**Transcription-Model-Selection (Schema 0.11.0)**
+    :class:`SetTranscriptionModelRequested`          User-gewähltes Transkriptions-Modell für ein Backend setzen (oder auf Default zurück).
+
 INBOUND (Python → Overlay)
 --------------------------
 
@@ -132,7 +136,7 @@ from frontprompt.state.state import (
 # Schema-Version — bumped on breaking changes (Field add/remove, kind rename)
 # ============================================================================
 
-SCHEMA_VERSION: str = "0.10.0"
+SCHEMA_VERSION: str = "0.11.0"
 
 
 # ============================================================================
@@ -739,6 +743,37 @@ class TriggerModelDownloadRequested(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Section J — Transcription-Model-Selection (Schema 0.11.0, voiceover-models sub-plan 02)
+# ---------------------------------------------------------------------------
+
+
+class SetTranscriptionModelRequested(BaseModel):
+    """User wählte ein Transkriptions-Modell für ein Backend — dauerhaft persistieren.
+
+    **User-Trigger**: Auswahl eines Modells im :svelte:`SettingsTab` (Model-Dropdown für ein Backend).
+    **Server-Wirkung**: :meth:`~frontprompt.show_session.ShowSession._on_set_transcription_model`
+    persistiert ``mlx_whisper_model_id`` in der ``settings``-Tabelle + ruft ``backend.set_model()``
+    + broadcastet ein Update von ``transcription_state`` im nächsten Snapshot.
+    **Semantik**: ``backend_id`` muss einem registrierten Backend entsprechen (z.B. ``'mlx_whisper'``).
+    Unbekannte ``backend_id`` → silent ignore + warning-log. ``model_id=None`` bedeutet
+    "Standard-Modell verwenden" (das mit ``default=True`` im Katalog). Ein String-Wert ist die
+    ``model_id`` eines :class:`~frontprompt.state.state.TranscriptionModelSpec`.
+    """
+
+    kind: Literal["set_transcription_model_requested"] = "set_transcription_model_requested"
+    schema_version: str = SCHEMA_VERSION
+    backend_id: str = Field(
+        description="Backend-ID (z.B. 'mlx_whisper'). Pflicht — kein Auto-Mode für Modell-Selektion."
+    )
+    model_id: str | None = Field(
+        description=(
+            "model_id des zu setzenden Modells (z.B. 'whisper-large-v3-turbo'). "
+            "None = Standard-Modell (``default=True`` im Katalog)."
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union — Outbound
 # ---------------------------------------------------------------------------
 
@@ -771,7 +806,8 @@ OutboundMessage = Annotated[
     | AssertionUpdatedRequested
     | SetMicDeviceRequested
     | SetTranscriptionBackendRequested
-    | TriggerModelDownloadRequested,
+    | TriggerModelDownloadRequested
+    | SetTranscriptionModelRequested,
     Field(discriminator="kind"),
 ]
 """Discriminated union aller Overlay → Python messages. Pydantic routet via ``kind``.
@@ -898,6 +934,8 @@ __codegen_roots__ = [
     "SetMicDeviceRequested",
     "SetTranscriptionBackendRequested",
     "TriggerModelDownloadRequested",
+    # Outbound — Transcription-Model-Selection (Schema 0.11.0)
+    "SetTranscriptionModelRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",
@@ -944,6 +982,8 @@ __all__ = [  # noqa: RUF022 — topical grouping (Lifecycle / Panel / Inspector 
     "SetMicDeviceRequested",
     "SetTranscriptionBackendRequested",
     "TriggerModelDownloadRequested",
+    # Outbound — Transcription-Model-Selection (Schema 0.11.0)
+    "SetTranscriptionModelRequested",
     # Inbound
     "Heartbeat",
     "StateSnapshotMessage",

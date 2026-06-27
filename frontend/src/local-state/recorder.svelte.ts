@@ -53,6 +53,17 @@ class Recorder {
   }
 
   /**
+   * Starte eine neue Aufnahme MIT Voice-Over (Mikrofon-Capture + Transkription).
+   * Delegiert an backendState.recordings.startRecordingWithVoiceOver() → bridge.send().
+   * Liest backendState.mic.selectedDeviceId für das Mikrofon (null = System-Default).
+   * Python sendet recording_start_requested mit with_voice_over=true.
+   */
+  startWithVoiceOver(name: string = 'New Recording', description: string = ''): void {
+    const micDeviceId = backendState.mic.selectedDeviceId ?? null;
+    backendState.recordings.startRecordingWithVoiceOver(micDeviceId, name, description);
+  }
+
+  /**
    * Stoppe die aktive Aufnahme.
    * Delegiert an backendState.recordings.stopRecording() → bridge.send().
    * No-op wenn keine aktive Aufnahme.

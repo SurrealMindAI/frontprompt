@@ -183,7 +183,7 @@ describe('overlayContext.isAboutBlank (reactive getter)', () => {
 });
 
 describe('SCHEMA_VERSION shared const', () => {
-  test('S9: SCHEMA_VERSION equals the current Pydantic SSoT value 0.10.0', () => {
-    expect(SCHEMA_VERSION).toBe('0.10.0');
+  test('S9: SCHEMA_VERSION equals the current Pydantic SSoT value 0.11.0', () => {
+    expect(SCHEMA_VERSION).toBe('0.11.0');
   });
 });

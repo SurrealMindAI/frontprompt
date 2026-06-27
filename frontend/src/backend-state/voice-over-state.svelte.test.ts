@@ -98,3 +98,66 @@ describe('VoiceOverState hydration', () => {
     expect(state.voiceOverRecordings).toEqual([]);
   });
 });
+
+describe('VoiceOverState transcription backend hydration (Schema 0.11.0)', () => {
+  test('initial state: no backends', () => {
+    const state = new VoiceOverState();
+    expect(state.backends).toEqual([]);
+  });
+
+  test('hydrateTranscription populates backends with available_models + selected_model_id', () => {
+    const state = new VoiceOverState();
+    state.hydrateTranscription({
+      backends: [
+        {
+          backend_id: 'mlx_whisper',
+          display_name: 'mlx-whisper (Apple Silicon)',
+          status: 'ready',
+          available_models: [
+            {
+              model_id: 'whisper-base-mlx',
+              display_name: 'Whisper Base',
+              hf_repo_id: 'mlx-community/whisper-base-mlx',
+              default: true,
+            },
+            {
+              model_id: 'whisper-large-v3-turbo',
+              display_name: 'Whisper Large V3 Turbo',
+              hf_repo_id: 'mlx-community/whisper-large-v3-turbo',
+              default: false,
+            },
+          ],
+          selected_model_id: 'whisper-large-v3-turbo',
+        },
+      ],
+    });
+    expect(state.backends).toHaveLength(1);
+    expect(state.availableModelsFor('mlx_whisper')).toHaveLength(2);
+    expect(state.selectedModelIdFor('mlx_whisper')).toBe('whisper-large-v3-turbo');
+  });
+
+  test('availableModelsFor returns [] for unknown backend', () => {
+    const state = new VoiceOverState();
+    expect(state.availableModelsFor('unknown_backend')).toEqual([]);
+  });
+
+  test('selectedModelIdFor returns null for unknown backend', () => {
+    const state = new VoiceOverState();
+    expect(state.selectedModelIdFor('unknown_backend')).toBeNull();
+  });
+
+  test('availableModelsFor returns [] when backend has no available_models (older snapshots)', () => {
+    const state = new VoiceOverState();
+    state.hydrateTranscription({
+      backends: [
+        {
+          backend_id: 'mlx_whisper',
+          display_name: 'mlx-whisper (Apple Silicon)',
+          status: 'ready',
+        },
+      ],
+    });
+    expect(state.availableModelsFor('mlx_whisper')).toEqual([]);
+    expect(state.selectedModelIdFor('mlx_whisper')).toBeNull();
+  });
+});

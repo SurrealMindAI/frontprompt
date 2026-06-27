@@ -34,6 +34,29 @@
   const allHidden = $derived(backendState.panel.allHidden);
   const recorderActive = $derived(recorder.isActive);
 
+  /**
+   * Readiness gate for the mic-on (voice-over) button.
+   * True when at least one transcription backend reports status='ready'.
+   * ADR-018: pure $derived, NO backend Pydantic field, NO $state copy (PIT-037).
+   */
+  const hasReadyBackend = $derived(
+    backendState.voiceOver.backends.some((b) => b.status === 'ready')
+  );
+
+  /**
+   * mic-on button is disabled when: no ready transcription backend OR a recording is already active.
+   */
+  const voiceOverDisabled = $derived(!hasReadyBackend || recorderActive);
+
+  /** Tooltip for mic-on button — explains why it is disabled (or indicates the action). */
+  const voiceOverTitle = $derived(
+    !hasReadyBackend
+      ? 'No transcription backend ready'
+      : recorderActive
+        ? 'Recording in progress'
+        : 'Start voice-over recording'
+  );
+
   function togglePick(): void {
     if (isPickActive) {
       pickClaim.release();
@@ -148,6 +171,7 @@
     <span class="tool-btn__icon" aria-hidden="true">{allHidden ? '⊞' : '⊟'}</span>
     <span class="tool-btn__label">{allHidden ? 'show all' : 'hide all'}</span>
   </button>
+  <!-- mic-off: normal recording toggle (start / stop). Keyboard: R. -->
   <button
     type="button"
     class="tool-btn tool-btn--rec"
@@ -159,6 +183,18 @@
   >
     <span class="tool-btn__icon" aria-hidden="true">{recorderActive ? '⏹' : '⏺'}</span>
     <span class="tool-btn__label">rec</span>
+  </button>
+  <!-- mic-on: voice-over recording start. Disabled when no ready transcription backend or recording active. -->
+  <button
+    type="button"
+    class="tool-btn tool-btn--rec-voice"
+    disabled={voiceOverDisabled}
+    onclick={() => recorder.startWithVoiceOver()}
+    aria-label="Start voice-over recording"
+    title={voiceOverTitle}
+  >
+    <span class="tool-btn__icon" aria-hidden="true">🎙</span>
+    <span class="tool-btn__label">voice</span>
   </button>
 </div>
 
@@ -234,5 +270,20 @@
 
   .tool-btn--rec.tool-btn--active:hover:not(:disabled) {
     background: rgba(255, 80, 80, 0.28);
+  }
+
+  /* Voice-over rec button: cyan accent to distinguish from normal rec. */
+  .tool-btn--rec-voice {
+    border-color: rgba(80, 200, 255, 0.4);
+  }
+
+  .tool-btn--rec-voice:hover:not(:disabled) {
+    background: rgba(80, 200, 255, 0.12);
+    border-color: rgba(80, 200, 255, 0.6);
+  }
+
+  .tool-btn--rec-voice:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 </style>

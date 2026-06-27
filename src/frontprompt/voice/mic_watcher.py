@@ -121,11 +121,27 @@ class MicrophoneWatcher:
                     if d["max_input_channels"] > 0
                 ]
 
+                # Candidate C fix: detect system default input device.
+                # sd.default.device is a (input_index, output_index) tuple; input_index is
+                # -1 when unset. Wrapped in try/except for environments where sd.default is
+                # absent (headless CI, custom sounddevice stubs).
+                system_default_device_id: int | None = None
+                try:
+                    default = sd.default.device
+                    if isinstance(default, (list, tuple)) and len(default) >= 1:
+                        idx = int(default[0])
+                        system_default_device_id = idx if idx >= 0 else None
+                    elif isinstance(default, int) and default >= 0:
+                        system_default_device_id = default
+                except Exception:
+                    pass
+
                 _LOG.info(
                     "voice.mic_watcher.topology_changed",
                     device_count=len(input_devices),
+                    system_default=system_default_device_id,
                 )
-                await state_manager.update_microphone_state(input_devices)
+                await state_manager.update_microphone_state(input_devices, system_default_device_id=system_default_device_id)
 
             await anyio.sleep(poll_interval_s)
 

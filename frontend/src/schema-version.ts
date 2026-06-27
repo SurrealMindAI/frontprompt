@@ -11,4 +11,4 @@
  * showed the hardcode in main.ts drifting stale to '0.3.0' — this module is the
  * single place to update when the Python SSoT bumps.
  */
-export const SCHEMA_VERSION = '0.10.0';
+export const SCHEMA_VERSION = '0.11.0';

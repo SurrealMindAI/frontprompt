@@ -577,7 +577,7 @@ def test_pick_region_relation_carry_origin_session() -> None:
 
 
 def test_schema_version_is_current() -> None:
-    """Schema 0.10.0: + voice-over bridge messages (voice-over sub-plan 02); previously 0.9.0."""
+    """Schema 0.11.0: + SetTranscriptionModelRequested (voiceover-models sub-plan 02); previously 0.10.0."""
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == "0.10.0"
+    assert SCHEMA_VERSION == "0.11.0"

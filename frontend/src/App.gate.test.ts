@@ -71,6 +71,15 @@ vi.mock('./backend-state/backend-state.svelte', () => ({
       isRecording: false,
       activeRecording: null,
     },
+    voiceOver: {
+      backends: [],
+      transcriptionStatus: 'none',
+    },
+    mic: {
+      devices: [],
+      selectedDeviceId: null,
+      systemDefaultDeviceId: null,
+    },
     hydrate: vi.fn(),
   },
 }));
