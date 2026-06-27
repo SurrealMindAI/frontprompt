@@ -85,6 +85,10 @@ vi.mock('./local-state/page-tool.svelte', () => ({
   pageTool: { active: false },
 }));
 
+vi.mock('./local-state/panel-collapse.svelte', () => ({
+  panelCollapse: { active: false },
+}));
+
 vi.mock('./local-state/pick-claim.svelte', () => ({
   GLOBAL_PICK_ID: 'pick:global',
   pickClaim: {

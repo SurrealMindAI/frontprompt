@@ -216,6 +216,26 @@ describe('RecordingsTab — timeline view', () => {
     expect(container.textContent).toContain('example.com');
   });
 
+  test('timeline header exposes an edit affordance (BUG 4: discoverable name/desc edit)', () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({ entries: [] });
+    const { container } = render(RecordingsTab, {});
+    const editBtn = container.querySelector('.timeline-edit-btn');
+    expect(editBtn).not.toBeNull();
+  });
+
+  test('clicking the edit affordance opens the right panel (where RecordingDetails lives)', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({ entries: [] });
+    // Right panel starts closed → clicking ✎ must open it so the editor is visible.
+    backendState.panel.panels.right.open = false;
+    const { container } = render(RecordingsTab, {});
+    const editBtn = container.querySelector('.timeline-edit-btn');
+    expect(editBtn).not.toBeNull();
+    await fireEvent.click(editBtn!);
+    expect(backendState.panel.panels.right.open).toBe(true);
+  });
+
   test('Back button sends recording_selected_requested with null via bridge', async () => {
     backendState.recordings.activeDetailRecordingId = 'rec-0001';
     backendState.recordings.detailRecording = makeDetailRecording({ entries: [] });

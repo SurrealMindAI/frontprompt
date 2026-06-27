@@ -25,17 +25,18 @@
   import { backendState } from '../backend-state/backend-state.svelte';
   import type { PanelId } from '../backend-state/panel-state.svelte';
   import { PANEL_CONFIGS } from '../backend-state/panel-state.svelte';
-  import { pageTool } from '../local-state/page-tool.svelte';
+  import { panelCollapse } from '../local-state/panel-collapse.svelte';
 
   let { id, label }: { id: PanelId; label: string } = $props();
 
   /*
-    EffectiveOpenWith respektiert den cross-store override (pageTool.active=true
-    → panels rendern als Lasche). Panel.svelte nutzt dieselbe Logik — so kommt
-    Tab + Panel-container immer aus derselben source-of-truth, kein visual
-    mismatch (e.g. tab denkt "open", panel denkt "collapsed").
+    EffectiveOpenWith respektiert den cross-store override (panelCollapse.active=true
+    → panels rendern als Lasche, ausgelöst durch full-viewport-tools ODER aktive
+    Aufnahme). Panel.svelte nutzt dieselbe Logik — so kommt Tab + Panel-container
+    immer aus derselben source-of-truth, kein visual mismatch (e.g. tab denkt
+    "open", panel denkt "collapsed").
   */
-  const isOpen = $derived(backendState.panel.effectiveOpenWith(id, pageTool.active));
+  const isOpen = $derived(backendState.panel.effectiveOpenWith(id, panelCollapse.active));
   const config = $derived(PANEL_CONFIGS[id]);
   const isHorizontal = $derived(config.axis === 'horizontal');
 

@@ -44,7 +44,7 @@
   import Panel from './components/Panel.svelte';
   import RightPanel from './components/right-panel/RightPanel.svelte';
   import Toolbar from './components/Toolbar.svelte';
-  import { pageTool } from './local-state/page-tool.svelte';
+  import { panelCollapse } from './local-state/panel-collapse.svelte';
   import { pickClaim } from './local-state/pick-claim.svelte';
   import { quickCommentMode } from './local-state/quick-comment-mode.svelte';
   import { recorder } from './local-state/recorder.svelte';
@@ -78,11 +78,11 @@
     setAboutBlankBackdrop(isAboutBlank);
   });
 
-  // PageTool-cross-derive: alle panels rendern als Lasche solange ein
-  // full-viewport-tool (Inspector ODER Region-Draw) ODER about:blank aktiv ist.
-  // panel-state.gridTemplate*With(forceClosed) respektiert den flag,
-  // user-intent in panels[id].open bleibt unberührt.
-  const pageToolActive = $derived(pageTool.active);
+  // panelCollapse-cross-derive: alle panels rendern als Lasche solange ein
+  // full-viewport-tool (Inspector ODER Region-Draw) ODER eine aktive Aufnahme
+  // (recorder.isActive) ODER about:blank aktiv ist. panel-state.gridTemplate*With(
+  // forceClosed) respektiert den flag, user-intent in panels[id].open bleibt unberührt.
+  const panelsCollapsed = $derived(panelCollapse.active);
   const inspectorActive = $derived(backendState.inspector.active);
 
   // Quick-comment mode (localState). When on, the whole HUD collapses to a small
@@ -117,10 +117,10 @@
   // NOT re-mount the picker. (An earlier effect forced inspector.active on, which
   // then lingered after Done/✕ and kept the picker alive — that was the bug.)
   const gridTemplateRows = $derived(
-    backendState.panel.gridTemplateRowsWith(pageToolActive || isAboutBlank)
+    backendState.panel.gridTemplateRowsWith(panelsCollapsed || isAboutBlank)
   );
   const gridTemplateColumns = $derived(
-    backendState.panel.gridTemplateColumnsWith(pageToolActive || isAboutBlank)
+    backendState.panel.gridTemplateColumnsWith(panelsCollapsed || isAboutBlank)
   );
 
   // Fade-in nach mount: initial opacity 0 → 1 via rAF-getriggerter class.
@@ -150,7 +150,12 @@
   $effect(() => {
     const currentPick = backendState.inspector.activePickId;
     const currentRegion = backendState.inspector.activeRegionId;
-    if (currentPick === null && currentRegion === null) return;
+    // BUG 4: a selected recording also opens the right panel — that's where
+    // RecordingDetails (incl. the name/description editor) lives. Without this,
+    // clicking a recording row populated detailRecording but left the editor
+    // invisible behind a closed right panel.
+    const currentDetailRecording = backendState.recordings.activeDetailRecordingId;
+    if (currentPick === null && currentRegion === null && currentDetailRecording === null) return;
     // In quick-comment mode the right panel must stay closed — picks flow into
     // the inline input + hovering box, not the details view. (Tracked read of
     // quickCommentMode.active so the guard re-evaluates on mode toggle.)
@@ -268,6 +273,9 @@
   (localState, ephemere Drag-Position). isHudChrome-Prädikat schließt alle Toolbar-
   Clicks korrekt von durable Capture aus — kein Code-Change nötig (sub-plan 03).
   pageTool wird NICHT erweitert — floating toolbar nimmt keinen full-viewport ein.
+  Das Panel-Kollabieren bei aktiver Aufnahme läuft über panelCollapse (separat von
+  pageTool), das recorder.isActive mit-ODER-t: Panels retracten zu Laschen während
+  der Aufnahme (BUG 3), die floating toolbar bleibt sichtbar, restore beim Stop.
 -->
 {#if recorder.isActive}
   <FloatingRecorderToolbar />

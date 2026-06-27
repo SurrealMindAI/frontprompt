@@ -47,6 +47,16 @@
     backendState.recordings.selectRecording(id);
   }
 
+  // BUG 4: make name/description editing discoverable from the timeline view.
+  // The editor lives in RecordingDetails (RightPanel) — clicking the ✎ affordance
+  // ensures the right panel is open so the editor is visible. DRY: no duplicate
+  // editor here, we reuse the single RecordingDetails name/description editor.
+  function openDetailsEditor(): void {
+    if (!backendState.panel.panels.right.open) {
+      backendState.panel.togglePanel('right');
+    }
+  }
+
   // --- Helpers ----------------------------------------------------------------
 
   function formatRelativeTime(ms: number): string {
@@ -123,6 +133,15 @@
         ← Back
       </button>
       <span class="timeline-header__name">{detailRecording.name}</span>
+      <button
+        type="button"
+        class="timeline-edit-btn"
+        title="Edit name & description"
+        aria-label="Edit name and description"
+        onclick={openDetailsEditor}
+      >
+        ✎
+      </button>
     </div>
 
     {#if sortedEntries.length === 0}
@@ -376,6 +395,27 @@
     flex: 1 1 auto;
     min-width: 0;
     color: var(--fp-color-text-primary);
+  }
+
+  /* BUG 4: edit affordance — opens the RecordingDetails editor in the right panel. */
+  .timeline-edit-btn {
+    background: transparent;
+    border: 1px solid var(--fp-color-border);
+    color: var(--fp-color-text-secondary);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 3px 7px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+
+  .timeline-edit-btn:hover {
+    background: var(--fp-color-surface-secondary);
+    color: var(--fp-color-text-primary);
+    border-color: rgba(120, 180, 255, 0.5);
   }
 
   .timeline-list {

@@ -244,6 +244,72 @@ async def test_recording_stop_non_voice_over_does_not_call_audio_capture() -> No
 
 
 # ---------------------------------------------------------------------------
+# BUG 2: daemon-start path populates the transcription backend registry
+# ---------------------------------------------------------------------------
+
+
+def test_build_initial_transcription_state_populates_registry() -> None:
+    """BUG 2 regression: the daemon-start path must import frontprompt.voice.backends
+    (populating REGISTERED_BACKENDS) and build a non-empty TranscriptionState so the
+    Settings tab never shows "No backends registered." on Apple Silicon.
+    """
+    from frontprompt.show_session import build_initial_transcription_state
+    from frontprompt.voice.transcription import REGISTERED_BACKENDS
+
+    state = build_initial_transcription_state()
+
+    # The registry is populated as a side-effect of the import inside the builder.
+    assert any(b.backend_id == "mlx_whisper" for b in REGISTERED_BACKENDS)
+
+    # The built state surfaces the backend with its real probe_status() — NOT empty.
+    assert len(state.backends) >= 1
+    mlx = next(b for b in state.backends if b.backend_id == "mlx_whisper")
+    assert mlx.display_name
+    assert mlx.status in {
+        "unavailable",
+        "missing_dep",
+        "needs_download",
+        "downloading",
+        "ready",
+        "error",
+    }
+
+
+def test_mlx_backend_constructs_without_mlx_installed() -> None:
+    """BUG 2 invariant: MlxWhisperBackend() construction must NOT require mlx — it
+    lazy-imports mlx inside methods. probe_status() is a cheap, safe filesystem +
+    importlib check returning a valid status regardless of platform/deps.
+    """
+    from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
+
+    backend = MlxWhisperBackend()  # must not raise even when mlx is absent
+    status = backend.probe_status()
+    assert status in {
+        "unavailable",
+        "missing_dep",
+        "needs_download",
+        "downloading",
+        "ready",
+        "error",
+    }
+
+
+def test_build_state_manager_wires_transcription_state() -> None:
+    """BUG 2 wiring: ShowSession._build_state_manager must inject a non-empty
+    TranscriptionState so the snapshot carries the registered backends.
+    """
+    from frontprompt.ipc.session import SessionMetadata
+    from frontprompt.show_session import ShowSession
+
+    s = ShowSession(url="https://example.com")
+    meta = SessionMetadata.for_current_process(session_id="bug2-session", url="https://example.com")
+    sm = s._build_state_manager(meta)
+
+    snap = sm.snapshot()
+    assert any(b.backend_id == "mlx_whisper" for b in snap.transcription_state.backends)
+
+
+# ---------------------------------------------------------------------------
 # Test 7: MicrophoneWatcher task started in run()
 # ---------------------------------------------------------------------------
 

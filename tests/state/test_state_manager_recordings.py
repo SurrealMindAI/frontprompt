@@ -170,6 +170,37 @@ async def test_stop_recording_sets_status_stopped() -> None:
 
 
 @pytest.mark.anyio
+async def test_entry_count_reflects_appended_entries_after_stop() -> None:
+    """BUG 1 regression: RecordingMeta.entry_count must reflect the true number of
+    appended timeline entries at the next real broadcast (e.g. stop_recording),
+    not the stale 0 captured when the recording was first created.
+
+    The non-broadcasting append_timeline_entry path (PIT-105) mutates only
+    _full_recordings; the lightweight meta must be re-derived on broadcast.
+    """
+    sm = StateManager(session_id="test-session")
+    snap = await sm.start_recording(name="With Entries")
+    recording_id = snap.recordings_state.active_recording_id
+    assert recording_id is not None
+
+    # Append N entries via the non-broadcasting path (no snapshot per append).
+    n = 4
+    for i in range(n):
+        await sm.append_timeline_entry(recording_id, _make_page_event(seq=0, timestamp_ms=1000 + i))
+
+    # Next real broadcast (stop) must carry the correct entry_count.
+    stopped_snap = await sm.stop_recording(recording_id)
+    stopped_meta = next(
+        r for r in stopped_snap.recordings_state.recordings if r.recording_id == recording_id
+    )
+    assert stopped_meta.entry_count == n
+
+    # And the lightweight read API agrees.
+    meta = next(r for r in sm.list_recordings_meta() if r.recording_id == recording_id)
+    assert meta.entry_count == n
+
+
+@pytest.mark.anyio
 async def test_stop_recording_unknown_id_is_noop() -> None:
     """stop_recording mit unbekannter ID: no-op + warning log (kein Crash)."""
     sm = StateManager(session_id="test-session")

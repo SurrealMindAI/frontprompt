@@ -76,7 +76,7 @@ from frontprompt.overlay import (
     load_overlay_bundle,
 )
 from frontprompt.state import StateManager, StateSnapshot
-from frontprompt.state.state import NavigationEntry
+from frontprompt.state.state import NavigationEntry, TranscriptionBackendInfo, TranscriptionState
 from frontprompt.state.persistence import make_persistence
 
 if TYPE_CHECKING:
@@ -85,6 +85,48 @@ if TYPE_CHECKING:
     from frontprompt.ipc.session import SessionMetadata
 
 _LOG = structlog.get_logger("frontprompt.show_session")
+
+
+def build_initial_transcription_state() -> TranscriptionState:
+    """Build the initial :class:`TranscriptionState` by probing every registered backend.
+
+    BUG 2 fix: transcription backends self-register into
+    :data:`frontprompt.voice.transcription.REGISTERED_BACKENDS` only when the
+    ``frontprompt.voice.backends`` package is imported. The daemon never imported
+    that package at startup, so the registry stayed empty and the Settings tab
+    showed "No backends registered." even on Apple Silicon.
+
+    This imports the package at session/daemon start (guarded — an ImportError
+    degrades gracefully to an empty state) and maps each registered backend to a
+    :class:`TranscriptionBackendInfo` carrying its real ``probe_status()`` (e.g.
+    ``"needs_download"`` / ``"unavailable"`` / ``"missing_dep"``), so the UI can
+    show the backend and offer init/download.
+
+    Backend *construction* must never require heavy optional deps:
+    ``MlxWhisperBackend`` lazy-imports ``mlx`` inside its methods, so importing the
+    package is safe even where the ``voice`` extra is absent.
+    """
+    try:
+        from frontprompt.voice.backends import register_builtin_backends
+        from frontprompt.voice.transcription import REGISTERED_BACKENDS
+
+        # Idempotent + reload-robust: guarantees the registry is populated even if
+        # the package was already imported and the registry list rebound to empty.
+        register_builtin_backends()
+    except Exception as exc:  # pragma: no cover - defensive: never block daemon boot
+        _LOG.warning("show_session.transcription_state.import_failed", error=str(exc))
+        return TranscriptionState()
+
+    backends = [
+        TranscriptionBackendInfo(
+            backend_id=backend.backend_id,
+            display_name=backend.display_name,
+            status=backend.probe_status(),
+        )
+        for backend in REGISTERED_BACKENDS
+    ]
+    _LOG.info("show_session.transcription_state.built", backend_count=len(backends))
+    return TranscriptionState(backends=backends)
 
 
 class ShowSession:
@@ -170,7 +212,11 @@ class ShowSession:
         (produced by ``session_lifecycle`` in ``ipc/session.py``); this method only
         consumes it. Persistence is the disk-backed default via ``make_persistence()``.
         """
-        return StateManager(session_id=session.session_id, persistence=make_persistence())
+        return StateManager(
+            session_id=session.session_id,
+            persistence=make_persistence(),
+            transcription_state=build_initial_transcription_state(),
+        )
 
     async def __aenter__(self) -> ShowSession:
         return self

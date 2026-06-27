@@ -1544,7 +1544,25 @@ class StateManager:
         """
         if persist is not None:
             persist()
+        self._sync_recording_meta_counts()
         return self.snapshot()
+
+    def _sync_recording_meta_counts(self) -> None:
+        """Re-derive each ``RecordingMeta.entry_count`` from the authoritative full
+        recording before a snapshot is built.
+
+        BUG 1 fix: the non-broadcasting ``append_timeline_entry`` path (PIT-105)
+        mutates only ``_full_recordings[*].entries`` and never the lightweight metas
+        in ``_recordings_state``. Without this re-derivation the broadcast snapshot
+        (and ``list_recordings_meta()``) keeps the stale ``entry_count`` captured at
+        ``start_recording`` time (0). Deriving from ``_full_recordings`` on every
+        real broadcast keeps the count correct while preserving the
+        non-broadcast-per-append behaviour (appends still don't broadcast).
+        """
+        for meta in self._recordings_state.recordings:
+            full = self._full_recordings.get(meta.recording_id)
+            if full is not None:
+                meta.entry_count = len(full.entries)
 
     async def _notify_and_return(self, snap: StateSnapshot) -> StateSnapshot:
         """Called OUTSIDE the lock: notify listeners, return snapshot.

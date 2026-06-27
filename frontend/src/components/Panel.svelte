@@ -17,7 +17,7 @@
   import { backendState } from '../backend-state/backend-state.svelte';
   import type { PanelId } from '../backend-state/panel-state.svelte';
   import { PANEL_CONFIGS } from '../backend-state/panel-state.svelte';
-  import { pageTool } from '../local-state/page-tool.svelte';
+  import { panelCollapse } from '../local-state/panel-collapse.svelte';
   import PanelResizer from './PanelResizer.svelte';
   import PanelTab from './PanelTab.svelte';
 
@@ -32,10 +32,10 @@
   } = $props();
 
   const config = $derived(PANEL_CONFIGS[id]);
-  // Cross-derive auf pageTool.active: wenn irgendein full-viewport-tool
-  // (Inspector ODER Region-Draw) aktiv ist, panels rendern als Lasche
-  // (user-intent in panels[id].open bleibt unangetastet).
-  const isOpen = $derived(backendState.panel.effectiveOpenWith(id, pageTool.active));
+  // Cross-derive auf panelCollapse.active: wenn ein full-viewport-tool
+  // (Inspector ODER Region-Draw) ODER eine aktive Aufnahme läuft, panels rendern
+  // als Lasche (user-intent in panels[id].open bleibt unangetastet).
+  const isOpen = $derived(backendState.panel.effectiveOpenWith(id, panelCollapse.active));
   const isHorizontal = $derived(config.axis === 'horizontal');
   const tabAtEnd = $derived(id === 'left' || id === 'top');
 </script>
