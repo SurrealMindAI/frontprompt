@@ -49,6 +49,43 @@ def _log(msg: str) -> None:
     print(f"[frontprompt.build] {msg}", file=sys.stderr, flush=True)
 
 
+def _strip_dead_duplicates(path: Path) -> int:
+    """Remove broken numbered-duplicate blocks from a generated .ts file.
+
+    pydantic-zod-codegen bug: when the same nested type (e.g. ElementRect) is
+    referenced from two different codegen-root models, the Zod augmentation stage
+    emits a numbered-suffix duplicate (``ElementRect1``) with broken syntax —
+    ``number.optional()`` instead of ``z.number().optional()``. The duplicate is
+    dead code (no importer) but TypeScript refuses to compile it.
+
+    This post-processor strips both the interface block and the broken Zod const.
+    TODO: upstream fix in pydantic-zod-codegen.
+    """
+    import re
+
+    content = path.read_text(encoding="utf-8")
+    original_len = len(content)
+
+    # Interface block — optional leading JSDoc + numbered-suffix name
+    dead_interface_re = re.compile(
+        r"\n(?:/\*\*\n(?:[^*]|\*(?!/))*?\*/\n)?export interface \w+\d+ \{[^}]*\}\n",
+        re.DOTALL,
+    )
+    # Broken const block — fields use ``number.optional()`` instead of ``z.number().optional()``
+    dead_const_re = re.compile(
+        r"\nexport const \w+\d+ = z\.object\(\{\n(?:\s+\w+: \w+\.optional\(\),\n)+\}\);\n",
+        re.DOTALL,
+    )
+
+    content, n_interface = dead_interface_re.subn("\n", content)
+    content, n_const = dead_const_re.subn("\n", content)
+    total = n_interface + n_const
+    if total > 0:
+        path.write_text(content, encoding="utf-8")
+        _log(f"  stripped {total} dead duplicate block(s) from {path.name} ({original_len - len(content)} bytes removed)")
+    return total
+
+
 def _run_codegen(module: str, output: Path) -> None:
     _log(f"codegen {module} -> {output.relative_to(_PROJECT_ROOT)}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +104,8 @@ def _run_codegen(module: str, output: Path) -> None:
         _log(result.stdout)
         _log(result.stderr)
         sys.exit(result.returncode)
+    # Post-process: strip broken numbered-duplicate blocks (pydantic-zod-codegen bug)
+    _strip_dead_duplicates(output)
 
 
 def _git_sha() -> str:

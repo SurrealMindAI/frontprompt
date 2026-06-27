@@ -4,7 +4,8 @@ Captures microphone audio into a per-session WAV file for voice-over transcripti
 
 Design constraints:
     - COL-2: ``import sounddevice`` is LAZY — inside methods only, never at module top.
-      sounddevice is a [voice] optional extra; module-level import crashes non-[voice] installs.
+      sounddevice is a core dependency (promoted from [voice] optional extra in 0.0.6);
+      the lazy import defers PortAudio initialization until capture is actually needed.
     - COL-5: drainer join pattern — C-callback → queue.Queue.put_nowait → anyio drainer task.
       ``stop()`` sets stop_flag, awaits drain_complete (set by drainer on exit), then
       wave.close(). WAV header is only finalised AFTER all frames are written.
@@ -119,7 +120,8 @@ class AudioCaptureManager:
             no exception propagated).
 
         Note:
-            ``import sounddevice`` is lazy — only executed inside this method (COL-2).
+            ``import sounddevice`` is lazy — only executed inside this method (COL-2);
+            defers PortAudio initialization until capture is actually needed.
 
             When ``capture_source_override`` is set (non-None), delegates to it and
             returns without opening a real sounddevice stream.
@@ -139,18 +141,7 @@ class AudioCaptureManager:
                 )
             return started
 
-        try:
-            import sounddevice as sd  # COL-2: lazy import
-        except ImportError:
-            # sounddevice is a [voice] optional extra — not installed on base installs.
-            _LOG.warning(
-                "voice.audio_capture.sounddevice_not_installed",
-                recording_id=recording_id,
-                hint="Install frontprompt[voice] to enable audio capture.",
-            )
-            if self._state_manager is not None:
-                await self._state_manager.set_has_voice_over(recording_id, False)
-            return False
+        import sounddevice as sd  # COL-2: lazy import — defer PortAudio init until capture needed
 
         # Reset per-capture state
         self._queue = queue.Queue()

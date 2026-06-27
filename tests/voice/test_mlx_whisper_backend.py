@@ -251,12 +251,13 @@ def test_transcribe_integration_returns_segments(tmp_path: Path) -> None:
     Requires: mlx_whisper installed, model downloaded, Apple Silicon.
     Run with: pytest -m integration
     """
-    import importlib.util
-
     if sys.platform != "darwin" or __import__("platform").machine() != "arm64":
         pytest.skip("Integration test requires Apple Silicon macOS")
-    if importlib.util.find_spec("mlx_whisper") is None:
-        pytest.skip("mlx_whisper not installed — run uv pip install frontprompt[voice]")
+    # mlx_whisper is a core dep on arm64 — no need to check if it's installed.
+    # But the model must be downloaded before transcription is possible.
+    from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend as _B
+    if _B().probe_status() != "ready":
+        pytest.skip("mlx-whisper model not downloaded — run `frontprompt bootstrap --voice` to download")
 
     # Create a minimal valid WAV fixture (silence)
     import struct

@@ -6,7 +6,8 @@ not TTL-based polling — atlas convention).
 
 Design constraints:
     - COL-2: ``import sounddevice`` is LAZY — inside ``run()`` only, never at module
-      top. sounddevice is a [voice] optional extra.
+      top (avoids PortAudio initialization at import time; consistent with the lazy
+      pattern used elsewhere in the voice module).
     - State-based detection: ``_compute_topology_hash()`` computes a stable hash from
       the sorted list of (index, name) pairs for input devices. An update is pushed to
       StateManager only when the hash changes — avoids lock acquisition and snapshot
@@ -16,6 +17,8 @@ Design constraints:
     - The watcher is a long-running anyio task — it is started via ``tg.start_soon()``
       in ``ShowSession.run()`` and lives until the task group is cancelled (browser close /
       SIGTERM).
+
+sounddevice is a core dependency (promoted from [voice] optional extra in 0.0.6).
 """
 
 from __future__ import annotations
@@ -84,17 +87,10 @@ class MicrophoneWatcher:
         Note:
             ``import sounddevice`` is lazy — executed on the first call to ``run()``
             (COL-2). Subsequent iterations reuse the already-imported module.
+            sounddevice is a core dependency; the lazy import is kept to defer PortAudio
+            initialization until the watcher task actually runs.
         """
-        try:
-            import sounddevice as sd  # COL-2: lazy import inside run()
-        except ImportError:
-            # sounddevice is a [voice] optional extra — not installed on base installs.
-            # Degrade gracefully: log once and exit the task (no devices to enumerate).
-            _LOG.warning(
-                "voice.mic_watcher.sounddevice_not_installed",
-                hint="Install frontprompt[voice] to enable microphone enumeration.",
-            )
-            return
+        import sounddevice as sd  # COL-2: lazy import inside run() — defer PortAudio init
 
         from frontprompt.state.state import MicrophoneDevice  # also lazy — avoids circular
 

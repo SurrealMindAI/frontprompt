@@ -51,7 +51,10 @@ import type {
   RelationCreatedRequested,
   RelationDeletedRequested,
   RelationUpdatedRequested,
+  SetMicDeviceRequested,
+  SetTranscriptionBackendRequested,
   StateSnapshotMessage,
+  TriggerModelDownloadRequested,
 } from '../_generated/schemas';
 import type { StateSnapshot } from '../_generated/state';
 import { BUILD_GIT_SHA, BUILD_SESSION, BUILD_VERSION } from '../_generated/build-info';
@@ -87,7 +90,11 @@ export type OutboundMessage =
   | RecordedEventCapturedRequested
   | AssertionAddedToRecordingRequested
   | AssertionDeletedRequested
-  | AssertionUpdatedRequested;
+  | AssertionUpdatedRequested
+  // Voice-Over-Mutations (Schema 0.10.0)
+  | SetMicDeviceRequested
+  | SetTranscriptionBackendRequested
+  | TriggerModelDownloadRequested;
 
 /** Tagged union aller Inbound-Messages (Python → Overlay). */
 export type InboundMessage = Heartbeat | StateSnapshotMessage;

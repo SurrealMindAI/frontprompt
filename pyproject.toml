@@ -35,6 +35,13 @@ dependencies = [
     "structlog>=25.1,<26",
     "websockets>=14,<17",         # wire/ws_server.py uses websockets.asyncio.server.serve() directly
     "pydantic-zod-codegen>=1.0,<2",
+    # Voice-over — CORE feature, always installed.
+    # sounddevice and huggingface_hub are cross-platform (PortAudio + HF cache).
+    # mlx-whisper runs only on Apple Silicon; the PEP 508 env-marker ensures it is
+    # installed on arm64 macOS and simply skipped on Linux/Intel — no extras needed.
+    "sounddevice>=0.5,<1",
+    "huggingface_hub>=0.24,<1",
+    "mlx-whisper>=0.4,<1 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.scripts]
@@ -44,17 +51,6 @@ frontprompt = "frontprompt.cli:main"
 Homepage = "https://github.com/SurrealMindAI/frontprompt"
 Repository = "https://github.com/SurrealMindAI/frontprompt"
 Issues = "https://github.com/SurrealMindAI/frontprompt/issues"
-
-[project.optional-dependencies]
-# voice — heavy, platform-specific deps for the voice-over transcription feature.
-# Not in core deps: mlx-whisper only runs on Apple Silicon (macOS arm64); sounddevice
-# requires PortAudio native lib which is cross-platform but optional for non-voice users.
-# Install: uv pip install frontprompt[voice]
-voice = [
-    "mlx-whisper>=0.4,<1",
-    "sounddevice>=0.5,<1",
-    "huggingface_hub>=0.24,<1",
-]
 
 [build-system]
 requires = ["uv_build>=0.11.13,<0.12.0"]

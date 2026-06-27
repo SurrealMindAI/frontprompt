@@ -572,7 +572,7 @@ async def _ensure_voice_backends(progress_prefix: str = "  ") -> None:
         if status == "unavailable":
             click.echo(f"{progress_prefix}[--] voice:{bid} ... unavailable (platform not supported)")
         elif status == "missing_dep":
-            click.echo(f"{progress_prefix}[!!] voice:{bid} ... missing dep (run: uv pip install frontprompt[voice])")
+            click.echo(f"{progress_prefix}[!!] voice:{bid} ... missing dep (mlx-whisper not importable — only supported on macOS arm64; run `uv sync` to reinstall)")
         elif status == "ready":
             click.echo(f"{progress_prefix}[ok] voice:{bid} ... already ready ({name})")
         elif status == "needs_download":
@@ -711,7 +711,7 @@ def doctor_command() -> None:
             elif status == "unavailable":
                 click.echo(f"  [--] voice:{bid} ... unavailable on this platform ({name})")
             elif status == "missing_dep":
-                click.echo(f"  [!!] voice:{bid} ... optional dep missing — run: uv pip install frontprompt[voice]")
+                click.echo(f"  [!!] voice:{bid} ... mlx-whisper not importable (macOS arm64 only; run `uv sync` to repair)")
             elif status == "needs_download":
                 click.echo(f"  [..] voice:{bid} ... needs model download — run: frontprompt bootstrap --voice")
             else:

@@ -72,8 +72,9 @@ def _make_mock_state_manager() -> MagicMock:
 def test_audio_capture_lazy_import_no_sounddevice_at_module_level() -> None:
     """Importing voice/audio_capture.py must NOT trigger `import sounddevice`.
 
-    COL-2: sounddevice is a [voice] optional extra. Module-level import would crash
-    on every non-[voice] install.
+    COL-2: sounddevice import is lazy — defers PortAudio initialization until
+    capture is actually started. sounddevice is a core dep (not optional), but
+    eager import would initialize PortAudio at daemon startup, which is undesirable.
     """
     # Remove sounddevice from sys.modules if cached from another test
     sd_backup = sys.modules.pop("sounddevice", None)
