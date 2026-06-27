@@ -5,18 +5,29 @@
    * Reads from:
    *   - `backendState.mic` (MicState) — device list + selection
    *   - `backendState.voiceOver.backends` (TranscriptionBackendInfo[]) — backend list + status
-   *   - `backendState.settings` (SettingsState) — voiceOverEnabled, selectedTranscriptionBackendId
+   *   - `backendState.settings` (SettingsState) — voiceOverEnabled, selectedTranscriptionBackendId,
+   *     mlxWhisperModelId
    *
    * Sends via bridge:
    *   - `SetMicDeviceRequested` — user changed mic device
    *   - `SetTranscriptionBackendRequested` — user selected a backend
    *   - `TriggerModelDownloadRequested` — user clicked Download for a backend
+   *   - `SetTranscriptionModelRequested` — user changed model in the mlx_whisper model dropdown
    *
    * ADR-018: no ephemeral UI state in this component — all state reads are backendState mirrors.
+   * PIT-037: mlxWhisperModelId is the SSoT mirror — no duplicate $state.
    */
   import { backendState } from '../../../backend-state/backend-state.svelte';
   import { bridge } from '../../../bridge/bridge.svelte';
-  import type { SetMicDeviceRequested, SetTranscriptionBackendRequested, TriggerModelDownloadRequested } from '../../../_generated/schemas';
+  import type {
+    SetMicDeviceRequested,
+    SetTranscriptionBackendRequested,
+    TriggerModelDownloadRequested,
+  } from '../../../_generated/schemas';
+  import type { TranscriptionBackendInfo } from '../../../_generated/state';
+
+  /** Backend-ID für mlx-whisper — das einzige Backend mit Modell-Auswahl. */
+  const MLX_WHISPER_BACKEND_ID = 'mlx_whisper';
 
   function onMicChange(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -40,6 +51,29 @@
       kind: 'trigger_model_download_requested',
       backend_id: backendId,
     } satisfies TriggerModelDownloadRequested);
+  }
+
+  /**
+   * Returns the effective model_id to show as selected in the dropdown.
+   * Uses selected_model_id from the backend if set; falls back to the model
+   * with default=true; falls back to '' if neither exists.
+   */
+  function getEffectiveModelId(backend: TranscriptionBackendInfo): string {
+    if (backend.selected_model_id != null) {
+      return backend.selected_model_id;
+    }
+    const defaultModel = backend.available_models?.find((m) => m.default);
+    return defaultModel?.model_id ?? '';
+  }
+
+  /**
+   * Sends SetTranscriptionModelRequested when the user changes the model dropdown.
+   * model_id=null resets to the default model (default=true in catalog).
+   */
+  function onModelChange(event: Event, backendId: string) {
+    const select = event.target as HTMLSelectElement;
+    const modelId = select.value === '' ? null : select.value;
+    backendState.settings.setTranscriptionModel(backendId, modelId);
   }
 
   // Status badge display helpers
@@ -121,6 +155,30 @@
                   ? 'Selected'
                   : 'Select'}
               </button>
+            {/if}
+
+            {#if backend.backend_id === MLX_WHISPER_BACKEND_ID}
+              <div class="model-select-section">
+                <label
+                  class="model-select-label"
+                  for="model-select-{backend.backend_id}"
+                >Model</label>
+                <select
+                  id="model-select-{backend.backend_id}"
+                  class="model-select"
+                  disabled={!backend.available_models || backend.available_models.length === 0}
+                  value={getEffectiveModelId(backend)}
+                  onchange={(e) => onModelChange(e, backend.backend_id)}
+                >
+                  {#if !backend.available_models || backend.available_models.length === 0}
+                    <option value="">No models available</option>
+                  {:else}
+                    {#each backend.available_models as model (model.model_id)}
+                      <option value={model.model_id}>{model.display_name}</option>
+                    {/each}
+                  {/if}
+                </select>
+              </div>
             {/if}
           </li>
         {/each}
@@ -268,5 +326,33 @@
     font-size: 0.8rem;
     color: var(--color-text-secondary, #888);
     margin: 0;
+  }
+
+  .model-select-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+
+  .model-select-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--color-text-secondary, #888);
+  }
+
+  .model-select {
+    width: 100%;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.78rem;
+    border: 1px solid var(--color-border, #333);
+    border-radius: 4px;
+    background: var(--color-bg, #111);
+    color: var(--color-text, #e0e0e0);
+  }
+
+  .model-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>
