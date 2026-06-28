@@ -5,7 +5,7 @@ Tests all assertion types and error handling. No real Chromium needed.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

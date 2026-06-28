@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
-from frontprompt.voice.transcription import TranscriptSegment, TranscriptionBackendStatus
+from frontprompt.voice.transcription import TranscriptionBackendStatus, TranscriptSegment
 
 
 class MockTranscriptionBackend:

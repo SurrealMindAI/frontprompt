@@ -19,13 +19,12 @@ from frontprompt.state.state import (
     SettingsState,
     StateSnapshot,
     TimelineEntry,
-    TranscriptSegmentEntry,
     TranscriptionBackendInfo,
     TranscriptionBackendStatus,
     TranscriptionState,
     TranscriptionStatus,
+    TranscriptSegmentEntry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,8 +204,9 @@ def test_timeline_entry_routes_transcript_segment_kind() -> None:
 
 def test_timeline_entry_kind_includes_transcript_segment() -> None:
     """TimelineEntryKind Literal includes 'transcript_segment'."""
-    from frontprompt.state.state import TimelineEntryKind
     from pydantic import TypeAdapter
+
+    from frontprompt.state.state import TimelineEntryKind
 
     ta: TypeAdapter[TimelineEntryKind] = TypeAdapter(TimelineEntryKind)
     assert ta.validate_python("transcript_segment") == "transcript_segment"

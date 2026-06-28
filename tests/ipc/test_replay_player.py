@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,10 +18,7 @@ from frontprompt.state.state import (
     PageEventEntry,
     PickRefEntry,
     Recording,
-    ReplayProgress,
-    ReplayStepResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -211,9 +208,7 @@ async def test_page_event_keydown_printable_calls_keyboard_type() -> None:
 
     controller = FakeReplayPageController()
     sm = _make_state_manager_mock()
-    recording = _make_recording(
-        entries=[_make_page_event(seq=0, event_type="keydown", target="input#name", key="a")]
-    )
+    recording = _make_recording(entries=[_make_page_event(seq=0, event_type="keydown", target="input#name", key="a")])
 
     player = ReplayPlayer(recording=recording, parameters={}, page_controller=controller, state_manager=sm)
     report = await player.run()
@@ -247,9 +242,7 @@ async def test_page_event_pointerdown_is_skipped() -> None:
 
     controller = FakeReplayPageController()
     sm = _make_state_manager_mock()
-    recording = _make_recording(
-        entries=[_make_page_event(seq=0, event_type="pointerdown", target="div#area")]
-    )
+    recording = _make_recording(entries=[_make_page_event(seq=0, event_type="pointerdown", target="div#area")])
 
     player = ReplayPlayer(recording=recording, parameters={}, page_controller=controller, state_manager=sm)
     report = await player.run()
@@ -393,9 +386,7 @@ async def test_parameter_substitution_in_navigation_url() -> None:
 
     controller = FakeReplayPageController()
     sm = _make_state_manager_mock()
-    recording = _make_recording(
-        entries=[_make_nav_entry(seq=0, to_url="{{base_url}}/dashboard")]
-    )
+    recording = _make_recording(entries=[_make_nav_entry(seq=0, to_url="{{base_url}}/dashboard")])
 
     player = ReplayPlayer(
         recording=recording,

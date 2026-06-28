@@ -121,7 +121,6 @@ from pydantic import BaseModel, Field
 # WirePick / WireRegion / WireRelation DTOs and map from domain here. Until then,
 # do NOT add a translation layer — YAGNI.
 from frontprompt.state.state import (
-    AssertionComparator,
     AssertionType,
     PageEventEntry,
     PanelId,
@@ -563,9 +562,7 @@ class RecordingSelectedRequested(BaseModel):
 
     kind: Literal["recording_selected_requested"] = "recording_selected_requested"
     schema_version: str = SCHEMA_VERSION
-    recording_id: str | None = Field(
-        description="UUID der zu selektierenden Aufnahme, oder None zum Deselektieren."
-    )
+    recording_id: str | None = Field(description="UUID der zu selektierenden Aufnahme, oder None zum Deselektieren.")
 
 
 class RecordedEventCapturedRequested(BaseModel):
@@ -627,8 +624,7 @@ class AssertionAddedToRecordingRequested(BaseModel):
     insert_after_seq: int | None = Field(
         default=None,
         description=(
-            "None = append nach dem letzten Eintrag. "
-            "Integer = insert nach dem Eintrag mit dem entsprechenden seq."
+            "None = append nach dem letzten Eintrag. Integer = insert nach dem Eintrag mit dem entsprechenden seq."
         ),
     )
 
@@ -718,9 +714,7 @@ class SetTranscriptionBackendRequested(BaseModel):
 
     kind: Literal["set_transcription_backend_requested"] = "set_transcription_backend_requested"
     schema_version: str = SCHEMA_VERSION
-    backend_id: str | None = Field(
-        description="Backend-ID (z.B. 'mlx_whisper'). None = Auto (erstes 'ready'-Backend)."
-    )
+    backend_id: str | None = Field(description="Backend-ID (z.B. 'mlx_whisper'). None = Auto (erstes 'ready'-Backend).")
 
 
 class TriggerModelDownloadRequested(BaseModel):
@@ -737,9 +731,7 @@ class TriggerModelDownloadRequested(BaseModel):
 
     kind: Literal["trigger_model_download_requested"] = "trigger_model_download_requested"
     schema_version: str = SCHEMA_VERSION
-    backend_id: str = Field(
-        description="Backend-ID für den Modell-Download (z.B. 'mlx_whisper'). Pflicht — kein None."
-    )
+    backend_id: str = Field(description="Backend-ID für den Modell-Download (z.B. 'mlx_whisper'). Pflicht — kein None.")
 
 
 # ---------------------------------------------------------------------------

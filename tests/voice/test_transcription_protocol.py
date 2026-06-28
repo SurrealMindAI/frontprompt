@@ -11,7 +11,6 @@ from typing import ClassVar
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Section 1a: TranscriptSegment round-trip
 # ---------------------------------------------------------------------------
@@ -43,11 +42,11 @@ def test_transcript_segment_is_frozen() -> None:
 
 def test_backend_status_literals_match_state_py() -> None:
     """TranscriptionBackendStatus from transcription.py matches state.py's Literal."""
-    from frontprompt.state.state import TranscriptionBackendStatus as StateStatus
-    from frontprompt.voice.transcription import TranscriptionBackendStatus
-
     # Both should define the same set of valid values
     import typing
+
+    from frontprompt.state.state import TranscriptionBackendStatus as StateStatus
+    from frontprompt.voice.transcription import TranscriptionBackendStatus
 
     transcription_args = set(typing.get_args(TranscriptionBackendStatus))
     state_args = set(typing.get_args(StateStatus))

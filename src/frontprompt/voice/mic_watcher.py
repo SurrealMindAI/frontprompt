@@ -66,11 +66,7 @@ class MicrophoneWatcher:
         Returns:
             64-character SHA-256 hex digest.
         """
-        input_items = sorted(
-            (d["index"], d["name"])
-            for d in devices
-            if d["max_input_channels"] > 0
-        )
+        input_items = sorted((d["index"], d["name"]) for d in devices if d["max_input_channels"] > 0)
         return hashlib.sha256(str(input_items).encode()).hexdigest()
 
     async def run(
@@ -159,7 +155,9 @@ class MicrophoneWatcher:
                     system_default=system_default_device_id,
                     system_default_reason=system_default_reason,
                 )
-                await state_manager.update_microphone_state(input_devices, system_default_device_id=system_default_device_id)
+                await state_manager.update_microphone_state(
+                    input_devices, system_default_device_id=system_default_device_id
+                )
 
             await anyio.sleep(poll_interval_s)
 

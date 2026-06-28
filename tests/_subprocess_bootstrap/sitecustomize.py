@@ -40,8 +40,9 @@ if _fixture_wav_str:
     #    At this point REGISTERED_BACKENDS is the live list object —
     #    Python's module cache guarantees all later imports share it.
     # ------------------------------------------------------------------
-    from frontprompt.voice.transcription import REGISTERED_BACKENDS
     from mock_transcription import MockTranscriptionBackend  # on PYTHONPATH (this dir)
+
+    from frontprompt.voice.transcription import REGISTERED_BACKENDS
 
     if not any(b.backend_id == "mock" for b in REGISTERED_BACKENDS):
         REGISTERED_BACKENDS.append(MockTranscriptionBackend())

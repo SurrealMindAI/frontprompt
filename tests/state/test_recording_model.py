@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # RecordingStatus
 # ---------------------------------------------------------------------------
@@ -17,26 +16,28 @@ from pydantic import ValidationError
 
 def test_recording_status_accepts_active() -> None:
     """RecordingStatus Literal akzeptiert 'active'."""
-    from frontprompt.state.state import RecordingStatus
-
     # Pydantic-Literal-Validierung über TypeAdapter
     from pydantic import TypeAdapter
+
+    from frontprompt.state.state import RecordingStatus
 
     ta: TypeAdapter[RecordingStatus] = TypeAdapter(RecordingStatus)
     assert ta.validate_python("active") == "active"
 
 
 def test_recording_status_accepts_stopped() -> None:
-    from frontprompt.state.state import RecordingStatus
     from pydantic import TypeAdapter
+
+    from frontprompt.state.state import RecordingStatus
 
     ta: TypeAdapter[RecordingStatus] = TypeAdapter(RecordingStatus)
     assert ta.validate_python("stopped") == "stopped"
 
 
 def test_recording_status_rejects_invalid() -> None:
-    from frontprompt.state.state import RecordingStatus
     from pydantic import TypeAdapter
+
+    from frontprompt.state.state import RecordingStatus
 
     ta: TypeAdapter[RecordingStatus] = TypeAdapter(RecordingStatus)
     with pytest.raises(ValidationError):

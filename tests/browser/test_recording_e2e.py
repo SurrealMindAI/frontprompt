@@ -50,7 +50,6 @@ from frontprompt.ipc.protocol import (
 )
 from frontprompt.mcp_server import LazyBrowserSessionProvider
 
-
 # ---------------------------------------------------------------------------
 # Chromium availability guard
 # ---------------------------------------------------------------------------
@@ -239,12 +238,8 @@ async def test_capture_round_trip(anyio_backend: str) -> None:
     entries = rec_resp.data["entries"]
 
     # At least 1 click and 1 keydown
-    click_entries = [
-        e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "click"
-    ]
-    keydown_entries = [
-        e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "keydown"
-    ]
+    click_entries = [e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "click"]
+    keydown_entries = [e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "keydown"]
     assert len(click_entries) >= 1, f"Expected ≥1 click entry, all entries: {entries}"
     assert len(keydown_entries) >= 1, f"Expected ≥1 keydown entry, all entries: {entries}"
 
@@ -295,9 +290,7 @@ async def test_snapshot_visibility_col2(anyio_backend: str) -> None:
         f"Recording {recording_id!r} missing from snapshot.recordings_state.recordings — "
         f"COL-2: StateManager.snapshot() not wired to live _recordings_state"
     )
-    assert meta["status"] == "active", (
-        f"Expected status=active in snapshot recording meta, got: {meta}"
-    )
+    assert meta["status"] == "active", f"Expected status=active in snapshot recording meta, got: {meta}"
 
     await _stop_recording(sock, recording_id)
 
@@ -331,14 +324,9 @@ async def test_pick_during_recording_auto_link(anyio_backend: str) -> None:
 
     # Assert pick_ref entry with matching pick_id
     pick_refs = [e for e in entries if e.get("kind") == "pick_ref"]
-    assert len(pick_refs) >= 1, (
-        f"Expected ≥1 pick_ref entry, got kinds: {[e['kind'] for e in entries]}"
-    )
+    assert len(pick_refs) >= 1, f"Expected ≥1 pick_ref entry, got kinds: {[e['kind'] for e in entries]}"
     matching = [p for p in pick_refs if p.get("pick_id") == pick_id]
-    assert len(matching) >= 1, (
-        f"Expected pick_ref entry with pick_id={pick_id!r}, "
-        f"pick_ref entries: {pick_refs}"
-    )
+    assert len(matching) >= 1, f"Expected pick_ref entry with pick_id={pick_id!r}, pick_ref entries: {pick_refs}"
 
     # seq is interleaved correctly (pick_ref must be in the seq order)
     seqs = [e["seq"] for e in entries]
@@ -410,9 +398,7 @@ async def test_cross_origin_nav_survival(anyio_backend: str) -> None:
 
     # Assert navigation entry with correct from_url / to_url
     nav_entries = [e for e in entries if e.get("kind") == "navigation"]
-    assert len(nav_entries) >= 1, (
-        f"Expected ≥1 navigation entry, entry kinds: {[e['kind'] for e in entries]}"
-    )
+    assert len(nav_entries) >= 1, f"Expected ≥1 navigation entry, entry kinds: {[e['kind'] for e in entries]}"
     nav_entry = nav_entries[0]
     assert page_a in nav_entry.get("from_url", ""), (
         f"Expected from_url to contain {page_a!r}, got nav_entry: {nav_entry}"
@@ -423,12 +409,8 @@ async def test_cross_origin_nav_survival(anyio_backend: str) -> None:
     )
 
     # Click on page A also appears (page_event before nav entry)
-    click_entries = [
-        e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "click"
-    ]
-    assert len(click_entries) >= 1, (
-        f"Expected ≥1 click entry (from page A), all entries: {entries}"
-    )
+    click_entries = [e for e in entries if e.get("kind") == "page_event" and e.get("event_type") == "click"]
+    assert len(click_entries) >= 1, f"Expected ≥1 click entry (from page A), all entries: {entries}"
 
 
 # ---------------------------------------------------------------------------
@@ -469,9 +451,7 @@ async def test_hud_chrome_exclusion(anyio_backend: str) -> None:
     await _wait_for_entry_count(sock, recording_id, 1)
 
     # Click on the FloatingRecorderToolbar drag handle (HUD chrome — must be excluded)
-    toolbar_result = await query(
-        sock, EvalJsRequest(expression=_CLICK_TOOLBAR_DRAG_HANDLE_JS, mutating=False)
-    )
+    toolbar_result = await query(sock, EvalJsRequest(expression=_CLICK_TOOLBAR_DRAG_HANDLE_JS, mutating=False))
     assert toolbar_result.ok, f"Toolbar click eval failed: {toolbar_result.error}"
     result_val = toolbar_result.data.get("result") if toolbar_result.ok else None
     assert result_val == "clicked", (
@@ -524,9 +504,7 @@ async def test_wire_economy_no_wheel_scroll(anyio_backend: str) -> None:
     recording_id = await _start_recording(sock, "e2e-scenario-6")
 
     # Dispatch wheel + scroll events
-    result = await query(
-        sock, EvalJsRequest(expression=_DISPATCH_WHEEL_SCROLL_JS, mutating=False)
-    )
+    result = await query(sock, EvalJsRequest(expression=_DISPATCH_WHEEL_SCROLL_JS, mutating=False))
     assert result.ok, f"Wheel/scroll dispatch failed: {result.error}"
 
     # Wait to allow any in-flight forwarding (there should be none)
@@ -614,24 +592,16 @@ async def test_read_side_parity_cli_ipc(anyio_backend: str) -> None:
         return r.exit_code, _extract_json(r.output)
 
     cli_list_exit, cli_recordings = await anyio.to_thread.run_sync(_cli_list)
-    assert cli_list_exit == 0, (
-        f"CLI recordings list failed (exit {cli_list_exit}): {cli_recordings}"
-    )
+    assert cli_list_exit == 0, f"CLI recordings list failed (exit {cli_list_exit}): {cli_recordings}"
 
     cli_get_exit, cli_recording = await anyio.to_thread.run_sync(_cli_get)
-    assert cli_get_exit == 0, (
-        f"CLI recordings get failed (exit {cli_get_exit}): {cli_recording}"
-    )
+    assert cli_get_exit == 0, f"CLI recordings get failed (exit {cli_get_exit}): {cli_recording}"
 
     # Parity: our recording appears in both IPC list and CLI list
     ipc_ids = {r["recording_id"] for r in ipc_recordings}
     cli_ids = {r["recording_id"] for r in cli_recordings}
-    assert recording_id in ipc_ids, (
-        f"IPC list missing recording {recording_id!r}: {ipc_recordings}"
-    )
-    assert recording_id in cli_ids, (
-        f"CLI list missing recording {recording_id!r}: {cli_recordings}"
-    )
+    assert recording_id in ipc_ids, f"IPC list missing recording {recording_id!r}: {ipc_recordings}"
+    assert recording_id in cli_ids, f"CLI list missing recording {recording_id!r}: {cli_recordings}"
 
     # Parity: full recording shape matches
     assert cli_recording["recording_id"] == ipc_recording["recording_id"], (
@@ -643,18 +613,14 @@ async def test_read_side_parity_cli_ipc(anyio_backend: str) -> None:
     assert cli_recording["status"] == ipc_recording["status"], (
         f"status mismatch: CLI={cli_recording['status']!r} vs IPC={ipc_recording['status']!r}"
     )
-    assert cli_recording["status"] == "stopped", (
-        f"Expected recording to be stopped, got: {cli_recording['status']!r}"
-    )
+    assert cli_recording["status"] == "stopped", f"Expected recording to be stopped, got: {cli_recording['status']!r}"
     # Entry count parity
     cli_entry_count = len(cli_recording.get("entries", []))
     ipc_entry_count = len(ipc_recording.get("entries", []))
     assert cli_entry_count == ipc_entry_count, (
         f"CLI and IPC entry counts differ: CLI={cli_entry_count}, IPC={ipc_entry_count}"
     )
-    assert ipc_entry_count >= 1, (
-        f"Expected ≥1 entry in full recording (from the click), got: {ipc_entry_count}"
-    )
+    assert ipc_entry_count >= 1, f"Expected ≥1 entry in full recording (from the click), got: {ipc_entry_count}"
 
 
 # ---------------------------------------------------------------------------
@@ -704,9 +670,7 @@ async def test_ui_render_smoke(anyio_backend: str) -> None:
     await _stop_recording(sock, recording_id)
 
     # Click the Recordings tab in the LeftPanel (inside fp-overlay shadow root)
-    tab_result = await query(
-        sock, EvalJsRequest(expression=_CLICK_RECORDINGS_TAB_JS, mutating=False)
-    )
+    tab_result = await query(sock, EvalJsRequest(expression=_CLICK_RECORDINGS_TAB_JS, mutating=False))
     assert tab_result.ok, f"Recordings tab click eval failed: {tab_result.error}"
     result_val = tab_result.data.get("result") if tab_result.ok else None
     assert result_val == "clicked", (
@@ -718,9 +682,7 @@ async def test_ui_render_smoke(anyio_backend: str) -> None:
     await anyio.sleep(0.4)
 
     # Read the shadow DOM text content
-    text_result = await query(
-        sock, EvalJsRequest(expression=_READ_SHADOW_TEXT_JS, mutating=False)
-    )
+    text_result = await query(sock, EvalJsRequest(expression=_READ_SHADOW_TEXT_JS, mutating=False))
     assert text_result.ok, f"Shadow DOM text read failed: {text_result.error}"
     shadow_text = text_result.data.get("result", "") if text_result.ok else ""
     assert isinstance(shadow_text, str) and len(shadow_text) > 0, (
@@ -729,8 +691,7 @@ async def test_ui_render_smoke(anyio_backend: str) -> None:
 
     # Assert "Recordings" tab label is rendered in the shadow DOM
     assert "Recordings" in shadow_text, (
-        f"Expected 'Recordings' tab label in shadow DOM text, "
-        f"got excerpt: {shadow_text[:500]!r}"
+        f"Expected 'Recordings' tab label in shadow DOM text, got excerpt: {shadow_text[:500]!r}"
     )
 
     # Assert the recording name appears in the RecordingsTab list

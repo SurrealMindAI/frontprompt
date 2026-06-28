@@ -9,15 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_recording(recording_id: str = "rec-001", name: str = "Test Recording") -> "Recording":
+def _make_recording(recording_id: str = "rec-001", name: str = "Test Recording") -> Recording:
     from frontprompt.state.state import Recording
 
     return Recording(
@@ -30,7 +27,7 @@ def _make_recording(recording_id: str = "rec-001", name: str = "Test Recording")
     )
 
 
-def _make_page_event(seq: int = 0, timestamp_ms: int = 1000) -> "PageEventEntry":
+def _make_page_event(seq: int = 0, timestamp_ms: int = 1000) -> PageEventEntry:
     from frontprompt.state.state import PageEventEntry
 
     return PageEventEntry(
@@ -45,7 +42,7 @@ def _make_page_event(seq: int = 0, timestamp_ms: int = 1000) -> "PageEventEntry"
     )
 
 
-def _make_nav_entry(seq: int = 0, timestamp_ms: int = 2000) -> "NavigationEntry":
+def _make_nav_entry(seq: int = 0, timestamp_ms: int = 2000) -> NavigationEntry:
     from frontprompt.state.state import NavigationEntry
 
     return NavigationEntry(
@@ -279,8 +276,7 @@ def test_corrupt_timeline_entry_json_skipped(tmp_path: Path) -> None:
     # Inject a corrupt row directly
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO timeline_entries (recording_id, seq, kind, timestamp_ms, payload_json) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO timeline_entries (recording_id, seq, kind, timestamp_ms, payload_json) VALUES (?, ?, ?, ?, ?)",
         ("rec-corrupt", 0, "page_event", 1000, "THIS IS NOT JSON{{{"),
     )
     conn.commit()

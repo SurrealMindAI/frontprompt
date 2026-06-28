@@ -20,14 +20,12 @@ import pytest
 from frontprompt.state.persistence.in_memory import InMemoryPersistence
 from frontprompt.state.state import (
     MicrophoneDevice,
-    MicrophoneState,
     Recording,
     SettingsState,
-    TranscriptSegmentEntry,
     TranscriptionBackendInfo,
     TranscriptionState,
+    TranscriptSegmentEntry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -92,7 +90,9 @@ async def test_snapshot_includes_settings_state() -> None:
 @pytest.mark.anyio
 async def test_snapshot_includes_transcription_state() -> None:
     """snapshot() includes transcription_state (from constructor injection)."""
-    ts = TranscriptionState(backends=[TranscriptionBackendInfo(backend_id="mlx", display_name="MLX Whisper", status="unavailable")])
+    ts = TranscriptionState(
+        backends=[TranscriptionBackendInfo(backend_id="mlx", display_name="MLX Whisper", status="unavailable")]
+    )
     manager = _make_manager(transcription_state=ts)
     snap = manager.snapshot()
     assert len(snap.transcription_state.backends) == 1
@@ -324,7 +324,9 @@ async def test_append_transcript_segments_broadcasts_once() -> None:
     broadcast_count = 0
 
     segments = [
-        TranscriptSegmentEntry(kind="transcript_segment", seq=0, timestamp_ms=0, start_ms=0, end_ms=1000, text=f"Seg {i}", backend_id="mlx")
+        TranscriptSegmentEntry(
+            kind="transcript_segment", seq=0, timestamp_ms=0, start_ms=0, end_ms=1000, text=f"Seg {i}", backend_id="mlx"
+        )
         for i in range(5)
     ]
     await manager.append_transcript_segments(recording_id, segments, backend_id="mlx")
@@ -336,7 +338,9 @@ async def test_append_transcript_segments_broadcasts_once() -> None:
 async def test_append_transcript_segments_unknown_recording_is_noop() -> None:
     """append_transcript_segments on unknown recording_id is a no-op."""
     manager = _make_manager()
-    segment = TranscriptSegmentEntry(kind="transcript_segment", seq=0, timestamp_ms=0, start_ms=0, end_ms=1000, text="X", backend_id="mlx")
+    segment = TranscriptSegmentEntry(
+        kind="transcript_segment", seq=0, timestamp_ms=0, start_ms=0, end_ms=1000, text="X", backend_id="mlx"
+    )
     snap = await manager.append_transcript_segments("nonexistent", [segment], backend_id="mlx")
     assert snap is not None
 
@@ -429,7 +433,6 @@ async def test_set_mic_device_persists_to_settings() -> None:
     # Use SqlitePersistence for a real round-trip
     from pathlib import Path
 
-    import pytest
     tmp_db = Path("/tmp/test_mic_device.db")
     tmp_db.unlink(missing_ok=True)
     from frontprompt.state.persistence.sqlite import SqlitePersistence
@@ -495,9 +498,11 @@ async def test_set_settings_persists_to_storage() -> None:
 @pytest.mark.anyio
 async def test_update_transcription_backend_status_updates_existing_backend() -> None:
     """update_transcription_backend_status updates the matching backend info."""
-    ts = TranscriptionState(backends=[
-        TranscriptionBackendInfo(backend_id="mlx_whisper", display_name="MLX Whisper", status="unavailable"),
-    ])
+    ts = TranscriptionState(
+        backends=[
+            TranscriptionBackendInfo(backend_id="mlx_whisper", display_name="MLX Whisper", status="unavailable"),
+        ]
+    )
     manager = _make_manager(transcription_state=ts)
 
     snap = await manager.update_transcription_backend_status("mlx_whisper", "ready", None)
@@ -509,9 +514,11 @@ async def test_update_transcription_backend_status_updates_existing_backend() ->
 @pytest.mark.anyio
 async def test_update_transcription_backend_status_with_progress() -> None:
     """update_transcription_backend_status sets download_progress."""
-    ts = TranscriptionState(backends=[
-        TranscriptionBackendInfo(backend_id="mlx_whisper", display_name="MLX Whisper", status="unavailable"),
-    ])
+    ts = TranscriptionState(
+        backends=[
+            TranscriptionBackendInfo(backend_id="mlx_whisper", display_name="MLX Whisper", status="unavailable"),
+        ]
+    )
     manager = _make_manager(transcription_state=ts)
 
     snap = await manager.update_transcription_backend_status("mlx_whisper", "downloading", 0.42)

@@ -21,7 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import anyio
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -355,6 +354,7 @@ async def test_mic_watcher_task_started_in_run() -> None:
 
             # Wire lifecycle CM
             from frontprompt.ipc import session as session_mod
+
             real_lifecycle = session_mod.session_lifecycle
 
             class _LifecycleCM:

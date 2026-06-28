@@ -102,7 +102,7 @@ class PostProcessor:
             entries = [
                 TranscriptSegmentEntry(
                     kind="transcript_segment",
-                    seq=0,           # stamped Python-side in append_transcript_segments
+                    seq=0,  # stamped Python-side in append_transcript_segments
                     timestamp_ms=started_at_ms + seg.start_ms,
                     start_ms=seg.start_ms,
                     end_ms=seg.end_ms,
@@ -113,9 +113,7 @@ class PostProcessor:
             ]
 
             # Step 7: batch inject + set status="done" atomically (single lock, single broadcast)
-            await state_manager.append_transcript_segments(
-                recording_id, entries, backend_id=backend.backend_id
-            )
+            await state_manager.append_transcript_segments(recording_id, entries, backend_id=backend.backend_id)
             log.info("voice_over.post_processor.segments_injected", count=len(entries))
 
         except BaseException as exc:
@@ -124,9 +122,7 @@ class PostProcessor:
             # status in SQLite after browser close.
             with anyio.CancelScope(shield=True):
                 try:
-                    await state_manager.set_transcription_status(
-                        recording_id, "failed", error=str(exc)
-                    )
+                    await state_manager.set_transcription_status(recording_id, "failed", error=str(exc))
                     log.warning(
                         "voice_over.post_processor.failed",
                         error=str(exc),

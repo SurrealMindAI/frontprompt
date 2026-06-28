@@ -24,7 +24,6 @@ from frontprompt.ipc.protocol import (
 )
 from frontprompt.mcp_server import _build_ipc_request, _build_tool_list
 
-
 # ---------------------------------------------------------------------------
 # Tool list presence tests
 # ---------------------------------------------------------------------------

@@ -11,17 +11,14 @@ Coverage:
 
 from __future__ import annotations
 
-import queue
 import sys
-import threading
 import types
 import wave
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers: fake sounddevice module + FakeStream factory
@@ -83,6 +80,7 @@ def test_audio_capture_lazy_import_no_sounddevice_at_module_level() -> None:
 
     try:
         import frontprompt.voice.audio_capture  # noqa: F401 — import side-effect only
+
         assert "sounddevice" not in sys.modules, (
             "sounddevice MUST NOT be imported at module level of voice/audio_capture.py — "
             "it is a [voice] optional extra. Use lazy import inside methods."
@@ -218,9 +216,7 @@ async def test_drainer_join_via_drain_complete_event(tmp_path: Path) -> None:
             tg.cancel_scope.cancel()
 
     with wave.open(str(wav_path), "rb") as wf:
-        assert wf.getnframes() == 1000, (
-            "Frames enqueued before stop() must be drained (COL-5 drain_complete pattern)"
-        )
+        assert wf.getnframes() == 1000, "Frames enqueued before stop() must be drained (COL-5 drain_complete pattern)"
 
 
 # ---------------------------------------------------------------------------

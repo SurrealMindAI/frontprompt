@@ -21,7 +21,6 @@ import pytest
 from frontprompt.state import StateManager
 from frontprompt.state.state import NavigationEntry
 
-
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
@@ -164,15 +163,15 @@ async def test_nav_observation_no_entry_on_same_url() -> None:
     await handler(msg)
 
     # Both fires same URL: no entries appended
-    assert sm._full_recordings == {} or all(
-        len(r.entries) == 0 for r in sm._full_recordings.values()
-    ), "No NavigationEntry should be appended when URL does not change"
+    assert sm._full_recordings == {} or all(len(r.entries) == 0 for r in sm._full_recordings.values()), (
+        "No NavigationEntry should be appended when URL does not change"
+    )
 
 
 @pytest.mark.anyio
 async def test_nav_observation_entry_appended_on_url_change_with_active_recording() -> None:
     """OverlayReady with new URL + active recording: NavigationEntry appended."""
-    from frontprompt.bridge.messages import OverlayReady, RecordingStartRequested
+    from frontprompt.bridge.messages import OverlayReady
     from frontprompt.show_session import ShowSession
 
     sm = StateManager(session_id="test-nav-change")
@@ -221,9 +220,7 @@ async def test_nav_observation_no_entry_without_active_recording() -> None:
     handler2 = await _invoke_overlay_ready_handler(session, sm, current_url="https://example.com/page2")
     await handler2(msg)
 
-    assert sm._full_recordings == {}, (
-        "No NavigationEntry should be appended when no recording is active"
-    )
+    assert sm._full_recordings == {}, "No NavigationEntry should be appended when no recording is active"
 
 
 @pytest.mark.anyio

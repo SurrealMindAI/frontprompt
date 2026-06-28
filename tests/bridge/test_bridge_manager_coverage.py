@@ -12,14 +12,13 @@ Covers:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-import anyio
 import pytest
 
 from frontprompt.bridge.errors import BridgeError, BridgeNotReadyError
 from frontprompt.bridge.manager import BridgeManager
-from frontprompt.bridge.messages import HeartbeatAck, OverlayReady
+from frontprompt.bridge.messages import OverlayReady
 
 
 class _FakeBrowser:

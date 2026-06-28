@@ -17,16 +17,13 @@ Covers:
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import ClassVar
 
-import anyio
 import pytest
 
 from frontprompt.state import StateManager
 from frontprompt.voice.transcription import TranscriptSegment
-
 
 # ---------------------------------------------------------------------------
 # Mock backends
@@ -130,9 +127,7 @@ async def test_full_pipeline_done_with_two_entries() -> None:
 
     rec = sm.get_recording(recording_id)
     assert rec is not None, "Recording not found after pipeline run"
-    assert rec.transcription_status == "done", (
-        f"Expected transcription_status='done', got {rec.transcription_status!r}"
-    )
+    assert rec.transcription_status == "done", f"Expected transcription_status='done', got {rec.transcription_status!r}"
 
     transcript_entries = [e for e in rec.entries if e.kind == "transcript_segment"]
     assert len(transcript_entries) == 2, (
@@ -178,12 +173,8 @@ async def test_transcript_entry_timestamp_equals_started_at_ms_plus_start_ms() -
 
     # Check timestamp_ms = started_at_ms + start_ms for each segment
     expected = [(1000, started_at_ms + 1000), (3000, started_at_ms + 3000)]
-    for entry, (expected_start_ms, expected_ts) in zip(
-        sorted(transcript_entries, key=lambda e: e.start_ms), expected
-    ):
-        assert entry.start_ms == expected_start_ms, (
-            f"Expected start_ms={expected_start_ms}, got {entry.start_ms}"
-        )
+    for entry, (expected_start_ms, expected_ts) in zip(sorted(transcript_entries, key=lambda e: e.start_ms), expected):
+        assert entry.start_ms == expected_start_ms, f"Expected start_ms={expected_start_ms}, got {entry.start_ms}"
         assert entry.timestamp_ms == expected_ts, (
             f"Expected timestamp_ms={expected_ts} (started_at_ms={started_at_ms} + "
             f"start_ms={expected_start_ms}), got {entry.timestamp_ms}"
@@ -251,15 +242,10 @@ async def test_seq_unique_monotonic_across_page_events_and_transcript_entries() 
     all_entries = rec_after.entries
 
     # 2 page_events + 2 transcript_segments = 4 entries total
-    assert len(all_entries) == 4, (
-        f"Expected 4 entries total, got {len(all_entries)}: "
-        f"{[e.kind for e in all_entries]}"
-    )
+    assert len(all_entries) == 4, f"Expected 4 entries total, got {len(all_entries)}: {[e.kind for e in all_entries]}"
 
     seqs = [e.seq for e in all_entries]
-    assert seqs == list(range(len(seqs))), (
-        f"seq not gap-free monotonic across all entry variants: {seqs}"
-    )
+    assert seqs == list(range(len(seqs))), f"seq not gap-free monotonic across all entry variants: {seqs}"
 
 
 # ---------------------------------------------------------------------------

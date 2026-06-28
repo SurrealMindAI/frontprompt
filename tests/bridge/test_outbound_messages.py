@@ -150,9 +150,7 @@ def test_outbound_collection_complete() -> None:
     (no orphan message classes)."""
     from frontprompt.bridge import messages
 
-    assert "SetTranscriptionModelRequested" in messages.__all__, (
-        "SetTranscriptionModelRequested missing from __all__"
-    )
+    assert "SetTranscriptionModelRequested" in messages.__all__, "SetTranscriptionModelRequested missing from __all__"
     assert "SetTranscriptionModelRequested" in messages.__codegen_roots__, (
         "SetTranscriptionModelRequested missing from __codegen_roots__"
     )

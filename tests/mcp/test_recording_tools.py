@@ -11,7 +11,6 @@ import pytest
 from frontprompt.ipc.protocol import GetRecordingRequest, GetRecordingsRequest
 from frontprompt.mcp_server import _build_ipc_request, _build_tool_list
 
-
 # ---------------------------------------------------------------------------
 # Tool list presence tests
 # ---------------------------------------------------------------------------

@@ -55,7 +55,6 @@ from frontprompt.ipc.protocol import (
 from frontprompt.mcp_server import LazyBrowserSessionProvider
 from frontprompt.state.state import ReplayReport
 
-
 # ── Chromium availability guard ──────────────────────────────────────────────
 
 
@@ -217,10 +216,13 @@ async def test_basic_record_replay_round_trip(anyio_backend: str) -> None:
     # Record a click on #btn-click
     recording_id = await _start_recording(sock, "replay-e2e-1-basic")
 
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
 
     await _stop_recording(sock, recording_id)
@@ -230,10 +232,13 @@ async def test_basic_record_replay_round_trip(anyio_backend: str) -> None:
     await anyio.sleep(0.3)
 
     # Verify #click-result is in initial state (not yet clicked)
-    init_resp = await query(sock, EvalJsRequest(
-        expression="document.querySelector('#click-result').getAttribute('data-clicked')",
-        mutating=False,
-    ))
+    init_resp = await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#click-result').getAttribute('data-clicked')",
+            mutating=False,
+        ),
+    )
     assert init_resp.ok
     assert init_resp.data.get("result") is None, (
         f"Expected #click-result to be in initial state (no data-clicked), got: {init_resp.data!r}"
@@ -244,26 +249,23 @@ async def test_basic_record_replay_round_trip(anyio_backend: str) -> None:
     assert replay_resp.ok, f"RunReplayRequest failed: {replay_resp.error}"
 
     report = replay_resp.data
-    assert report["status"] == "completed", (
-        f"Expected status=completed, got: {report['status']!r}"
-    )
-    assert len(report["step_results"]) >= 1, (
-        "Expected at least 1 step result in ReplayReport"
-    )
+    assert report["status"] == "completed", f"Expected status=completed, got: {report['status']!r}"
+    assert len(report["step_results"]) >= 1, "Expected at least 1 step result in ReplayReport"
 
     # All non-skipped steps must have ok=True
     for step in report["step_results"]:
         if not step["skipped"]:
-            assert step["ok"], (
-                f"Expected ok=True for non-skipped step seq={step['seq']}, got: {step}"
-            )
+            assert step["ok"], f"Expected ok=True for non-skipped step seq={step['seq']}, got: {step}"
 
     # Verify DOM effect: the replay actually re-drove the page
     # (button was clicked by the replay player → DOM changed)
-    dom_resp = await query(sock, EvalJsRequest(
-        expression="document.querySelector('#click-result').getAttribute('data-clicked')",
-        mutating=False,
-    ))
+    dom_resp = await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#click-result').getAttribute('data-clicked')",
+            mutating=False,
+        ),
+    )
     assert dom_resp.ok
     assert dom_resp.data.get("result") == "true", (
         f"Expected DOM change after replay (data-clicked='true'), got: {dom_resp.data!r}. "
@@ -287,23 +289,29 @@ async def test_assertion_selector_exists_pass(anyio_backend: str) -> None:
     recording_id = await _start_recording(sock, "replay-e2e-2-selector-exists")
 
     # Record one interaction so the recording has a non-empty timeline
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
     await _stop_recording(sock, recording_id)
 
     # Add assertion: h1 should exist (selector_exists — always passes on replay-fixture.html)
-    assert_resp = await query(sock, AddAssertionRequest(
-        recording_id=recording_id,
-        assertion_type="selector_exists",
-        target="h1",
-        target_kind="selector",
-        expected=None,
-        comparator="none",
-        description="h1 heading must be present",
-    ))
+    assert_resp = await query(
+        sock,
+        AddAssertionRequest(
+            recording_id=recording_id,
+            assertion_type="selector_exists",
+            target="h1",
+            target_kind="selector",
+            expected=None,
+            comparator="none",
+            description="h1 heading must be present",
+        ),
+    )
     assert assert_resp.ok, f"AddAssertionRequest failed: {assert_resp.error}"
     assertion_id = assert_resp.data.get("assertion_id")
     assert assertion_id, f"Expected non-empty assertion_id in response: {assert_resp.data}"
@@ -320,8 +328,7 @@ async def test_assertion_selector_exists_pass(anyio_backend: str) -> None:
 
     assertion_steps = [s for s in report["step_results"] if s["kind"] == "assertion"]
     assert len(assertion_steps) >= 1, (
-        f"Expected ≥1 assertion step in replay report, got step kinds: "
-        f"{[s['kind'] for s in report['step_results']]}"
+        f"Expected ≥1 assertion step in replay report, got step kinds: {[s['kind'] for s in report['step_results']]}"
     )
 
     for step in assertion_steps:
@@ -346,23 +353,29 @@ async def test_assertion_text_equals_fail(anyio_backend: str) -> None:
 
     recording_id = await _start_recording(sock, "replay-e2e-3-text-fail")
 
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
     await _stop_recording(sock, recording_id)
 
     # Add assertion that will intentionally fail: h1 text is NOT "WRONG_TEXT"
-    assert_resp = await query(sock, AddAssertionRequest(
-        recording_id=recording_id,
-        assertion_type="text_equals",
-        target="h1",
-        target_kind="selector",
-        expected="WRONG_TEXT",
-        comparator="equals",
-        description="h1 text check (intentionally wrong expected)",
-    ))
+    assert_resp = await query(
+        sock,
+        AddAssertionRequest(
+            recording_id=recording_id,
+            assertion_type="text_equals",
+            target="h1",
+            target_kind="selector",
+            expected="WRONG_TEXT",
+            comparator="equals",
+            description="h1 text check (intentionally wrong expected)",
+        ),
+    )
     assert assert_resp.ok, f"AddAssertionRequest failed: {assert_resp.error}"
 
     # Reset page and run replay
@@ -375,19 +388,14 @@ async def test_assertion_text_equals_fail(anyio_backend: str) -> None:
     report = replay_resp.data
     # Replay MUST complete even when assertions fail (completed ≠ all assertions passed)
     assert report["status"] == "completed", (
-        f"Expected status=completed (replay finishes regardless of assertion failures), "
-        f"got: {report['status']!r}"
+        f"Expected status=completed (replay finishes regardless of assertion failures), got: {report['status']!r}"
     )
 
     assertion_steps = [s for s in report["step_results"] if s["kind"] == "assertion"]
-    assert len(assertion_steps) >= 1, (
-        f"Expected ≥1 assertion step in replay report"
-    )
+    assert len(assertion_steps) >= 1, "Expected ≥1 assertion step in replay report"
 
     for step in assertion_steps:
-        assert step["assertion_passed"] is False, (
-            f"Expected text_equals with WRONG_TEXT to fail on h1, got: {step}"
-        )
+        assert step["assertion_passed"] is False, f"Expected text_equals with WRONG_TEXT to fail on h1, got: {step}"
         assert step["assertion_actual"] is not None, (
             f"Expected assertion_actual to contain actual h1 text for diagnostics, got: {step}"
         )
@@ -441,10 +449,13 @@ async def test_navigation_replay(anyio_backend: str) -> None:
     )
 
     # Run replay with extra (unused) parameters — verifies that extra params don't break replay
-    replay_resp = await query(sock, RunReplayRequest(
-        recording_id=recording_id,
-        parameters={"base_url": _playground_base},
-    ))
+    replay_resp = await query(
+        sock,
+        RunReplayRequest(
+            recording_id=recording_id,
+            parameters={"base_url": _playground_base},
+        ),
+    )
     assert replay_resp.ok, f"RunReplayRequest failed: {replay_resp.error}"
 
     report = replay_resp.data
@@ -453,20 +464,16 @@ async def test_navigation_replay(anyio_backend: str) -> None:
     # All navigation steps must succeed
     nav_steps = [s for s in report["step_results"] if s["kind"] == "navigation"]
     assert len(nav_steps) >= 1, (
-        f"Expected ≥1 navigation step in replay report, "
-        f"got kinds: {[s['kind'] for s in report['step_results']]}"
+        f"Expected ≥1 navigation step in replay report, got kinds: {[s['kind'] for s in report['step_results']]}"
     )
     for step in nav_steps:
-        assert step["ok"], (
-            f"Expected navigation step ok=True, got: {step}"
-        )
+        assert step["ok"], f"Expected navigation step ok=True, got: {step}"
 
     # Assert browser URL changed to page2 after replay drove the navigation
     info_after = await query(sock, GetPageInfoRequest())
     assert info_after.ok
     assert "page2" in info_after.data["url"], (
-        f"Expected browser to navigate to page2 during replay, "
-        f"current URL: {info_after.data['url']!r}"
+        f"Expected browser to navigate to page2 during replay, current URL: {info_after.data['url']!r}"
     )
 
     # Restore to fixture for subsequent tests
@@ -494,10 +501,13 @@ async def test_dry_run_mode(anyio_backend: str) -> None:
     recording_id = await _start_recording(sock, "replay-e2e-5-dry-run")
 
     # Record a click
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
 
     # Record a navigation to page2
@@ -514,9 +524,7 @@ async def test_dry_run_mode(anyio_backend: str) -> None:
     info_before = await query(sock, GetPageInfoRequest())
     assert info_before.ok
     url_before = info_before.data["url"]
-    assert "replay-fixture" in url_before, (
-        f"Expected to be at replay-fixture before dry_run, got: {url_before!r}"
-    )
+    assert "replay-fixture" in url_before, f"Expected to be at replay-fixture before dry_run, got: {url_before!r}"
 
     # Run dry_run replay
     replay_resp = await query(sock, RunReplayRequest(recording_id=recording_id, dry_run=True))
@@ -530,15 +538,10 @@ async def test_dry_run_mode(anyio_backend: str) -> None:
 
     # All steps must be ok=True + skipped=True with reason='dry_run'
     for step in report["step_results"]:
-        assert step["ok"], (
-            f"Expected ok=True in dry_run step seq={step['seq']}, got: {step}"
-        )
-        assert step["skipped"], (
-            f"Expected skipped=True in dry_run step seq={step['seq']}, got: {step}"
-        )
+        assert step["ok"], f"Expected ok=True in dry_run step seq={step['seq']}, got: {step}"
+        assert step["skipped"], f"Expected skipped=True in dry_run step seq={step['seq']}, got: {step}"
         assert step.get("skipped_reason") == "dry_run", (
-            f"Expected skipped_reason='dry_run' for step seq={step['seq']}, "
-            f"got: {step.get('skipped_reason')!r}"
+            f"Expected skipped_reason='dry_run' for step seq={step['seq']}, got: {step.get('skipped_reason')!r}"
         )
 
     # Browser URL must be unchanged — no navigation executed in dry_run
@@ -581,10 +584,13 @@ async def test_agent_start_stop_recording_ipc(anyio_backend: str) -> None:
     await _wait_for_ipc_start_broadcast(sock, recording_id)
 
     # Interact to generate a timeline entry
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
 
     # Stop recording via IPC
@@ -626,10 +632,13 @@ async def test_mcp_tool_round_trip(anyio_backend: str) -> None:
     await _wait_for_ipc_start_broadcast(sock, recording_id)
 
     # Minimal interaction
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
 
     # Stop via IPC (mirrors frontprompt_stop_recording MCP tool)
@@ -647,13 +656,9 @@ async def test_mcp_tool_round_trip(anyio_backend: str) -> None:
     # Validate that the response is a well-formed ReplayReport
     report = ReplayReport.model_validate(replay_resp.data)
     assert report.replay_id, f"Expected non-empty replay_id: {report}"
-    assert report.recording_id == recording_id, (
-        f"Expected recording_id={recording_id!r}, got: {report.recording_id!r}"
-    )
+    assert report.recording_id == recording_id, f"Expected recording_id={recording_id!r}, got: {report.recording_id!r}"
     assert report.status == "completed", f"Expected status=completed, got: {report.status!r}"
-    assert len(report.step_results) >= 1, (
-        f"Expected ≥1 step result, got: {len(report.step_results)}"
-    )
+    assert len(report.step_results) >= 1, f"Expected ≥1 step result, got: {len(report.step_results)}"
 
 
 @pytest.mark.anyio
@@ -673,10 +678,13 @@ async def test_cli_replay_command(anyio_backend: str) -> None:
 
     # Create a recording to replay
     recording_id = await _start_recording(sock, "cli-replay-test")
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
     await _stop_recording(sock, recording_id)
 
@@ -703,15 +711,9 @@ async def test_cli_replay_command(anyio_backend: str) -> None:
 
     # Run CLI in a thread to avoid asyncio event-loop nesting
     cli_exit, cli_result = await anyio.to_thread.run_sync(_cli_replay)
-    assert cli_exit == 0, (
-        f"CLI recordings replay failed with exit code {cli_exit}. Output: {cli_result!r}"
-    )
-    assert isinstance(cli_result, dict), (
-        f"Expected dict from CLI recordings replay, got: {type(cli_result).__name__}"
-    )
-    assert "status" in cli_result, (
-        f"Expected 'status' key in CLI replay JSON output: {cli_result}"
-    )
+    assert cli_exit == 0, f"CLI recordings replay failed with exit code {cli_exit}. Output: {cli_result!r}"
+    assert isinstance(cli_result, dict), f"Expected dict from CLI recordings replay, got: {type(cli_result).__name__}"
+    assert "status" in cli_result, f"Expected 'status' key in CLI replay JSON output: {cli_result}"
     assert cli_result["status"] == "completed", (
         f"Expected status=completed from CLI replay, got: {cli_result.get('status')!r}"
     )
@@ -732,10 +734,13 @@ async def test_replay_report_persistence(anyio_backend: str) -> None:
     await anyio.sleep(0.3)
 
     recording_id = await _start_recording(sock, "report-persistence-test")
-    await query(sock, EvalJsRequest(
-        expression="document.querySelector('#btn-click').click()",
-        mutating=True,
-    ))
+    await query(
+        sock,
+        EvalJsRequest(
+            expression="document.querySelector('#btn-click').click()",
+            mutating=True,
+        ),
+    )
     await _wait_for_entry_count(sock, recording_id, 1)
     await _stop_recording(sock, recording_id)
 
@@ -760,9 +765,7 @@ async def test_replay_report_persistence(anyio_backend: str) -> None:
     assert stored["replay_id"] == replay_id, (
         f"replay_id mismatch: stored={stored['replay_id']!r} != original={replay_id!r}"
     )
-    assert stored["recording_id"] == recording_id, (
-        f"recording_id mismatch in stored report"
-    )
+    assert stored["recording_id"] == recording_id, "recording_id mismatch in stored report"
     assert stored["status"] == replay_resp.data["status"], (
         f"status mismatch: stored={stored['status']!r} != original={replay_resp.data['status']!r}"
     )

@@ -13,12 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -127,9 +122,7 @@ def test_cache_subdir_derived_from_hf_repo_id() -> None:
     expected_subdir = "models--" + non_default.hf_repo_id.replace("/", "--")
     cache_dir = backend._model_cache_dir
 
-    assert expected_subdir in str(cache_dir), (
-        f"Expected cache dir to contain '{expected_subdir}', got: {cache_dir}"
-    )
+    assert expected_subdir in str(cache_dir), f"Expected cache dir to contain '{expected_subdir}', got: {cache_dir}"
 
 
 def test_cache_subdir_default_model() -> None:
@@ -142,9 +135,7 @@ def test_cache_subdir_default_model() -> None:
     expected_subdir = "models--" + default_model.hf_repo_id.replace("/", "--")
     cache_dir = backend._model_cache_dir
 
-    assert expected_subdir in str(cache_dir), (
-        f"Expected cache dir to contain '{expected_subdir}', got: {cache_dir}"
-    )
+    assert expected_subdir in str(cache_dir), f"Expected cache dir to contain '{expected_subdir}', got: {cache_dir}"
 
 
 __all__ = []

@@ -6,7 +6,6 @@ per-entity WAL JSON-blob pattern analog dem Recorder's Persistenz.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ from frontprompt.state.state import (
     ReplayReportMeta,
     ReplayStepResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

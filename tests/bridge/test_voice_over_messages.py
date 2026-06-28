@@ -146,9 +146,7 @@ def test_set_mic_device_requested_routes_via_outbound() -> None:
 def test_set_mic_device_requested_missing_mic_device_id_fails() -> None:
     """mic_device_id is required — missing raises ValidationError."""
     with pytest.raises(ValidationError):
-        _outbound().validate_python(
-            {"kind": "set_mic_device_requested", "schema_version": "0.10.0"}
-        )
+        _outbound().validate_python({"kind": "set_mic_device_requested", "schema_version": "0.10.0"})
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +211,7 @@ def test_set_transcription_backend_requested_routes_via_outbound() -> None:
 def test_set_transcription_backend_requested_missing_backend_id_fails() -> None:
     """backend_id is required — missing raises ValidationError."""
     with pytest.raises(ValidationError):
-        _outbound().validate_python(
-            {"kind": "set_transcription_backend_requested", "schema_version": "0.10.0"}
-        )
+        _outbound().validate_python({"kind": "set_transcription_backend_requested", "schema_version": "0.10.0"})
 
 
 # ---------------------------------------------------------------------------
@@ -261,9 +257,7 @@ def test_trigger_model_download_requested_routes_via_outbound() -> None:
 def test_trigger_model_download_requested_missing_backend_id_fails() -> None:
     """backend_id is required (non-None for download trigger) — missing raises ValidationError."""
     with pytest.raises(ValidationError):
-        _outbound().validate_python(
-            {"kind": "trigger_model_download_requested", "schema_version": "0.10.0"}
-        )
+        _outbound().validate_python({"kind": "trigger_model_download_requested", "schema_version": "0.10.0"})
 
 
 # ---------------------------------------------------------------------------

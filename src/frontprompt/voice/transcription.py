@@ -15,11 +15,10 @@ Design principles:
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable, ClassVar, Literal, runtime_checkable
-
-from typing_extensions import Protocol
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     pass
@@ -28,9 +27,7 @@ if TYPE_CHECKING:
 # TranscriptionBackendStatus — mirrors state.py's Literal exactly
 # ---------------------------------------------------------------------------
 
-TranscriptionBackendStatus = Literal[
-    "unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"
-]
+TranscriptionBackendStatus = Literal["unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"]
 """Availability status of a transcription backend.
 
 Mirrors :data:`frontprompt.state.state.TranscriptionBackendStatus` exactly —

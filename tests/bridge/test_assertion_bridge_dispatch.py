@@ -16,7 +16,6 @@ import pytest
 
 from frontprompt.state import StateManager
 
-
 # ---------------------------------------------------------------------------
 # Test 5 — handler_count updated to 29 (sub-plan 06: +1 SetTranscriptionModelRequested)
 # ---------------------------------------------------------------------------
@@ -257,9 +256,7 @@ async def test_assertion_deleted_handler_broadcasts_snapshot() -> None:
     )
     await session._on_assertion_deleted(del_msg)
 
-    assert len(broadcasts) == 1, (
-        f"Expected exactly 1 snapshot broadcast from delete_assertion, got {len(broadcasts)}"
-    )
+    assert len(broadcasts) == 1, f"Expected exactly 1 snapshot broadcast from delete_assertion, got {len(broadcasts)}"
 
 
 @pytest.mark.anyio
@@ -354,9 +351,7 @@ async def test_assertion_updated_handler_broadcasts_snapshot() -> None:
     )
     await session._on_assertion_updated(upd_msg)
 
-    assert len(broadcasts) == 1, (
-        f"Expected exactly 1 snapshot broadcast from update_assertion, got {len(broadcasts)}"
-    )
+    assert len(broadcasts) == 1, f"Expected exactly 1 snapshot broadcast from update_assertion, got {len(broadcasts)}"
 
 
 @pytest.mark.anyio

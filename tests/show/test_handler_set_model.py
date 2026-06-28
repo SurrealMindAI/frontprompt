@@ -14,14 +14,12 @@ Covers:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from frontprompt.state import StateManager
-from frontprompt.state.state import SettingsState
-from frontprompt.voice.transcription import REGISTERED_BACKENDS, TranscriptionBackend
-
+from frontprompt.voice.transcription import TranscriptionBackend
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,7 +73,6 @@ async def test_handler_dispatches_set_model_to_backend() -> None:
     The handler itself must NOT call set_model() — a call_count of 2 means COL-6 regressed.
     """
     from frontprompt.bridge.messages import SetTranscriptionModelRequested
-    from frontprompt.show_session import ShowSession
 
     s, sm = _build_session_with_manager()
     mock_backend = _make_mock_backend("mlx_whisper")
@@ -99,9 +96,7 @@ async def test_handler_dispatches_set_model_to_backend() -> None:
         await s._on_set_transcription_model(msg)
 
     # set_mlx_whisper_model was called exactly once
-    assert len(set_model_calls) == 1, (
-        f"Expected set_mlx_whisper_model called once, got {len(set_model_calls)}"
-    )
+    assert len(set_model_calls) == 1, f"Expected set_mlx_whisper_model called once, got {len(set_model_calls)}"
     assert set_model_calls[0][0] == "whisper-large-v3-turbo"
     assert set_model_calls[0][1] is mock_backend
 
@@ -118,7 +113,6 @@ async def test_handler_dispatches_set_model_to_backend() -> None:
 async def test_handler_ignores_unknown_backend_id() -> None:
     """Unknown backend_id → handler returns without raising; state NOT broadcast."""
     from frontprompt.bridge.messages import SetTranscriptionModelRequested
-    from frontprompt.show_session import ShowSession
 
     s, sm = _build_session_with_manager()
 
@@ -141,9 +135,7 @@ async def test_handler_ignores_unknown_backend_id() -> None:
         await s._on_set_transcription_model(msg)
 
     # No snapshot broadcast on unknown backend
-    assert broadcast_count == 0, (
-        f"Expected 0 broadcasts for unknown backend, got {broadcast_count}"
-    )
+    assert broadcast_count == 0, f"Expected 0 broadcasts for unknown backend, got {broadcast_count}"
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +147,6 @@ async def test_handler_ignores_unknown_backend_id() -> None:
 async def test_handler_model_id_none_calls_set_model_with_none() -> None:
     """model_id=None → backend.set_model(None) called exactly once (revert to default)."""
     from frontprompt.bridge.messages import SetTranscriptionModelRequested
-    from frontprompt.show_session import ShowSession
 
     s, sm = _build_session_with_manager()
     mock_backend = _make_mock_backend("mlx_whisper")
@@ -181,7 +172,6 @@ async def test_handler_model_id_none_calls_set_model_with_none() -> None:
 async def test_handler_updates_snapshot_mlx_whisper_model_id() -> None:
     """After handler, snapshot.settings_state.mlx_whisper_model_id equals msg.model_id."""
     from frontprompt.bridge.messages import SetTranscriptionModelRequested
-    from frontprompt.show_session import ShowSession
 
     s, sm = _build_session_with_manager()
     mock_backend = _make_mock_backend("mlx_whisper")
@@ -197,8 +187,7 @@ async def test_handler_updates_snapshot_mlx_whisper_model_id() -> None:
 
     snap = sm.snapshot()
     assert snap.settings_state.mlx_whisper_model_id == chosen_model, (
-        f"Expected mlx_whisper_model_id={chosen_model!r}, "
-        f"got {snap.settings_state.mlx_whisper_model_id!r}"
+        f"Expected mlx_whisper_model_id={chosen_model!r}, got {snap.settings_state.mlx_whisper_model_id!r}"
     )
 
 
@@ -216,7 +205,6 @@ async def test_set_backend_preserves_model_id() -> None:
     seeded model_id — the backend switch must not revert the model selection to None.
     """
     from frontprompt.bridge.messages import SetTranscriptionBackendRequested
-    from frontprompt.show_session import ShowSession
 
     s, sm = _build_session_with_manager()
 

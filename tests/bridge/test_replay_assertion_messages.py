@@ -289,7 +289,6 @@ def test_existing_outbound_variants_still_route() -> None:
     from frontprompt.bridge.messages import (
         RecordingStartRequested,
         RecordingStopRequested,
-        RecordedEventCapturedRequested,
     )
 
     cases = [

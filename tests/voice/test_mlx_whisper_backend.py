@@ -20,10 +20,9 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helper: clear any cached backend instance so each test starts fresh
@@ -88,7 +87,9 @@ def test_probe_status_needs_download_when_model_cache_absent(tmp_path: Path) -> 
         patch("sys.platform", "darwin"),
         patch("platform.machine", return_value="arm64"),
         patch("importlib.util.find_spec", return_value=fake_spec),
-        patch.object(type(backend), "_model_cache_dir", new_callable=lambda: property(lambda self: tmp_path / "no-such-dir")),
+        patch.object(
+            type(backend), "_model_cache_dir", new_callable=lambda: property(lambda self: tmp_path / "no-such-dir")
+        ),
     ):
         status = backend.probe_status()  # type: ignore[attr-defined]
     assert status == "needs_download"
@@ -256,6 +257,7 @@ def test_transcribe_integration_returns_segments(tmp_path: Path) -> None:
     # mlx_whisper is a core dep on arm64 — no need to check if it's installed.
     # But the model must be downloaded before transcription is possible.
     from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend as _B
+
     if _B().probe_status() != "ready":
         pytest.skip("mlx-whisper model not downloaded — run `frontprompt bootstrap --voice` to download")
 
@@ -270,10 +272,10 @@ def test_transcribe_integration_returns_segments(tmp_path: Path) -> None:
         f.setframerate(16000)
         f.writeframes(struct.pack("<" + "h" * 16000, *([0] * 16000)))  # 1 second silence
 
+    import anyio
+
     from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
     from frontprompt.voice.transcription import TranscriptSegment
-
-    import anyio
 
     backend = MlxWhisperBackend()
     # transcribe() is an async method; run it in a fresh event loop from this sync

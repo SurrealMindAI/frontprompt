@@ -446,7 +446,12 @@ One-directional: none → pending → transcribing → done/failed.
 """
 
 TimelineEntryKind = Literal[
-    "page_event", "pick_ref", "region_ref", "relation_ref", "navigation", "assertion",
+    "page_event",
+    "pick_ref",
+    "region_ref",
+    "relation_ref",
+    "navigation",
+    "assertion",
     "transcript_segment",
 ]
 """Discriminator für die TimelineEntry-Union. Eine pro Variant-Klasse."""
@@ -571,10 +576,7 @@ class AssertionEntry(BaseModel):
     assertion_type: AssertionType = Field(description="Art der Assertion.")
     target: str = Field(
         default="",
-        description=(
-            "CSS-Selektor für element-targeted assertions (tag#id.class descriptor). "
-            "Leer für url_equals."
-        ),
+        description=("CSS-Selektor für element-targeted assertions (tag#id.class descriptor). Leer für url_equals."),
     )
     target_kind: Literal["selector", "url"] = Field(
         description="Typ des target — 'selector' für DOM-Assertions, 'url' für URL-Assertion."
@@ -583,9 +585,7 @@ class AssertionEntry(BaseModel):
         default=None,
         description="Erwarteter Wert; None für selector_exists und visible.",
     )
-    comparator: AssertionComparator = Field(
-        description="Vergleichsoperator; 'none' für selector_exists und visible."
-    )
+    comparator: AssertionComparator = Field(description="Vergleichsoperator; 'none' für selector_exists und visible.")
     description: str = Field(
         default="",
         description="Human-readable Label für Report-Anzeige.",
@@ -617,7 +617,12 @@ class TranscriptSegmentEntry(BaseModel):
 
 
 TimelineEntry = Annotated[
-    PageEventEntry | PickRefEntry | RegionRefEntry | RelationRefEntry | NavigationEntry | AssertionEntry
+    PageEventEntry
+    | PickRefEntry
+    | RegionRefEntry
+    | RelationRefEntry
+    | NavigationEntry
+    | AssertionEntry
     | TranscriptSegmentEntry,
     Field(discriminator="kind"),
 ]
@@ -989,9 +994,7 @@ class SettingsState(BaseModel):
     )
 
 
-TranscriptionBackendStatus = Literal[
-    "unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"
-]
+TranscriptionBackendStatus = Literal["unavailable", "missing_dep", "needs_download", "downloading", "ready", "error"]
 """Verfügbarkeitsstatus eines Transkriptions-Backends.
 
 - ``unavailable``: Plattform nicht unterstützt (z.B. non-Apple-Silicon für mlx_whisper).
@@ -1333,12 +1336,12 @@ __all__ = [
     "RecordingMeta",
     "RecordingStatus",
     "RecordingsState",
-    "RegionRefEntry",
     "Region",
-    "RelationRefEntry",
+    "RegionRefEntry",
     "Relation",
     "RelationEndpointKind",
     "RelationKind",
+    "RelationRefEntry",
     "ReplayProgress",
     "ReplayReport",
     "ReplayReportMeta",

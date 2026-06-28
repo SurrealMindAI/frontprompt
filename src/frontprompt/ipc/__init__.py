@@ -102,6 +102,7 @@ from frontprompt.ipc.protocol import (
     StopRecordingRequest,  # Schema 0.8.0
     TextReaderResult,
 )
+from frontprompt.ipc.replay_player import ReplayPlayer
 from frontprompt.ipc.session import (
     SessionMetadata,
     discover_sessions,
@@ -109,13 +110,11 @@ from frontprompt.ipc.session import (
     prune_dead_sessions,
     session_lifecycle,
 )
-from frontprompt.ipc.replay_player import ReplayPlayer
 from frontprompt.ipc.socket_client import IPC_ROUNDTRIP_TIMEOUT_S, IpcConnectError, query
 from frontprompt.ipc.socket_server import run_socket_server
 
 __all__ = [
     "IPC_ROUNDTRIP_TIMEOUT_S",
-    "ReplayPlayer",
     "IPC_SCHEMA_VERSION",
     "AddAssertionRequest",
     "AnnotationEntry",
@@ -173,6 +172,7 @@ __all__ = [
     "PingRequest",
     "RelocatePicksRequest",
     "RelocatePicksResult",
+    "ReplayPlayer",
     "ReplayReportMeta",
     "RunReplayRequest",
     "ScreenshotElementRequest",

@@ -12,13 +12,11 @@ import pytest
 
 from frontprompt.state import StateManager
 from frontprompt.state.state import (
-    AssertionEntry,
     ParameterDeclaration,
     ReplayProgress,
     ReplayReport,
     ReplayStepResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,9 +70,15 @@ def _make_report(
         ended_at_ms=2000,
         step_results=[
             ReplayStepResult(
-                seq=0, kind="page_event", ok=True, skipped=False,
-                skipped_reason=None, error=None, assertion_passed=None,
-                assertion_actual=None, duration_ms=10,
+                seq=0,
+                kind="page_event",
+                ok=True,
+                skipped=False,
+                skipped_reason=None,
+                error=None,
+                assertion_passed=None,
+                assertion_actual=None,
+                duration_ms=10,
             )
         ],
         error=None,
@@ -112,7 +116,7 @@ async def test_add_assertion_appended_at_end_when_no_insert_after_seq() -> None:
 @pytest.mark.anyio
 async def test_add_assertion_after_seq_inserts_and_renumbers() -> None:
     """add_assertion_to_timeline with insert_after_seq inserts and renumbers later entries."""
-    from frontprompt.state.state import NavigationEntry, PageEventEntry
+    from frontprompt.state.state import NavigationEntry
 
     sm = StateManager(session_id="sess-001")
     snap = await sm.start_recording(name="Seq Test")

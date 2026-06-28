@@ -59,8 +59,22 @@ _CONTROL_KEYS = frozenset(
         "End",
         "PageUp",
         "PageDown",
-        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
-        "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F10",
+        "F11",
+        "F12",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
     }
 )
 
@@ -391,9 +405,7 @@ class ReplayPlayer:
                 duration_ms=_now_ms() - step_start,
             )
 
-    async def _replay_assertion(
-        self, entry: AssertionEntry, seq: int, step_start: int
-    ) -> ReplayStepResult:
+    async def _replay_assertion(self, entry: AssertionEntry, seq: int, step_start: int) -> ReplayStepResult:
         """Evaluate an assertion against the live DOM."""
         result = await self._page_controller.evaluate_assertion(entry)
 

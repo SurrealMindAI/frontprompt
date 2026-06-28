@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock
 import anyio
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers: fake sounddevice + fake state manager
 # ---------------------------------------------------------------------------
@@ -49,11 +48,29 @@ def _make_fake_sm() -> MagicMock:
 
 # Canonical device topologies for tests
 _TOPOLOGY_1 = [
-    {"index": 0, "name": "Built-in Microphone", "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 44100.0},
+    {
+        "index": 0,
+        "name": "Built-in Microphone",
+        "max_input_channels": 1,
+        "max_output_channels": 0,
+        "default_samplerate": 44100.0,
+    },
 ]
 _TOPOLOGY_2 = [
-    {"index": 0, "name": "Built-in Microphone", "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 44100.0},
-    {"index": 1, "name": "USB Headset", "max_input_channels": 2, "max_output_channels": 2, "default_samplerate": 48000.0},
+    {
+        "index": 0,
+        "name": "Built-in Microphone",
+        "max_input_channels": 1,
+        "max_output_channels": 0,
+        "default_samplerate": 44100.0,
+    },
+    {
+        "index": 1,
+        "name": "USB Headset",
+        "max_input_channels": 2,
+        "max_output_channels": 2,
+        "default_samplerate": 48000.0,
+    },
 ]
 _TOPOLOGY_OUTPUT_ONLY = [
     {"index": 0, "name": "Speakers", "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 44100.0},
@@ -72,9 +89,9 @@ def test_mic_watcher_lazy_import_no_sounddevice_at_module_level() -> None:
 
     try:
         import frontprompt.voice.mic_watcher  # noqa: F401
+
         assert "sounddevice" not in sys.modules, (
-            "sounddevice MUST NOT be imported at module level of voice/mic_watcher.py — "
-            "it is a [voice] optional extra."
+            "sounddevice MUST NOT be imported at module level of voice/mic_watcher.py — it is a [voice] optional extra."
         )
     finally:
         if sd_backup is not None:
@@ -262,8 +279,20 @@ async def test_watcher_task_can_be_cancelled_cleanly() -> None:
 
 # Helper topology constants for this section
 _TOPOLOGY_TWO_INPUTS = [
-    {"index": 0, "name": "Built-in Mic", "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 44100.0},
-    {"index": 1, "name": "USB Headset", "max_input_channels": 2, "max_output_channels": 2, "default_samplerate": 48000.0},
+    {
+        "index": 0,
+        "name": "Built-in Mic",
+        "max_input_channels": 1,
+        "max_output_channels": 0,
+        "default_samplerate": 44100.0,
+    },
+    {
+        "index": 1,
+        "name": "USB Headset",
+        "max_input_channels": 2,
+        "max_output_channels": 2,
+        "default_samplerate": 48000.0,
+    },
 ]
 _TOPOLOGY_OUTPUT_ONLY_ONLY = [
     {"index": 0, "name": "Speakers", "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 44100.0},
@@ -272,7 +301,6 @@ _TOPOLOGY_OUTPUT_ONLY_ONLY = [
 
 def _stop_after_one_poll() -> types.CoroutineType:
     """Return a patch target that cancels the watcher after the first sleep call."""
-    import asyncio
 
     async def _one_shot_sleep(seconds: float) -> None:
         raise anyio.get_cancelled_exc_class()()
@@ -345,8 +373,7 @@ async def test_watcher_broadcasts_empty_devices_on_first_poll() -> None:
 
     snap = sm.snapshot()
     assert len(snap.microphone_state.devices) == 0, (
-        "Expected 0 devices (all output-only), "
-        f"got {len(snap.microphone_state.devices)}"
+        f"Expected 0 devices (all output-only), got {len(snap.microphone_state.devices)}"
     )
     assert len(broadcast_calls) >= 1, (
         "Expected at least one broadcast to listeners after first poll with empty device list, "
@@ -389,8 +416,7 @@ async def test_watcher_does_not_broadcast_on_unchanged_topology() -> None:
                 pass
 
     assert fake_sm.update_microphone_state.call_count == 1, (
-        f"Expected exactly 1 update call for 2 stable-topology polls, "
-        f"got {fake_sm.update_microphone_state.call_count}"
+        f"Expected exactly 1 update call for 2 stable-topology polls, got {fake_sm.update_microphone_state.call_count}"
     )
 
 

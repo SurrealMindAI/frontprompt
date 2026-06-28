@@ -14,11 +14,7 @@ forgets to update handler_count(), the test will catch it immediately.
 from __future__ import annotations
 
 import ast
-import importlib
-import importlib.util
 from pathlib import Path
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,12 +63,8 @@ def _top_level_imports(tree: ast.Module) -> list[str]:
         elif isinstance(node, ast.If):
             # Check if it's a TYPE_CHECKING guard — those don't execute at runtime
             test = node.test
-            is_type_checking = (
-                (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING")
-                or (
-                    isinstance(test, ast.Attribute)
-                    and test.attr == "TYPE_CHECKING"
-                )
+            is_type_checking = (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+                isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
             )
             if not is_type_checking:
                 # Non-TYPE_CHECKING if-block: imports inside DO execute at module load

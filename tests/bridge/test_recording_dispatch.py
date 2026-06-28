@@ -19,7 +19,6 @@ import pytest
 from frontprompt.state import StateManager
 from frontprompt.state.state import PageEventEntry
 
-
 # ---------------------------------------------------------------------------
 # Test 7 — handler_count updated to 29 (sub-plan 06: +1 SetTranscriptionModelRequested)
 # ---------------------------------------------------------------------------
@@ -224,9 +223,7 @@ async def test_recorded_event_captured_handler_appends_entry() -> None:
     recording_id = sm._recordings_state.recordings[0].recording_id
 
     entry = _make_page_event_entry(event_type="click", target="button#go")
-    await session._on_recorded_event_captured(
-        RecordedEventCapturedRequested(recording_id=recording_id, entry=entry)
-    )
+    await session._on_recorded_event_captured(RecordedEventCapturedRequested(recording_id=recording_id, entry=entry))
 
     full_recording = sm._full_recordings.get(recording_id)
     assert full_recording is not None
@@ -251,9 +248,7 @@ async def test_recorded_event_captured_handler_does_not_broadcast_snapshot() -> 
     sm.add_snapshot_listener(lambda snap: snapshot_broadcasts.append(snap))
 
     entry = _make_page_event_entry(event_type="keydown", key="Enter")
-    await session._on_recorded_event_captured(
-        RecordedEventCapturedRequested(recording_id=recording_id, entry=entry)
-    )
+    await session._on_recorded_event_captured(RecordedEventCapturedRequested(recording_id=recording_id, entry=entry))
 
     assert len(snapshot_broadcasts) == 0, (
         "append_timeline_entry must NOT trigger snapshot broadcast (non-broadcasting path, COL-5)"
@@ -267,7 +262,5 @@ async def test_recorded_event_captured_unknown_recording_is_noop() -> None:
 
     session, sm = _make_session()
     entry = _make_page_event_entry()
-    await session._on_recorded_event_captured(
-        RecordedEventCapturedRequested(recording_id="unknown", entry=entry)
-    )
+    await session._on_recorded_event_captured(RecordedEventCapturedRequested(recording_id="unknown", entry=entry))
     # No exception raised

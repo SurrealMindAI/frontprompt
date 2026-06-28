@@ -339,7 +339,6 @@ def test_recordings_get_emits_json() -> None:
 
 def test_recordings_list_exits_2_when_no_session(monkeypatch: pytest.MonkeyPatch) -> None:
     """recordings list exits 2 when no running session is found."""
-    from frontprompt.ipc import pick_latest_session
 
     monkeypatch.setattr("frontprompt.ipc.pick_latest_session", lambda: None)
     monkeypatch.setattr("frontprompt.ipc.discover_sessions", lambda: [])

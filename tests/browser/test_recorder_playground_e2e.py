@@ -211,9 +211,7 @@ _DRAG_SOURCE_TO_DROP_ZONE = """
 # Normalization helpers
 # ---------------------------------------------------------------------------
 
-_FIXTURE_PATH = (
-    Path(__file__).parent / "fixtures" / "recorder" / "click-type-drag.recording.json"
-)
+_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "recorder" / "click-type-drag.recording.json"
 
 
 def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
@@ -281,9 +279,7 @@ async def test_fixture_equality_round_trip(anyio_backend: str) -> None:
     # Assert each entry's normalized shape matches fixture
     for i, (actual, expected) in enumerate(zip(entries, fixture["entries"])):
         norm = _normalize_entry(actual)
-        assert norm["kind"] == expected["kind"], (
-            f"Entry {i}: kind mismatch — {norm['kind']!r} != {expected['kind']!r}"
-        )
+        assert norm["kind"] == expected["kind"], f"Entry {i}: kind mismatch — {norm['kind']!r} != {expected['kind']!r}"
         assert norm["event_type"] == expected.get("event_type"), (
             f"Entry {i}: event_type mismatch — {norm['event_type']!r} != {expected.get('event_type')!r}"
         )
@@ -382,40 +378,60 @@ async def test_screenshot_per_event_visual_report(anyio_backend: str) -> None:
     await query(sock, EvalJsRequest(expression=_CLICK_BTN_PRIMARY, mutating=True))
     await _wait_for_entry_count(sock, recording_id, 1)
     after_click = await _screenshot_path(sock)
-    pairs.append({
-        "seq": 0, "event_type": "click", "target": "button#btn-primary",
-        "before_path": before_click, "after_path": after_click,
-    })
+    pairs.append(
+        {
+            "seq": 0,
+            "event_type": "click",
+            "target": "button#btn-primary",
+            "before_path": before_click,
+            "after_path": after_click,
+        }
+    )
 
     # --- Event 2: type 'a' into #input-text ---
     before_type_a = await _screenshot_path(sock)
     await query(sock, EvalJsRequest(expression=_TYPE_A_INTO_INPUT_TEXT, mutating=True))
     await _wait_for_entry_count(sock, recording_id, 2)
     after_type_a = await _screenshot_path(sock)
-    pairs.append({
-        "seq": 1, "event_type": "keydown", "target": "input#input-text",
-        "before_path": before_type_a, "after_path": after_type_a,
-    })
+    pairs.append(
+        {
+            "seq": 1,
+            "event_type": "keydown",
+            "target": "input#input-text",
+            "before_path": before_type_a,
+            "after_path": after_type_a,
+        }
+    )
 
     # --- Event 3: type '7' into #input-text ---
     before_type_7 = await _screenshot_path(sock)
     await query(sock, EvalJsRequest(expression=_TYPE_7_INTO_INPUT_TEXT, mutating=True))
     await _wait_for_entry_count(sock, recording_id, 3)
     after_type_7 = await _screenshot_path(sock)
-    pairs.append({
-        "seq": 2, "event_type": "keydown", "target": "input#input-text",
-        "before_path": before_type_7, "after_path": after_type_7,
-    })
+    pairs.append(
+        {
+            "seq": 2,
+            "event_type": "keydown",
+            "target": "input#input-text",
+            "before_path": before_type_7,
+            "after_path": after_type_7,
+        }
+    )
 
     # --- Event 4: drag #drag-source → #drop-zone ---
     before_drag = await _screenshot_path(sock)
     await query(sock, EvalJsRequest(expression=_DRAG_SOURCE_TO_DROP_ZONE, mutating=True))
     await _wait_for_entry_count(sock, recording_id, 4)
     after_drag = await _screenshot_path(sock)
-    pairs.append({
-        "seq": 3, "event_type": "pointerdown+drop", "target": "#drag-source→#drop-zone",
-        "before_path": before_drag, "after_path": after_drag,
-    })
+    pairs.append(
+        {
+            "seq": 3,
+            "event_type": "pointerdown+drop",
+            "target": "#drag-source→#drop-zone",
+            "before_path": before_drag,
+            "after_path": after_drag,
+        }
+    )
 
     await _stop_recording(sock, recording_id)
 
@@ -511,9 +527,7 @@ async def test_every_timeline_entry_kind(anyio_backend: str) -> None:
     await _wait_for_entry_count(sock, recording_id, expected_count)
 
     # 3. pick_ref (second pick, needed for relation source/target)
-    pick_resp2 = await query(
-        sock, PickBySelectorRequest(selector="#btn-secondary", comment="for relation", limit=1)
-    )
+    pick_resp2 = await query(sock, PickBySelectorRequest(selector="#btn-secondary", comment="for relation", limit=1))
     assert pick_resp2.ok
     pick_id_2 = pick_resp2.data["pick_ids"][0]
     expected_count += 1
@@ -557,8 +571,7 @@ async def test_every_timeline_entry_kind(anyio_backend: str) -> None:
     kinds_seen = {e["kind"] for e in entries}
     for required_kind in ("page_event", "pick_ref", "region_ref", "relation_ref", "navigation"):
         assert required_kind in kinds_seen, (
-            f"Expected '{required_kind}' in timeline, but got: {kinds_seen}. "
-            f"Entries: {[e['kind'] for e in entries]}"
+            f"Expected '{required_kind}' in timeline, but got: {kinds_seen}. Entries: {[e['kind'] for e in entries]}"
         )
 
     # Assert navigation entry carries correct from_url / to_url
@@ -576,6 +589,7 @@ async def test_every_timeline_entry_kind(anyio_backend: str) -> None:
 # ---------------------------------------------------------------------------
 # Scenario D — data-driven parametrized
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.anyio
 @_SKIP
@@ -607,8 +621,7 @@ async def test_data_driven_scenarios(
     # Assert at least one page_event entry with the expected event_type
     page_events = [e for e in entries if e.get("kind") == "page_event"]
     assert any(e["event_type"] == event_type for e in page_events), (
-        f"Expected event_type={event_type!r} in entries, got: "
-        f"{[e.get('event_type') for e in page_events]}"
+        f"Expected event_type={event_type!r} in entries, got: {[e.get('event_type') for e in page_events]}"
     )
     # Assert target contains the expected fragment
     matching = [e for e in page_events if e["event_type"] == event_type]

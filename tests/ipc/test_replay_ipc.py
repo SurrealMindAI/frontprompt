@@ -19,7 +19,6 @@ from pydantic import TypeAdapter, ValidationError
 
 from frontprompt.ipc.protocol import IpcRequest
 
-
 # ---------------------------------------------------------------------------
 # Schema version bump
 # ---------------------------------------------------------------------------
@@ -233,17 +232,19 @@ def test_add_assertion_request_routes_via_ipc_union() -> None:
     from frontprompt.ipc.protocol import AddAssertionRequest
 
     adapter: TypeAdapter[IpcRequest] = TypeAdapter(IpcRequest)
-    parsed = adapter.validate_python({
-        "kind": "add_assertion",
-        "recording_id": "rec-1",
-        "assertion_type": "text_equals",
-        "target": "h1",
-        "target_kind": "selector",
-        "expected": "Hello",
-        "comparator": "equals",
-        "description": "Title check",
-        "insert_after_seq": None,
-    })
+    parsed = adapter.validate_python(
+        {
+            "kind": "add_assertion",
+            "recording_id": "rec-1",
+            "assertion_type": "text_equals",
+            "target": "h1",
+            "target_kind": "selector",
+            "expected": "Hello",
+            "comparator": "equals",
+            "description": "Title check",
+            "insert_after_seq": None,
+        }
+    )
     assert isinstance(parsed, AddAssertionRequest)
     assert parsed.assertion_type == "text_equals"
 

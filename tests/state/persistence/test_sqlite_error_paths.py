@@ -14,12 +14,9 @@ cannot be used directly; replacing the whole connection is the clean alternative
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock
-
-import pytest
 
 
 def _broken_conn() -> MagicMock:

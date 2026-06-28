@@ -96,7 +96,7 @@ class StatePersistence(Protocol):
 
     # ----- Recording write-through (sub-plan 01) ---------------------------------
 
-    def upsert_recording(self, recording: "Recording") -> None:
+    def upsert_recording(self, recording: Recording) -> None:
         """Insert-or-replace one recording keyed on ``recording_id``. Idempotent.
 
         Bulk helper for tests and one-shot imports. Runtime mutations use the
@@ -110,11 +110,11 @@ class StatePersistence(Protocol):
         """Delete recording + all its timeline entries (cascade). Idempotent."""
         ...
 
-    def load_recordings(self) -> "list[Recording]":
+    def load_recordings(self) -> list[Recording]:
         """Return all recordings with their timeline entries, ordered by started_at_ms."""
         ...
 
-    def append_timeline_entry(self, recording_id: str, entry: "TimelineEntry") -> None:
+    def append_timeline_entry(self, recording_id: str, entry: TimelineEntry) -> None:
         """Append a single timeline entry to an existing recording. Append-only."""
         ...
 
@@ -128,14 +128,14 @@ class StatePersistence(Protocol):
 
     # ----- Voice-over settings persistence (sub-plan 01) -------------------------
 
-    def save_settings(self, settings: "SettingsState") -> None:
+    def save_settings(self, settings: SettingsState) -> None:
         """Persist durable voice-over settings (voice_over_enabled + selected_transcription_backend_id).
 
         Uses a key-value ``settings`` table. Idempotent — overwrites existing keys.
         """
         ...
 
-    def load_settings(self) -> "SettingsState | None":
+    def load_settings(self) -> SettingsState | None:
         """Load persisted voice-over settings. Returns None when no settings row exists yet."""
         ...
 
@@ -169,15 +169,15 @@ class StatePersistence(Protocol):
 
     # ----- Replay-report write-through (sub-plan 01) -------------------------
 
-    def save_replay_report(self, report: "ReplayReport") -> None:
+    def save_replay_report(self, report: ReplayReport) -> None:
         """Insert-or-replace one ReplayReport keyed on replay_id. Idempotent."""
         ...
 
-    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+    def get_replay_report(self, replay_id: str) -> ReplayReport | None:
         """Retrieve a ReplayReport by replay_id. Returns None when not found."""
         ...
 
-    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> list[ReplayReportMeta]:
         """Return lightweight ReplayReportMeta list, optionally filtered by recording_id."""
         ...
 

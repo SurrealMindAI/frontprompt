@@ -30,7 +30,7 @@ from typing import ClassVar
 import structlog
 
 from frontprompt.state.state import TranscriptionModelSpec
-from frontprompt.voice.transcription import ProgressCallback, TranscriptSegment, TranscriptionBackendStatus
+from frontprompt.voice.transcription import ProgressCallback, TranscriptionBackendStatus, TranscriptSegment
 
 _LOG = structlog.get_logger(__name__)
 
@@ -307,7 +307,7 @@ class MlxWhisperBackend:
         Raises:
             RuntimeError: If mlx_whisper transcription fails.
         """
-        import mlx_whisper  # lazy — Apple Silicon only  # noqa: PLC0415
+        import mlx_whisper  # lazy — Apple Silicon only
 
         _LOG.info("mlx_whisper.transcribe.start", audio_path=str(audio_path))
 

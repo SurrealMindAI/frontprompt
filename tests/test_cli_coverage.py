@@ -9,12 +9,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from frontprompt.cli import main
 from frontprompt.ipc.protocol import IpcResponse
-
 
 # ── _resolve_session error paths ──────────────────────────────────────────────
 
@@ -113,7 +111,6 @@ def test_state_command_emits_snapshot_json() -> None:
 
 def test_picks_list_emits_picks() -> None:
     """picks list sends GetPicksRequest and emits JSON."""
-    from pathlib import Path
 
     fake_sess = MagicMock(socket_path="/tmp/fp.sock", session_id="s1")
     data = [{"pick_id": "p1", "url": "https://example.com"}]
@@ -586,7 +583,6 @@ def test_bootstrap_voice_unknown_backend_status() -> None:
 
 def test_bootstrap_with_chromium_success() -> None:
     """bootstrap with chromium (default) calls playwright install."""
-    import subprocess
 
     fake_manifest = MagicMock(schema_version="0.7.0", bundle_size_bytes=1000)
     fake_result = MagicMock(returncode=0)

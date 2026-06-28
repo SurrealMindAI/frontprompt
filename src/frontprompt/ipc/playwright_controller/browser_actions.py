@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from playwright.async_api import ElementHandle, Error as PlaywrightError, Page
+from playwright.async_api import ElementHandle, Page
+from playwright.async_api import Error as PlaywrightError
 
 _LOG = structlog.get_logger(__name__)
 

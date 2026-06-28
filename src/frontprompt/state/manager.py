@@ -28,10 +28,8 @@ from frontprompt.state.state import (
     InspectorState,
     MicrophoneDevice,
     MicrophoneState,
-    NavigationEntry,
     OriginSessionGroup,
     OwnedVsForeign,
-    PageEventEntry,
     PanelId,
     PanelStateView,
     PanelView,
@@ -54,9 +52,9 @@ from frontprompt.state.state import (
     StateSummary,
     SummaryCounts,
     TimelineEntry,
-    TranscriptSegmentEntry,
     TranscriptionBackendStatus,
     TranscriptionState,
+    TranscriptSegmentEntry,
     hostname_for_url,
 )
 from frontprompt.voice.transcription import TranscriptionBackend
@@ -1083,9 +1081,7 @@ class StateManager:
         async with self._lock:
             recording = self._full_recordings.get(recording_id)
             if recording is None:
-                self._log.warning(
-                    "state.manager.add_assertion.unknown_recording", recording_id=recording_id
-                )
+                self._log.warning("state.manager.add_assertion.unknown_recording", recording_id=recording_id)
                 snap = self._post_mutate_locked()
             else:
                 now_ms = int(time.time() * 1000)
@@ -1129,14 +1125,13 @@ class StateManager:
         async with self._lock:
             recording = self._full_recordings.get(recording_id)
             if recording is None:
-                self._log.warning(
-                    "state.manager.delete_assertion.unknown_recording", recording_id=recording_id
-                )
+                self._log.warning("state.manager.delete_assertion.unknown_recording", recording_id=recording_id)
                 snap = self._post_mutate_locked()
             else:
                 before = len(recording.entries)
                 recording.entries = [
-                    e for e in recording.entries
+                    e
+                    for e in recording.entries
                     if not (e.kind == "assertion" and e.assertion_id == assertion_id)  # type: ignore[attr-defined]
                 ]
                 removed = before - len(recording.entries)
@@ -1172,9 +1167,7 @@ class StateManager:
         async with self._lock:
             recording = self._full_recordings.get(recording_id)
             if recording is None:
-                self._log.warning(
-                    "state.manager.update_assertion.unknown_recording", recording_id=recording_id
-                )
+                self._log.warning("state.manager.update_assertion.unknown_recording", recording_id=recording_id)
                 snap = self._post_mutate_locked()
             else:
                 mutated = False
@@ -1216,16 +1209,12 @@ class StateManager:
         async with self._lock:
             recording = self._full_recordings.get(recording_id)
             if recording is None:
-                self._log.warning(
-                    "state.manager.add_parameter.unknown_recording", recording_id=recording_id
-                )
+                self._log.warning("state.manager.add_parameter.unknown_recording", recording_id=recording_id)
                 snap = self._post_mutate_locked()
             else:
                 existing_names = {p.name for p in recording.parameters}
                 if param.name in existing_names:
-                    raise ValueError(
-                        f"Parameter name '{param.name}' already declared on recording {recording_id!r}."
-                    )
+                    raise ValueError(f"Parameter name '{param.name}' already declared on recording {recording_id!r}.")
                 recording.parameters.append(param)
                 self._log.info(
                     "state.manager.add_parameter",
@@ -1256,9 +1245,7 @@ class StateManager:
         """
         return self._persistence.get_replay_report(replay_id)
 
-    async def list_replay_reports_meta(
-        self, recording_id: str | None = None
-    ) -> list[ReplayReportMeta]:
+    async def list_replay_reports_meta(self, recording_id: str | None = None) -> list[ReplayReportMeta]:
         """Return lightweight ReplayReportMeta list from persistence.
 
         Lock-free read. Optionally filtered by recording_id.
@@ -1267,9 +1254,7 @@ class StateManager:
 
     # ----- Replay progress (backendState, broadcasts) ----------------
 
-    async def set_active_replay_progress(
-        self, progress: ReplayProgress | None
-    ) -> StateSnapshot:
+    async def set_active_replay_progress(self, progress: ReplayProgress | None) -> StateSnapshot:
         """Update RecordingsState.active_replay_progress + broadcast snapshot.
 
         ``None`` = no active replay (cleared after replay finishes or is aborted).
@@ -1432,7 +1417,10 @@ class StateManager:
         """
         new_hash = frozenset(d.device_id for d in devices)
         # Check topology hash outside lock (read-only access to current hash)
-        if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
+        if (
+            new_hash == self._microphone_topology_hash
+            and system_default_device_id == self._microphone_state.system_default_device_id
+        ):
             # No change — broadcast SKIPPED (idempotent; avoids a snapshot per poll).
             # Logged so the "no devices ever reached the overlay" class of bug is
             # distinguishable from "broadcast emitted but dropped downstream".
@@ -1445,7 +1433,10 @@ class StateManager:
 
         async with self._lock:
             # Re-check inside lock (double-checked locking — benign if same watcher)
-            if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
+            if (
+                new_hash == self._microphone_topology_hash
+                and system_default_device_id == self._microphone_state.system_default_device_id
+            ):
                 self._log.debug(
                     "state.manager.update_microphone_state.skipped_no_change_relocked",
                     device_count=len(devices),

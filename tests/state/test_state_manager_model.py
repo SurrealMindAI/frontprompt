@@ -16,7 +16,6 @@ import pytest
 from frontprompt.state.persistence.in_memory import InMemoryPersistence
 from frontprompt.state.state import TranscriptionBackendInfo, TranscriptionState
 
-
 # ---------------------------------------------------------------------------
 # Fake backend (implements TranscriptionBackend Protocol)
 # ---------------------------------------------------------------------------
@@ -143,6 +142,7 @@ async def test_set_mlx_whisper_model_updates_backend_selected_model_id() -> None
 @pytest.mark.anyio
 async def test_set_mlx_whisper_model_reprobes_status() -> None:
     """COL-2: after set_model, status is re-probed; stale 'ready' does not leak."""
+
     class _NeedsDownloadBackend(_FakeBackend):
         def probe_status(self) -> str:
             # Before set_model: ready; after set_model: needs_download

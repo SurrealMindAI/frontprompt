@@ -14,14 +14,12 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import ClassVar
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import anyio
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers — fake backend + counting StateManager
@@ -118,15 +116,11 @@ class _CountingStateManager:
         # Simulate the recording for timestamp_ms verification
         self._started_at_ms = started_at_ms
 
-    async def set_transcription_status(
-        self, recording_id: str, status: str, error: str | None = None
-    ) -> object:
+    async def set_transcription_status(self, recording_id: str, status: str, error: str | None = None) -> object:
         self._transcription_status_calls.append((recording_id, status, error))
         return MagicMock()
 
-    async def append_transcript_segments(
-        self, recording_id: str, segments: list, backend_id: str = ""
-    ) -> object:
+    async def append_transcript_segments(self, recording_id: str, segments: list, backend_id: str = "") -> object:
         self._lock_acquire_count += 1
         self._append_calls.append((recording_id, segments, backend_id))
         return MagicMock()
@@ -283,8 +277,9 @@ async def test_post_processor_backend_exception_sets_failed_status() -> None:
     assert ("rec-005", "failed") in statuses, f"Expected 'failed' status, got: {statuses}"
 
     # transcription_error is set
-    error_calls = [(rec_id, status, error) for rec_id, status, error in sm._transcription_status_calls
-                   if status == "failed"]
+    error_calls = [
+        (rec_id, status, error) for rec_id, status, error in sm._transcription_status_calls if status == "failed"
+    ]
     assert len(error_calls) == 1
     assert error_calls[0][2] is not None, "transcription_error must be set on failure"
     assert "transcription engine crashed" in error_calls[0][2]

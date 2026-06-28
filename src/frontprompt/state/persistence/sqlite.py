@@ -434,7 +434,6 @@ class SqlitePersistence:
             relations=len(inspector_state.relations),
         )
 
-
     # ------------------------------------------------------------------
     # Recording-domain (sub-plan 01)
     # ------------------------------------------------------------------
@@ -459,7 +458,7 @@ class SqlitePersistence:
             transcription_error  = excluded.transcription_error
     """
 
-    def upsert_recording(self, recording: "Recording") -> None:
+    def upsert_recording(self, recording: Recording) -> None:
         """Insert-or-replace one recording keyed on ``recording_id``. Idempotent.
 
         Stores recording metadata + voice-over fields; timeline entries are NOT
@@ -511,7 +510,7 @@ class SqlitePersistence:
             return
         self._log.debug("state.persistence.sqlite.delete_recording.ok", recording_id=recording_id)
 
-    def load_recordings(self) -> "list[Recording]":
+    def load_recordings(self) -> list[Recording]:
         """Return all recordings with their timeline entries, ordered by started_at_ms.
 
         Reads voice-over columns (has_voice_over, audio_path, transcription_status,
@@ -600,7 +599,7 @@ class SqlitePersistence:
             payload_json = excluded.payload_json
     """
 
-    def append_timeline_entry(self, recording_id: str, entry: "TimelineEntry") -> None:
+    def append_timeline_entry(self, recording_id: str, entry: TimelineEntry) -> None:
         """Append a single timeline entry to an existing recording. Append-only at runtime."""
         try:
             with self._conn:
@@ -668,7 +667,7 @@ class SqlitePersistence:
         ON CONFLICT (key) DO UPDATE SET value = excluded.value
     """
 
-    def save_settings(self, settings: "SettingsState") -> None:
+    def save_settings(self, settings: SettingsState) -> None:
         """Persist durable voice-over settings to the settings key-value table.
 
         Writes two rows: ``voice_over_enabled`` and ``selected_transcription_backend_id``.
@@ -692,7 +691,7 @@ class SqlitePersistence:
             return
         self._log.debug("state.persistence.sqlite.save_settings.ok")
 
-    def load_settings(self) -> "SettingsState | None":
+    def load_settings(self) -> SettingsState | None:
         """Load voice-over settings from the settings key-value table.
 
         Returns ``None`` when neither ``voice_over_enabled`` nor
@@ -738,9 +737,7 @@ class SqlitePersistence:
 
     def load_mic_device_id(self) -> int | None:
         """Load persisted microphone device id. Returns None when not set."""
-        row = self._conn.execute(
-            "SELECT value FROM settings WHERE key = 'selected_mic_device_id'"
-        ).fetchone()
+        row = self._conn.execute("SELECT value FROM settings WHERE key = 'selected_mic_device_id'").fetchone()
         if row is None or not row[0]:
             return None
         try:
@@ -770,9 +767,7 @@ class SqlitePersistence:
 
         Schema 0.11.0+.
         """
-        row = self._conn.execute(
-            "SELECT value FROM settings WHERE key = 'mlx_whisper_model_id'"
-        ).fetchone()
+        row = self._conn.execute("SELECT value FROM settings WHERE key = 'mlx_whisper_model_id'").fetchone()
         if row is None or not row[0]:
             return None
         return row[0]
@@ -799,7 +794,7 @@ class SqlitePersistence:
             updated_at        = excluded.updated_at
     """
 
-    def save_replay_report(self, report: "ReplayReport") -> None:
+    def save_replay_report(self, report: ReplayReport) -> None:
         """Insert-or-replace one ReplayReport keyed on replay_id.
 
         JSON blobs for ``parameters`` and ``step_results`` (WAL pattern
@@ -831,7 +826,7 @@ class SqlitePersistence:
             return
         self._log.debug("state.persistence.sqlite.save_replay_report.ok", replay_id=report.replay_id)
 
-    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+    def get_replay_report(self, replay_id: str) -> ReplayReport | None:
         """Retrieve a ReplayReport by replay_id. Returns None when not found."""
         import json
 
@@ -846,7 +841,17 @@ class SqlitePersistence:
         if row is None:
             return None
 
-        r_id, recording_id, status, started_at_ms, ended_at_ms, parameters_json, step_results_json, error, origin_session = row
+        (
+            r_id,
+            recording_id,
+            status,
+            started_at_ms,
+            ended_at_ms,
+            parameters_json,
+            step_results_json,
+            error,
+            origin_session,
+        ) = row
 
         try:
             parameters = json.loads(parameters_json)
@@ -886,7 +891,7 @@ class SqlitePersistence:
             origin_session=origin_session,
         )
 
-    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> list[ReplayReportMeta]:
         """Return lightweight ReplayReportMeta list, optionally filtered by recording_id.
 
         ``step_count``, ``passed_assertions``, and ``failed_assertions`` are derived
@@ -943,6 +948,7 @@ class SqlitePersistence:
             )
         self._log.debug("state.persistence.sqlite.list_replay_reports_meta.ok", count=len(results))
         return results
+
 
 # ---------------------------------------------------------------------------
 # Factory

@@ -77,8 +77,8 @@ from frontprompt.overlay import (
     load_overlay_bundle,
 )
 from frontprompt.state import StateManager, StateSnapshot
-from frontprompt.state.state import NavigationEntry, TranscriptionBackendInfo, TranscriptionState
 from frontprompt.state.persistence import make_persistence
+from frontprompt.state.state import NavigationEntry, TranscriptionBackendInfo, TranscriptionState
 
 if TYPE_CHECKING:
     import anyio.abc
@@ -193,6 +193,7 @@ class ShowSession:
         self._mic_watcher: object | None = None
         self._voice_over_recording_ids: set[str] = set()
         from frontprompt.voice.post_processor import PostProcessor
+
         self._post_processor = PostProcessor()
 
     def handler_count(self) -> int:
@@ -416,9 +417,7 @@ class ShowSession:
             # Resolve the active transcription backend.
             from frontprompt.voice.transcription import select_backend
 
-            active_backend = select_backend(
-                self._sm.snapshot().settings_state.selected_transcription_backend_id
-            )
+            active_backend = select_backend(self._sm.snapshot().settings_state.selected_transcription_backend_id)
             if active_backend is not None and self._tg is not None:
                 self._tg.start_soon(
                     self._post_processor.run,

@@ -84,6 +84,22 @@ Transcription-Model-Catalog-Typen (voiceover-models sub-plan 01):
 
 from __future__ import annotations
 
+# Re-exports from bridge messages SSoT
+from frontprompt.bridge.messages import (
+    AssertionAddedToRecordingRequested,
+    AssertionDeletedRequested,
+    AssertionUpdatedRequested,
+    RecordedEventCapturedRequested,
+    RecordingRenameRequested,
+    RecordingSelectedRequested,
+    RecordingStartRequested,
+    RecordingStopRequested,
+    SetMicDeviceRequested,
+    SetTranscriptionBackendRequested,
+    SetTranscriptionModelRequested,
+    TriggerModelDownloadRequested,
+)
+
 # Re-exports from state SSoT — intentional, no duplication
 from frontprompt.state.state import (
     AssertionComparator,
@@ -112,24 +128,8 @@ from frontprompt.state.state import (
     TranscriptionBackendStatus,
     TranscriptionModelSpec,
     TranscriptionState,
-    TranscriptSegmentEntry,
     TranscriptionStatus,
-)
-
-# Re-exports from bridge messages SSoT
-from frontprompt.bridge.messages import (
-    AssertionAddedToRecordingRequested,
-    AssertionDeletedRequested,
-    AssertionUpdatedRequested,
-    RecordedEventCapturedRequested,
-    RecordingRenameRequested,
-    RecordingSelectedRequested,
-    RecordingStartRequested,
-    RecordingStopRequested,
-    SetMicDeviceRequested,
-    SetTranscriptionBackendRequested,
-    SetTranscriptionModelRequested,
-    TriggerModelDownloadRequested,
+    TranscriptSegmentEntry,
 )
 
 # ============================================================================

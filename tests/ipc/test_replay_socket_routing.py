@@ -34,7 +34,6 @@ from frontprompt.ipc.protocol import (
 from frontprompt.state import StateManager
 from tests.ipc.fakes import FakePageAnalyzer, FakePageController
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

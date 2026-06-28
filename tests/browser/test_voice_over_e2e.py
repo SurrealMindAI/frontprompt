@@ -46,7 +46,6 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import anyio
 import pytest
@@ -130,7 +129,7 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
 
     assert _FIXTURE_WAV.is_file(), (
         f"Fixture WAV missing: {_FIXTURE_WAV}. "
-        f"Generate with: python -c \"import wave, struct, math; ...\" (see sub-plan 06)"
+        f'Generate with: python -c "import wave, struct, math; ..." (see sub-plan 06)'
     )
 
     # Compute the bootstrap dir path (tests/_subprocess_bootstrap/)
@@ -145,9 +144,7 @@ def _setup_provider(playground_server: str) -> Iterator[None]:
     # Inject: PYTHONPATH prepended + voice + mic markers set (both inherited by child)
     os.environ["FRONTPROMPT_E2E_VOICE_INJECT"] = str(_FIXTURE_WAV)
     os.environ["FRONTPROMPT_E2E_MIC_INJECT"] = "1"  # V7: fake sounddevice with 1 input device
-    os.environ["PYTHONPATH"] = (
-        _bootstrap_dir + (":" + _existing_pythonpath if _existing_pythonpath else "")
-    )
+    os.environ["PYTHONPATH"] = _bootstrap_dir + (":" + _existing_pythonpath if _existing_pythonpath else "")
 
     _tmp_dir = Path(tempfile.mkdtemp(prefix="fp-e2e-voiceover-", dir="/tmp"))
     _playground_base = playground_server
@@ -258,10 +255,7 @@ async def _wait_for_transcription_status(
                 return rec.data  # type: ignore[return-value]
             if status == "failed" and expected_status != "failed":
                 error = rec.data.get("transcription_error", "")
-                raise AssertionError(
-                    f"transcription_status='failed' (expected {expected_status!r}). "
-                    f"Error: {error!r}"
-                )
+                raise AssertionError(f"transcription_status='failed' (expected {expected_status!r}). Error: {error!r}")
         await anyio.sleep(0.1)
     # Final fetch for error message
     rec = await query(sock, GetRecordingRequest(recording_id=recording_id))
@@ -387,8 +381,7 @@ async def test_voice_over_full_round_trip(anyio_backend: str) -> None:
         f"Expected start_ms={_MOCK_SEGMENT_1_START_MS}, got {by_start[1]['start_ms']}"
     )
     assert by_start[1]["timestamp_ms"] == started_at_ms + _MOCK_SEGMENT_1_START_MS, (
-        f"timestamp_ms mismatch: expected {started_at_ms + _MOCK_SEGMENT_1_START_MS}, "
-        f"got {by_start[1]['timestamp_ms']}"
+        f"timestamp_ms mismatch: expected {started_at_ms + _MOCK_SEGMENT_1_START_MS}, got {by_start[1]['timestamp_ms']}"
     )
 
     # text matches mock backend fixture
@@ -401,9 +394,7 @@ async def test_voice_over_full_round_trip(anyio_backend: str) -> None:
 
     # backend_id == "mock"
     for entry in transcript_entries:
-        assert entry.get("backend_id") == "mock", (
-            f"Expected backend_id='mock', got {entry.get('backend_id')!r}"
-        )
+        assert entry.get("backend_id") == "mock", f"Expected backend_id='mock', got {entry.get('backend_id')!r}"
 
     # seq is gap-free monotonic across ALL entries
     seqs = [e["seq"] for e in entries]
@@ -421,18 +412,12 @@ async def test_voice_over_full_round_trip(anyio_backend: str) -> None:
     )
 
     # audio_path is set (fixture WAV was copied to session dir)
-    assert rec_data.get("audio_path") is not None, (
-        "Expected audio_path to be set after voice-over recording"
-    )
-    assert Path(rec_data["audio_path"]).exists(), (
-        f"audio_path file does not exist: {rec_data['audio_path']!r}"
-    )
+    assert rec_data.get("audio_path") is not None, "Expected audio_path to be set after voice-over recording"
+    assert Path(rec_data["audio_path"]).exists(), f"audio_path file does not exist: {rec_data['audio_path']!r}"
 
     # --- UI assertion (MIS-005): shadow-DOM renders the recording ---
     click_result = await _click_recordings_tab(sock)
-    assert click_result == "clicked", (
-        f"Expected Recordings tab to be found and clicked, got: {click_result!r}"
-    )
+    assert click_result == "clicked", f"Expected Recordings tab to be found and clicked, got: {click_result!r}"
     await anyio.sleep(0.4)  # Svelte reactive render barrier
 
     shadow_text = await _read_shadow_text(sock)
@@ -554,8 +539,7 @@ async def test_settings_bridge_round_trips(anyio_backend: str) -> None:
 
     # SetMicDeviceRequested: None → assert selected_device_id == None
     set_mic_none_expr = (
-        f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', "
-        f"mic_device_id: null}})"
+        f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', mic_device_id: null}})"
     )
     await query(sock, EvalJsRequest(expression=set_mic_none_expr, mutating=True))
     await anyio.sleep(0.2)
@@ -569,10 +553,7 @@ async def test_settings_bridge_round_trips(anyio_backend: str) -> None:
     )
 
     # SetMicDeviceRequested: 0 → assert selected_device_id == 0
-    set_mic_0_expr = (
-        f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', "
-        f"mic_device_id: 0}})"
-    )
+    set_mic_0_expr = f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', mic_device_id: 0}})"
     await query(sock, EvalJsRequest(expression=set_mic_0_expr, mutating=True))
     await anyio.sleep(0.2)
 
@@ -586,8 +567,7 @@ async def test_settings_bridge_round_trips(anyio_backend: str) -> None:
 
     # SetTranscriptionBackendRequested: "mock" → assert settings updated
     set_backend_expr = (
-        f"window.__fp({{kind: 'set_transcription_backend_requested', schema_version: '{_SCHEMA}', "
-        f"backend_id: 'mock'}})"
+        f"window.__fp({{kind: 'set_transcription_backend_requested', schema_version: '{_SCHEMA}', backend_id: 'mock'}})"
     )
     await query(sock, EvalJsRequest(expression=set_backend_expr, mutating=True))
     await anyio.sleep(0.2)
@@ -601,10 +581,7 @@ async def test_settings_bridge_round_trips(anyio_backend: str) -> None:
     )
 
     # Reset mic device to None (clean up for subsequent tests)
-    reset_expr = (
-        f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', "
-        f"mic_device_id: null}})"
-    )
+    reset_expr = f"window.__fp({{kind: 'set_mic_device_requested', schema_version: '{_SCHEMA}', mic_device_id: null}})"
     await query(sock, EvalJsRequest(expression=reset_expr, mutating=True))
 
 
@@ -691,14 +668,11 @@ async def test_voice_over_record_start_via_bridge(anyio_backend: str) -> None:
                 break
         await anyio.sleep(0.1)
 
-    assert rec_data is not None, (
-        "V5: transcription never reached done/failed after recording stop"
-    )
+    assert rec_data is not None, "V5: transcription never reached done/failed after recording stop"
 
     # has_voice_over must be True — fixture WAV was copied by the audio_capture override
     assert rec_data.get("has_voice_over") is True, (
-        f"V5: expected has_voice_over=True (fixture WAV injected), "
-        f"got {rec_data.get('has_voice_over')!r}"
+        f"V5: expected has_voice_over=True (fixture WAV injected), got {rec_data.get('has_voice_over')!r}"
     )
 
     # transcription_status must not be 'none' (PostProcessor ran)
@@ -760,8 +734,7 @@ async def test_model_switch_via_bridge(anyio_backend: str) -> None:
 
     # COL-1: switch backend and verify mlx_whisper_model_id is preserved
     set_backend_expr = (
-        f"window.__fp({{kind: 'set_transcription_backend_requested', schema_version: '0.11.0', "
-        f"backend_id: 'mock'}})"
+        "window.__fp({kind: 'set_transcription_backend_requested', schema_version: '0.11.0', backend_id: 'mock'})"
     )
     await query(sock, EvalJsRequest(expression=set_backend_expr, mutating=True))
     await anyio.sleep(0.2)
@@ -776,8 +749,8 @@ async def test_model_switch_via_bridge(anyio_backend: str) -> None:
 
     # Reset model selection (clean up)
     reset_model_expr = (
-        f"window.__fp({{kind: 'set_transcription_model_requested', schema_version: '0.11.0', "
-        f"backend_id: 'mock', model_id: null}})"
+        "window.__fp({kind: 'set_transcription_model_requested', schema_version: '0.11.0', "
+        "backend_id: 'mock', model_id: null})"
     )
     await query(sock, EvalJsRequest(expression=reset_model_expr, mutating=True))
 
@@ -825,9 +798,7 @@ async def test_mic_devices_populated(anyio_backend: str) -> None:
     snap_final = await query(sock, GetSnapshotRequest())
     assert snap_final.ok
     final_mic = snap_final.data.get("microphone_state")
-    assert final_mic is not None, (
-        "V7: microphone_state is None in snapshot — MicrophoneWatcher never ran"
-    )
+    assert final_mic is not None, "V7: microphone_state is None in snapshot — MicrophoneWatcher never ran"
     assert isinstance(final_mic.get("devices"), list), (
         f"V7: microphone_state.devices is not a list: {final_mic.get('devices')!r}"
     )
@@ -837,8 +808,7 @@ async def test_mic_devices_populated(anyio_backend: str) -> None:
     if mic_inject_active and mic_state is not None:
         device_names = [d.get("name", "") for d in mic_state["devices"]]
         assert any("Fake Microphone" in name for name in device_names), (
-            f"V7: expected 'Fake Microphone' device from MIC_INJECT seam, "
-            f"got devices: {device_names!r}"
+            f"V7: expected 'Fake Microphone' device from MIC_INJECT seam, got devices: {device_names!r}"
         )
     elif mic_inject_active and mic_state is None:
         # Mic inject active but watcher hasn't broadcasted yet — robust xfail

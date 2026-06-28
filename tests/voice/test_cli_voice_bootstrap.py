@@ -11,14 +11,11 @@ Tests verify:
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from frontprompt.cli import main
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

@@ -124,9 +124,7 @@ def test_recording_stop_requested_routes_via_outbound() -> None:
 def test_recording_stop_requested_missing_recording_id_fails() -> None:
     """recording_id is required — missing raises ValidationError."""
     with pytest.raises(ValidationError):
-        _outbound().validate_python(
-            {"kind": "recording_stop_requested", "schema_version": "0.8.0"}
-        )
+        _outbound().validate_python({"kind": "recording_stop_requested", "schema_version": "0.8.0"})
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +136,7 @@ def test_recording_rename_requested_carries_all_fields() -> None:
     """recording_id, name, description all required and preserved."""
     from frontprompt.bridge.messages import RecordingRenameRequested
 
-    msg = RecordingRenameRequested(
-        recording_id="rec-uuid-1", name="Renamed Flow", description="New desc"
-    )
+    msg = RecordingRenameRequested(recording_id="rec-uuid-1", name="Renamed Flow", description="New desc")
     assert msg.recording_id == "rec-uuid-1"
     assert msg.name == "Renamed Flow"
     assert msg.description == "New desc"
@@ -294,8 +290,6 @@ def test_existing_outbound_variants_still_route() -> None:
         InspectorActivateRequested,
         OverlayReady,
         PanelToggleRequested,
-        RegionCreatedRequested,
-        RelationCreatedRequested,
     )
 
     cases = [

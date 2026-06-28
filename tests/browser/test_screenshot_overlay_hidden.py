@@ -42,6 +42,7 @@ _INJECT_OVERLAY_JS = f"""() => {{
     document.body.appendChild(host);
 }}"""
 
+
 def _chromium_binary_available() -> bool:
     candidates = [
         Path.home() / "Library" / "Caches" / "ms-playwright",

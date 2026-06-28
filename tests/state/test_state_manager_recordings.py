@@ -8,8 +8,6 @@ append_timeline_entry (non-broadcast), auto-link (add_pick/add_region/add_relati
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from frontprompt.state import StateManager
@@ -190,9 +188,7 @@ async def test_entry_count_reflects_appended_entries_after_stop() -> None:
 
     # Next real broadcast (stop) must carry the correct entry_count.
     stopped_snap = await sm.stop_recording(recording_id)
-    stopped_meta = next(
-        r for r in stopped_snap.recordings_state.recordings if r.recording_id == recording_id
-    )
+    stopped_meta = next(r for r in stopped_snap.recordings_state.recordings if r.recording_id == recording_id)
     assert stopped_meta.entry_count == n
 
     # And the lightweight read API agrees.
@@ -245,9 +241,7 @@ async def test_rename_recording() -> None:
 
     renamed_snap = await sm.rename_recording(recording_id, name="New Name", description="new desc")
 
-    renamed_meta = next(
-        r for r in renamed_snap.recordings_state.recordings if r.recording_id == recording_id
-    )
+    renamed_meta = next(r for r in renamed_snap.recordings_state.recordings if r.recording_id == recording_id)
     assert renamed_meta.name == "New Name"
     assert renamed_meta.description == "new desc"
 
@@ -348,7 +342,9 @@ async def test_append_timeline_entry_monotonic_across_all_kinds() -> None:
     assert recording_id is not None
 
     click = _make_page_event()
-    nav = NavigationEntry(kind="navigation", seq=99, timestamp_ms=2000, from_url="https://a.com", to_url="https://b.com")
+    nav = NavigationEntry(
+        kind="navigation", seq=99, timestamp_ms=2000, from_url="https://a.com", to_url="https://b.com"
+    )
     pick_ref = PickRefEntry(kind="pick_ref", seq=99, timestamp_ms=3000, pick_id="pick-001")
 
     await sm.append_timeline_entry(recording_id, click)

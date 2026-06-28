@@ -22,7 +22,6 @@ import pytest
 from frontprompt.browser.errors import BrowserNotReadyError, NavigationError, PageEvaluationError
 from frontprompt.browser.manager import BrowserSessionManager, _chromium_present
 
-
 # ── _chromium_present ─────────────────────────────────────────────────────────
 
 

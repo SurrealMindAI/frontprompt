@@ -618,9 +618,7 @@ class AddAssertionRequest(BaseModel):
         default=None,
         description="Erwarteter Wert; None für selector_exists und visible.",
     )
-    comparator: AssertionComparator = Field(
-        description="Vergleichsoperator; 'none' für selector_exists und visible."
-    )
+    comparator: AssertionComparator = Field(description="Vergleichsoperator; 'none' für selector_exists und visible.")
     description: str = Field(
         default="",
         description="Human-readable Label für Report-Anzeige.",

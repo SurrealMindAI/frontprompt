@@ -199,6 +199,7 @@ async def _dispatch(
         if existing is None:
             return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
         from uuid import uuid4 as _uuid4
+
         assertion_id = str(_uuid4())
         entry_payload: dict[str, Any] = {
             "assertion_id": assertion_id,
@@ -209,9 +210,7 @@ async def _dispatch(
             "comparator": request.comparator,
             "description": request.description,
         }
-        await state_manager.add_assertion_to_timeline(
-            request.recording_id, entry_payload, request.insert_after_seq
-        )
+        await state_manager.add_assertion_to_timeline(request.recording_id, entry_payload, request.insert_after_seq)
         updated = state_manager.get_recording(request.recording_id)
         seq = 0
         if updated is not None:
@@ -231,6 +230,7 @@ async def _dispatch(
         if recording is None:
             return IpcResponse(ok=False, error=f"recording not found: {request.recording_id}")
         from frontprompt.ipc.replay_player import ReplayPlayer as _ReplayPlayer
+
         player = _ReplayPlayer(
             recording=recording,
             parameters=request.parameters,

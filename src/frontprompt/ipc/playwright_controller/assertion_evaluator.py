@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from playwright.async_api import Error as PlaywrightError, Page
+from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import Page
 
 from frontprompt.state.state import AssertionEntry
 

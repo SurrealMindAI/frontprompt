@@ -123,9 +123,7 @@ async def test_find_by_regex_with_parent_pick() -> None:
     </body></html>"""
     pa = PageAnalyzer(page=_FakePage(html=html), resolver=None, state_manager=_FakeSM())
     parent_pick = _make_pick("#scope")
-    result = await pa.find_by_regex(
-        pattern=r"\d+", field="text", parent_pick=parent_pick, comment="test", limit=5
-    )
+    result = await pa.find_by_regex(pattern=r"\d+", field="text", parent_pick=parent_pick, comment="test", limit=5)
     assert result is not None
 
 

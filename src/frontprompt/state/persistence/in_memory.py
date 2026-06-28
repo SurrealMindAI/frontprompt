@@ -41,9 +41,9 @@ class InMemoryPersistence:
     def __init__(self) -> None:
         self._log = _LOG.bind(impl="in_memory")
         # Recording in-memory store: recording_id -> Recording
-        self._recordings: dict[str, "Recording"] = {}
+        self._recordings: dict[str, Recording] = {}
         # Replay report in-memory store: replay_id -> ReplayReport
-        self._replay_reports: dict[str, "ReplayReport"] = {}
+        self._replay_reports: dict[str, ReplayReport] = {}
         # Model selection in-memory store (Schema 0.11.0+)
         self._mlx_whisper_model_id: str | None = None
 
@@ -93,7 +93,7 @@ class InMemoryPersistence:
 
     # ----- Recording write-through (sub-plan 01) --- in-memory dict store -----
 
-    def upsert_recording(self, recording: "Recording") -> None:
+    def upsert_recording(self, recording: Recording) -> None:
         """In-memory upsert — last-write-wins by recording_id."""
         self._recordings[recording.recording_id] = recording.model_copy(deep=True)
         self._log.debug("state.persistence.upsert_recording.in_memory", recording_id=recording.recording_id)
@@ -103,11 +103,11 @@ class InMemoryPersistence:
         self._recordings.pop(recording_id, None)
         self._log.debug("state.persistence.delete_recording.in_memory", recording_id=recording_id)
 
-    def load_recordings(self) -> "list[Recording]":
+    def load_recordings(self) -> list[Recording]:
         """Return all in-memory recordings sorted by started_at_ms."""
         return sorted(self._recordings.values(), key=lambda r: r.started_at_ms)
 
-    def append_timeline_entry(self, recording_id: str, entry: "TimelineEntry") -> None:
+    def append_timeline_entry(self, recording_id: str, entry: TimelineEntry) -> None:
         """Append entry to the in-memory recording's entries list."""
         if recording_id not in self._recordings:
             self._log.warning("state.persistence.append_timeline_entry.unknown", recording_id=recording_id)
@@ -141,12 +141,12 @@ class InMemoryPersistence:
 
     # ----- Voice-over settings persistence (sub-plan 01) --- no-op stubs -----
 
-    def save_settings(self, settings: "SettingsState") -> None:
+    def save_settings(self, settings: SettingsState) -> None:
         """No-op — InMemoryPersistence does not persist settings across restarts."""
         del settings
         self._log.debug("state.persistence.save_settings.in_memory_no_op")
 
-    def load_settings(self) -> "SettingsState | None":
+    def load_settings(self) -> SettingsState | None:
         """Returns None — no persistent settings in InMemoryPersistence."""
         self._log.debug("state.persistence.load_settings.in_memory_no_op")
         return None
@@ -173,16 +173,16 @@ class InMemoryPersistence:
 
     # ----- Replay-report write-through (sub-plan 01) --- in-memory dict store -----
 
-    def save_replay_report(self, report: "ReplayReport") -> None:
+    def save_replay_report(self, report: ReplayReport) -> None:
         """In-memory upsert — last-write-wins by replay_id."""
         self._replay_reports[report.replay_id] = report.model_copy(deep=True)
         self._log.debug("state.persistence.save_replay_report.in_memory", replay_id=report.replay_id)
 
-    def get_replay_report(self, replay_id: str) -> "ReplayReport | None":
+    def get_replay_report(self, replay_id: str) -> ReplayReport | None:
         """Retrieve by replay_id. Returns None when not found."""
         return self._replay_reports.get(replay_id)
 
-    def list_replay_reports_meta(self, recording_id: str | None = None) -> "list[ReplayReportMeta]":
+    def list_replay_reports_meta(self, recording_id: str | None = None) -> list[ReplayReportMeta]:
         """Return lightweight ReplayReportMeta list, optionally filtered by recording_id."""
         from frontprompt.state.state import ReplayReportMeta
 
