@@ -58,57 +58,35 @@ half-finished drag, which tab is open, a transient hover — is local state and
 is allowed to die with the page. Hand-writing a piece of would-be-durable state
 as local state is the classic regression this boundary prevents.
 
-## ASCII architecture
+## Architecture at a glance
 
-```
-   ┌─────────────────────────────────────────────────────────────────┐
-   │  Python CLI Process  (frontprompt show <url>)                   │
-   │                                                                 │
-   │   BrowserSessionMgr ──► OverlayInjector ──► add_init_script     │
-   │   BridgeManager ──► expose_function dispatch (in/out)           │
-   │                                                                 │
-   │   StateManager (anyio.Lock single-writer)                       │
-   │     ├─ PanelStateView                                           │
-   │     ├─ InspectorState                                           │
-   │     │    ├─ picks: list[Pick]            (color_index, fp, rect)│
-   │     │    ├─ regions: list[Region]        (page-abs rect, members│
-   │     │    │                                viewport_snapshot,    │
-   │     │    │                                color_index)          │
-   │     │    ├─ relations: list[Relation]    (hetero: pick|region)  │
-   │     │    ├─ active_pick_id / active_region_id (mutually excl.)  │
-   │     │    └─ active flag (inspector mode)                        │
-   │     └─ SQLite persistence (WAL + JSON-blob)                     │
-   └──────────────────────────┬──────────────────────────────────────┘
-                              │  expose_function (Playwright)
-                              ▼
-   ┌─────────────────────────────────────────────────────────────────┐
-   │  Page (any origin) — <fp-overlay> Svelte customElement          │
-   │                                                                 │
-   │   window.__fp (single namespace, callable + dispatch + version) │
-   │                                                                 │
-   │   ╭─ backendState (mirror, $state-based) ───────────────────╮   │
-   │   │  panel + inspector (hydrated on OverlayReady)           │   │
-   │   ╰─────────────────────────────────────────────────────────╯   │
-   │                                                                 │
-   │   ╭─ localState (dies-with-page) ──────────────────────────╮    │
-   │   │  bridgeLog · uiPrefs (tab+visibilities+hover)          │    │
-   │   │  pageTool (inspector OR region-draft active?)          │    │
-   │   │  pickClaim (single-claim-at-a-time coordinator)        │    │
-   │   ╰────────────────────────────────────────────────────────╯    │
-   │                                                                 │
-   │   ╭─ Inspector-Layers ─────────────────────────────────────╮    │
-   │   │  InspectorLayer    — click-pick (one element)          │    │
-   │   │  DrawRegionLayer   — drag-rect (region+auto-picks)     │    │
-   │   │  RelationsLayer    — SVG overlay (picks, regions, edges│    │
-   │   │                       — ground-truth live-DOM render)  │    │
-   │   ╰────────────────────────────────────────────────────────╯    │
-   │                                                                 │
-   │   ╭─ HUD (4 panels: top/bottom/left/right) ────────────────╮    │
-   │   │  Toolbar (4 stat-pills: events/picks/regions/relations)│    │
-   │   │  LeftPanel: Picks · Regions · Relations · Events tabs  │    │
-   │   │  RightPanel: PickDetails | RegionDetails (mutex)       │    │
-   │   ╰────────────────────────────────────────────────────────╯    │
-   └─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph PY["Python process — frontprompt show url"]
+    direction TB
+    BSM["BrowserSessionMgr"] --> OI["OverlayInjector"] --> AIS["page.add_init_script"]
+    BM["BridgeManager — expose_function dispatch"]
+    SM["StateManager — anyio.Lock single-writer"]
+    SM --> PANEL["PanelState"]
+    SM --> INSP["InspectorState — picks · regions · relations"]
+    SM --> DB[("SQLite — WAL + JSON blob")]
+  end
+
+  subgraph PAGE["Page, any origin — fp-overlay shadow DOM"]
+    direction TB
+    FP["window.__fp — single namespace"]
+    BE["backendState mirror — panel + inspector"]
+    LS["localState — bridgeLog · uiPrefs · pageTool"]
+    LAY["Inspector layers — pick · region · relations SVG"]
+    HUD["HUD — toolbar + 4 panels"]
+    FP --> BE
+    FP --> LS
+    BE --> LAY
+    BE --> HUD
+  end
+
+  AIS -. injects overlay .-> FP
+  BM <-. expose_function .-> FP
 ```
 
 ## The bridge: `expose_function`, no HTTP
@@ -172,6 +150,22 @@ shadow boundary resolves cleanly.
   codegen → vite → embed into `_overlay/`; `--wheel` then packages a
   self-contained wheel.
 - `cli.py` — entry-point wiring for the `frontprompt` command.
+- `ipc/` — the per-session unix socket (`show.sock`) exposing a **read-only**
+  state API, plus the Playwright **page controller** (navigate, screenshots,
+  DOM readers, xpath/element resolution, assertion evaluation) and the
+  **replay player**. Every `frontprompt show` serves one; the CLI debug
+  subcommands and the MCP daemon both drive it. Daemon-singleton is **not**
+  enforced — multiple `show` instances run in parallel, each in its own
+  session directory.
+- `analysis/` — the **PageAnalyzer** service layer (page outline, finders,
+  element inspection, snapshot, pick relocation) that backs the agent-facing
+  scout tools. Scrapling stays behind an isolation seam
+  (`analysis/_impl/scrapling_bridge.py`).
+- `scrapling/` — the Scrapling **navigation substrate adapter**
+  (`ScraplingAdapter`, `SubstrateRouter`, `user_data_dir`): the thin, pinned
+  isolation boundary around the library (see the README risk note).
+- `voice/` — **voice-over** for recordings: audio capture, a microphone
+  watcher, and local transcription (`mlx-whisper` backend + model catalog).
 
 ### Frontend (`frontend/src/`)
 

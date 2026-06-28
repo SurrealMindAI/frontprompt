@@ -41,12 +41,16 @@ frontprompt/
 │   ├── _overlay/       # gitignored: build-embedded overlay bundle (ships in the wheel)
 │   ├── bridge/         # expose_function lifecycle + dispatch + Pydantic message-models
 │   ├── state/          # StateManager (single-writer) + Pydantic types + SQLite persistence
+│   ├── ipc/            # show.sock read-only API + Playwright page controller + replay player
+│   ├── analysis/       # PageAnalyzer scout tools (outline, finders, inspect) — Scrapling-isolated
+│   ├── scrapling/      # Scrapling navigation substrate adapter (pinned, isolated)
+│   ├── voice/          # voice-over: audio capture + mic watcher + mlx-whisper transcription
 │   ├── build/          # canonical build pipeline (python -m frontprompt.build)
 │   └── cli.py          # `frontprompt` entry point
 ├── frontend/
 │   └── src/            # Svelte overlay — bridge, backend-state, local-state, components, services
 │       └── _generated/ # gitignored: TS types generated from the Pydantic source of truth
-├── tests/              # python tests (browser, overlay, bridge, state)
+├── tests/              # python tests (browser, overlay, bridge, state, ipc, analysis, voice, arch)
 └── pyproject.toml
 ```
 
