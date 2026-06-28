@@ -93,7 +93,9 @@
     <h3 class="settings-section-title">Microphone</h3>
     <select
       class="mic-select"
-      value={backendState.mic.selectedDeviceId ?? ''}
+      value={backendState.mic.selectedDeviceId != null
+        ? String(backendState.mic.selectedDeviceId)
+        : ''}
       onchange={onMicChange}
     >
       <option value="">System default</option>

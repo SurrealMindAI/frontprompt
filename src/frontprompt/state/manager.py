@@ -1433,13 +1433,23 @@ class StateManager:
         new_hash = frozenset(d.device_id for d in devices)
         # Check topology hash outside lock (read-only access to current hash)
         if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
-            # No change — skip broadcast
-            self._log.debug("state.manager.update_microphone_state.no_change")
+            # No change — broadcast SKIPPED (idempotent; avoids a snapshot per poll).
+            # Logged so the "no devices ever reached the overlay" class of bug is
+            # distinguishable from "broadcast emitted but dropped downstream".
+            self._log.debug(
+                "state.manager.update_microphone_state.skipped_no_change",
+                device_count=len(devices),
+                system_default=system_default_device_id,
+            )
             return self.snapshot()
 
         async with self._lock:
             # Re-check inside lock (double-checked locking — benign if same watcher)
             if new_hash == self._microphone_topology_hash and system_default_device_id == self._microphone_state.system_default_device_id:
+                self._log.debug(
+                    "state.manager.update_microphone_state.skipped_no_change_relocked",
+                    device_count=len(devices),
+                )
                 snap = self._post_mutate_locked()
             else:
                 # Preserve selected_device_id
@@ -1448,10 +1458,15 @@ class StateManager:
                 self._microphone_state.system_default_device_id = system_default_device_id
                 self._microphone_state.selected_device_id = selected
                 self._microphone_topology_hash = new_hash
+                # Broadcast EMITTED — include the full device inventory (ids + names)
+                # plus the preserved selection so the blank/clear-on-select dropdown
+                # bug is diagnosable from a single state-manager log line.
                 self._log.info(
-                    "state.manager.update_microphone_state",
+                    "state.manager.update_microphone_state.broadcast",
                     device_count=len(devices),
+                    devices=[(d.device_id, d.name) for d in devices],
                     system_default=system_default_device_id,
+                    selected_device_id=selected,
                 )
                 snap = self._post_mutate_locked()
         return await self._notify_and_return(snap)

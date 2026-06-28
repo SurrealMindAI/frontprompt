@@ -25,6 +25,7 @@
     RegionRefEntry,
     RelationRefEntry,
     NavigationEntry,
+    TranscriptSegmentEntry,
   } from '../../../_generated/state';
 
   // --- Reactive reads from backendState (PIT-037: inline, no local $state copy) ---
@@ -36,9 +37,14 @@
   // Replay progress — null when no replay is running (PIT-037: inline derived)
   const activeReplayProgress = $derived(backendState.recordings.activeReplayProgress);
 
-  // Timeline entries sorted by seq (entries are append-only / already sorted, but sort defensively).
+  // Timeline entries sorted chronologically by timestamp_ms (primary), seq (tiebreak).
+  // Transcript segments are appended at stop (highest seq) yet span the whole
+  // recording — sorting by timestamp_ms interleaves the narration with the actions
+  // it describes. seq is the deterministic tiebreak for entries sharing a timestamp.
   const sortedEntries = $derived(
-    (detailRecording?.entries ?? []).slice().sort((a, b) => a.seq - b.seq)
+    (detailRecording?.entries ?? [])
+      .slice()
+      .sort((a, b) => a.timestamp_ms - b.timestamp_ms || a.seq - b.seq)
   );
 
   // --- Actions ----------------------------------------------------------------
@@ -109,6 +115,10 @@
   function isAssertion(entry: unknown): entry is AssertionEntry {
     return (entry as AssertionEntry).kind === 'assertion';
   }
+
+  function isTranscriptSegment(entry: unknown): entry is TranscriptSegmentEntry {
+    return (entry as TranscriptSegmentEntry).kind === 'transcript_segment';
+  }
 </script>
 
 <div class="recordings-tab-root">
@@ -175,6 +185,10 @@
             {:else if isAssertion(entry)}
               <span class="entry-kind assertion">✓ {entry.assertion_type}</span>
               <span class="entry-target">{entry.target}</span>
+              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+            {:else if isTranscriptSegment(entry)}
+              <span class="entry-kind transcript-segment">🎙 voice</span>
+              <span class="entry-target entry-target--transcript">{entry.text}</span>
               <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
             {/if}
           </div>
@@ -449,6 +463,17 @@
   .relation-ref { background: rgba(255, 109, 209, 0.18); }
   .navigation { background: rgba(180, 120, 255, 0.18); }
   .assertion { background: rgba(100, 220, 150, 0.18); }
+  .transcript-segment { background: rgba(255, 170, 120, 0.18); }
+
+  /* Voice narration spans the whole row and wraps — it is prose, not a selector. */
+  .entry-target--transcript {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-family: inherit;
+    font-style: italic;
+    color: var(--fp-color-text-secondary);
+  }
 
   .entry-target {
     flex: 1 1 auto;

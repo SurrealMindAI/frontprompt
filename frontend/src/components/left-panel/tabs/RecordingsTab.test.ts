@@ -252,6 +252,107 @@ describe('RecordingsTab — timeline view', () => {
   });
 });
 
+// --- Tests: transcript segments (voice-over) --------------------------------
+
+describe('RecordingsTab — transcript segment timeline rendering', () => {
+  test('renders a transcript_segment entry with its text', () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'transcript_segment' as const,
+          seq: 5,
+          timestamp_ms: 1700000003000,
+          start_ms: 3000,
+          end_ms: 6000,
+          text: 'now I click the submit button',
+          backend_id: 'mlx_whisper',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.transcript-segment')).not.toBeNull();
+    expect(container.textContent).toContain('now I click the submit button');
+  });
+
+  test('transcript segments interleave chronologically by timestamp, not by seq', () => {
+    // Voice segments are appended at stop (highest seq) but span the whole
+    // recording. They must sort by timestamp_ms so narration interleaves with
+    // the actions it describes.
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      started_at_ms: 1700000000000,
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 0,
+          timestamp_ms: 1700000002000,
+          event_type: 'click',
+          target: 'button#first',
+          default_prevented: false,
+        },
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000008000,
+          event_type: 'click',
+          target: 'button#second',
+          default_prevented: false,
+        },
+        // Transcript appended later (higher seq) but spoken BEFORE the second click.
+        {
+          kind: 'transcript_segment' as const,
+          seq: 2,
+          timestamp_ms: 1700000004000,
+          start_ms: 4000,
+          end_ms: 6000,
+          text: 'spoken between the two clicks',
+          backend_id: 'mlx_whisper',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rows = Array.from(container.querySelectorAll('.timeline-entry'));
+    const order = rows.map((r) => r.textContent ?? '');
+    const idxFirst = order.findIndex((t) => t.includes('button#first'));
+    const idxSpoken = order.findIndex((t) => t.includes('spoken between the two clicks'));
+    const idxSecond = order.findIndex((t) => t.includes('button#second'));
+    expect(idxFirst).toBeGreaterThanOrEqual(0);
+    expect(idxSpoken).toBeGreaterThan(idxFirst);
+    expect(idxSecond).toBeGreaterThan(idxSpoken);
+  });
+
+  test('entries with equal timestamp fall back to seq order', () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'keydown',
+          target: 'input#a',
+          default_prevented: false,
+        },
+        {
+          kind: 'page_event' as const,
+          seq: 0,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#b',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rows = Array.from(container.querySelectorAll('.timeline-entry'));
+    const order = rows.map((r) => r.textContent ?? '');
+    const idxB = order.findIndex((t) => t.includes('button#b')); // seq 0
+    const idxA = order.findIndex((t) => t.includes('input#a')); // seq 1
+    expect(idxB).toBeLessThan(idxA);
+  });
+});
+
 // --- Tests: replay progress bar -----------------------------------------
 
 function makeReplayProgress(overrides: Partial<ReplayProgress> = {}): ReplayProgress {

@@ -125,21 +125,39 @@ class MicrophoneWatcher:
                 # sd.default.device is a (input_index, output_index) tuple; input_index is
                 # -1 when unset. Wrapped in try/except for environments where sd.default is
                 # absent (headless CI, custom sounddevice stubs).
+                #
+                # ``system_default_reason`` records WHY the result is what it is so an
+                # empty/None default is diagnosable from a single log line (the
+                # silent ``system_default=None`` was just-barely-enough to debug the
+                # blank-dropdown class of bug — see IMPROVEMENT 3).
                 system_default_device_id: int | None = None
+                system_default_reason: str
                 try:
                     default = sd.default.device
                     if isinstance(default, (list, tuple)) and len(default) >= 1:
                         idx = int(default[0])
-                        system_default_device_id = idx if idx >= 0 else None
+                        if idx >= 0:
+                            system_default_device_id = idx
+                            system_default_reason = "tuple_input_index"
+                        else:
+                            system_default_reason = "tuple_input_index_unset(-1)"
                     elif isinstance(default, int) and default >= 0:
                         system_default_device_id = default
-                except Exception:
-                    pass
+                        system_default_reason = "scalar_index"
+                    else:
+                        system_default_reason = f"unrecognized_shape:{type(default).__name__}"
+                except Exception as exc:
+                    system_default_reason = f"probe_exception:{type(exc).__name__}:{exc}"
 
+                # One structured line per topology change (NOT per poll) — includes the
+                # full device inventory (ids + names) so the empty/blank-dropdown class
+                # of bug is diagnosable from logs without re-running the session.
                 _LOG.info(
                     "voice.mic_watcher.topology_changed",
                     device_count=len(input_devices),
+                    devices=[(d.device_id, d.name) for d in input_devices],
                     system_default=system_default_device_id,
+                    system_default_reason=system_default_reason,
                 )
                 await state_manager.update_microphone_state(input_devices, system_default_device_id=system_default_device_id)
 
