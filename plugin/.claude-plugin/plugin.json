@@ -1,7 +1,7 @@
 {
   "name": "frontprompt",
   "description": "Browser automation MCP server with in-page Svelte overlay — each daemon process owns its own private browser session.",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "author": { "name": "SurrealMind" },
   "repository": "https://github.com/SurrealMindAI/frontprompt",
   "license": "BSD-3-Clause",

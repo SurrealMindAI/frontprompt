@@ -2,7 +2,7 @@
   "mcpServers": {
     "frontprompt": {
       "command": "uvx",
-      "args": ["--from", "frontprompt==0.0.6", "frontprompt", "mcp"]
+      "args": ["--from", "frontprompt==0.1.0", "frontprompt", "mcp"]
     }
   }
 }
