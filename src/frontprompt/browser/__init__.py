@@ -1,14 +1,12 @@
 """Browser-Lifecycle für Phase 1 — headful Chromium via Playwright.
 
-Owner: das interaktive UI-Tool (frontprompt show <url>). Lebt parallel zu
-``frontprompt.scrapling`` — Scrapling bleibt für Phase 2+ Scraper-Workflows
-(Stealth, CF-Bypass, AsyncFetcher). Phase 1 nutzt Playwright direkt, weil
-Scrapling's Public API ein Scraper-Pattern ist (fetch → extract → close)
-ohne page-keep-open-Semantik.
+Owner: das interaktive UI-Tool (frontprompt show <url>). Phase 1 nutzt
+Playwright direkt statt der scrapling-Library, weil Scrapling's Public API ein
+Scraper-Pattern ist (fetch → extract → close) ohne page-keep-open-Semantik.
+Die scrapling-Library wird nur noch für DOM-Analyse via
+``analysis/_impl/scrapling_bridge.py`` genutzt.
 
 Design notes:
-    - Scrapling-only-Substrate gilt für Scraper-Workflows, nicht für das
-      interaktive UI-Tool.
     - Naming — ``browser_session_id`` als ID-Term, nicht bare ``id``.
 """
 

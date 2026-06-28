@@ -21,7 +21,6 @@ classifiers = [
 dependencies = [
     "anyio>=4.13,<5",
     "click>=8.1,<9",
-    "filelock>=3.16,<4",
     "mcp>=1.0,<2",
     "pydantic>=2.13,<3",
     "scrapling==0.4.8",

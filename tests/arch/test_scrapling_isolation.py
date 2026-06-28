@@ -1,9 +1,8 @@
 """Arch test: scrapling isolation.
 
-Only src/frontprompt/analysis/_impl/scrapling_bridge.py and
-src/frontprompt/scrapling/ (the existing Wave-A navigation substrate) may
-import scrapling.*. Every other Python file in src/frontprompt/ that does so
-is an isolation violation.
+Only src/frontprompt/analysis/_impl/scrapling_bridge.py may import scrapling.*.
+Every other Python file in src/frontprompt/ that does so is an isolation
+violation.
 
 Rationale: scrapling has bus-factor=1 (D4Vinci 97% commits). If the library
 stalls, only one file needs to change.
@@ -25,13 +24,8 @@ SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "frontprompt"
 # Paths are relative to SRC_ROOT.
 SCRAPLING_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        # New bridge — the only analysis-layer file that may import scrapling
+        # The only file in the codebase that may import scrapling.*
         "analysis/_impl/scrapling_bridge.py",
-        # Existing Wave-A navigation substrate — ScraplingAdapter, fetchers, etc.
-        # This entire sub-package legitimately depends on scrapling.
-        "scrapling/adapter.py",
-        "scrapling/substrate_router.py",
-        "scrapling/user_data_dir.py",
     }
 )
 
