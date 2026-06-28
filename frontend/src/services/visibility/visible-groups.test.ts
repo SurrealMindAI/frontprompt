@@ -211,6 +211,90 @@ describe('ordering', () => {
 });
 
 // ---------------------------------------------------------------------------
+// sort comparator edge cases — ensure all branches in the sort fn are taken
+// ---------------------------------------------------------------------------
+
+describe('sort comparator edge cases', () => {
+  test('localeCompare branch: two non-current non-unknown own domains are sorted alphabetically', () => {
+    // 'b.com' and 'a.com' are both non-currentHostname ('z.com') and non-UNKNOWN.
+    // The sort comparator MUST compare them via localeCompare → covers line 115.
+    const session = 'sort-sess';
+    const e1 = ent('e1', session); // b.com
+    const e2 = ent('e2', session); // a.com
+
+    const groups = visibleGroups([e1, e2], {
+      currentSessionId: session,
+      currentHostname: 'z.com', // different from both → neither key is 'z.com'
+      domainOf: (e) => (e.id === 'e1' ? 'b.com' : 'a.com'),
+    });
+
+    expect(groups).toHaveLength(2);
+    // localeCompare: 'a.com' < 'b.com' → a.com first
+    expect(groups[0]?.hostname).toBe('a.com');
+    expect(groups[1]?.hostname).toBe('b.com');
+  });
+
+  test('b===UNKNOWN branch: exactly [non-current, UNKNOWN] forces sort to compare them directly', () => {
+    // Only 2 groups: 'a.com' and '(unknown)'. The sort MUST call comparator for these.
+    // Comparator path for (a='a.com', b='(unknown)'):
+    //   a !== currentHostname, b !== currentHostname, a !== UNKNOWN → if(b===UNKNOWN) TRUE → line 114
+    const session = 'sort-sess-2';
+    const e1 = ent('e1', session); // a.com (owned)
+    const e2 = ent('e2', session); // null domain → (unknown)
+
+    const groups = visibleGroups([e1, e2], {
+      currentSessionId: session,
+      currentHostname: 'different.com', // no entities on this domain
+      domainOf: (e) => (e.id === 'e1' ? 'a.com' : null),
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.hostname).toBe('a.com'); // non-unknown before unknown
+    expect(groups[1]?.hostname).toBe('(unknown)');
+  });
+
+  test('a===currentHostname branch: currentHostname entity processed SECOND — covers line 111', () => {
+    // V8 binary insertion sort calls comparefn(pivot, sorted_elem).
+    // To get a===currentHostname, currentHostname must be the PIVOT (inserted second).
+    // keys insertion order: ['other.com', 'current.com'] → when inserting 'current.com':
+    //   comparefn('current.com', 'other.com') → a='current.com'=currentHostname → line 111 TRUE
+    const session = 'sort-sess-111';
+    const eOther = ent('eOther', session); // processed first → 'other.com' first in keys
+    const eCurrent = ent('eCurrent', session); // processed second → 'current.com' second (pivot)
+
+    const groups = visibleGroups([eOther, eCurrent], {
+      currentSessionId: session,
+      currentHostname: 'current.com',
+      domainOf: (e) => (e.id === 'eOther' ? 'other.com' : 'current.com'),
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.hostname).toBe('current.com'); // currentHostname sorts first
+    expect(groups[1]?.hostname).toBe('other.com');
+  });
+
+  test('b===UNKNOWN branch: UNKNOWN entity processed FIRST, regular domain second — covers line 114', () => {
+    // V8 binary insertion sort calls comparefn(pivot, sorted_elem).
+    // To get b===UNKNOWN, UNKNOWN must be the SORTED ELEMENT (inserted first).
+    // keys insertion order: ['(unknown)', 'regular.com'] → when inserting 'regular.com':
+    //   comparefn('regular.com', '(unknown)') → b='(unknown)'=UNKNOWN → line 114 TRUE
+    const session = 'sort-sess-114';
+    const eUnknown = ent('eUnknown', session); // null domain → '(unknown)' first in keys
+    const eRegular = ent('eRegular', session); // 'regular.com' second (pivot)
+
+    const groups = visibleGroups([eUnknown, eRegular], {
+      currentSessionId: session,
+      currentHostname: 'different.com', // not involved
+      domainOf: (e) => (e.id === 'eRegular' ? 'regular.com' : null),
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.hostname).toBe('regular.com'); // regular before unknown
+    expect(groups[1]?.hostname).toBe('(unknown)');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // null degrade
 // ---------------------------------------------------------------------------
 

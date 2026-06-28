@@ -234,6 +234,27 @@ describe('forwardWheel', () => {
     expect(() => forwardWheel(event)).not.toThrow();
   });
 
+  test('falls back to window.scrollBy when underCursor has no scrollable ancestor — covers line 41', () => {
+    // With no scrollable ancestor, findScrollableAncestor returns document.documentElement
+    // or document.scrollingElement. Both resolve to the same element in jsdom (standards mode).
+    // → scroller === document.documentElement → TRUE branch at line 40 → window.scrollBy at line 41.
+    document.body.innerHTML = '<div id="target">plain div, not scrollable</div>';
+    const target = document.getElementById('target')!;
+    mockElementsAtPoint([target, document.body]);
+
+    const origScrollBy = window.scrollBy;
+    const windowScrollSpy = vi.fn();
+    window.scrollBy = windowScrollSpy as typeof window.scrollBy;
+
+    try {
+      const event = new WheelEvent('wheel', { deltaX: 5, deltaY: 15 });
+      forwardWheel(event);
+      expect(windowScrollSpy).toHaveBeenCalledWith({ left: 5, top: 15, behavior: 'auto' });
+    } finally {
+      window.scrollBy = origScrollBy;
+    }
+  });
+
   test('custom skipPredicate funktioniert', () => {
     document.body.innerHTML = `
       <div id="scroller">

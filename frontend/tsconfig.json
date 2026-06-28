@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["@types/bun", "svelte", "vite/client"],
+    "types": ["@types/bun", "svelte", "vite/client", "vitest/globals"],
     "allowJs": true,
     "checkJs": true,
     "esModuleInterop": true,

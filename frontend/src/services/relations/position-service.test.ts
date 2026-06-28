@@ -251,6 +251,212 @@ describe('liveRectForRegion padding-preservation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Test F: centerForPick
+// ---------------------------------------------------------------------------
+
+describe('centerForPick', () => {
+  let service: PositionService;
+
+  beforeEach(() => {
+    service = new PositionService();
+  });
+
+  afterEach(() => {
+    service.dispose();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  test('F1: returns center point when pick resolves to an element with nonzero rect', () => {
+    document.body.innerHTML = '<div id="cfp-target" style="width:1px;height:1px">T</div>';
+    const el = document.getElementById('cfp-target')!;
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 200,
+      width: 80,
+      height: 40,
+      top: 200,
+      left: 100,
+      bottom: 240,
+      right: 180,
+      toJSON: () => ({}),
+    });
+    const pick = makePick('cfp1', '#cfp-target');
+    const result = service.centerForPick('cfp1', [pick]);
+    expect(result).not.toBeNull();
+    expect(result!.cx).toBeCloseTo(140); // 100 + 80/2
+    expect(result!.cy).toBeCloseTo(220); // 200 + 40/2
+  });
+
+  test('F2: returns null when pickId not found in picks array', () => {
+    const pick = makePick('cfp2', '#nonexistent');
+    const result = service.centerForPick('unknown-id', [pick]);
+    expect(result).toBeNull();
+  });
+
+  test('F3: returns null when element not resolvable (element not in DOM)', () => {
+    // No DOM element matching '#cfp3-missing'
+    const pick = makePick('cfp3', '#cfp3-missing');
+    const result = service.centerForPick('cfp3', [pick]);
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test G: centerForRegion
+// ---------------------------------------------------------------------------
+
+describe('centerForRegion', () => {
+  let service: PositionService;
+
+  beforeEach(() => {
+    service = new PositionService();
+  });
+
+  afterEach(() => {
+    service.dispose();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  test('G1: returns center point for a region with a resolvable member pick', () => {
+    document.body.innerHTML = '<div id="cfr-member" style="width:1px;height:1px">M</div>';
+    const memberEl = document.getElementById('cfr-member')!;
+    vi.spyOn(memberEl, 'getBoundingClientRect').mockReturnValue({
+      x: 50,
+      y: 100,
+      width: 100,
+      height: 60,
+      top: 100,
+      left: 50,
+      bottom: 160,
+      right: 150,
+      toJSON: () => ({}),
+    });
+    const pick = makePick('cfr-p1', '#cfr-member');
+    // Region drawn exactly around the member (no padding)
+    const region = makeRegion('cfr-r1', ['cfr-p1'], { x: 50, y: 100, width: 100, height: 60 });
+    const result = service.centerForRegion('cfr-r1', [region], [pick]);
+    expect(result).not.toBeNull();
+    expect(result!.cx).toBeCloseTo(100); // 50 + 100/2
+    expect(result!.cy).toBeCloseTo(130); // 100 + 60/2
+  });
+
+  test('G2: returns null when regionId not found', () => {
+    const result = service.centerForRegion('nonexistent-region', [], []);
+    expect(result).toBeNull();
+  });
+
+  test('G3: returns null when region has no member picks', () => {
+    const region = makeRegion('cfr-r2', [], { x: 10, y: 20, width: 100, height: 50 });
+    const result = service.centerForRegion('cfr-r2', [region], []);
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test H: centerForNode dispatcher
+// ---------------------------------------------------------------------------
+
+describe('centerForNode', () => {
+  let service: PositionService;
+
+  beforeEach(() => {
+    service = new PositionService();
+  });
+
+  afterEach(() => {
+    service.dispose();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  test('H1: dispatches to centerForPick when nodeKind === "pick"', () => {
+    const pick = makePick('cfn-p1', '#cfn-missing-pick');
+    // The pick element doesn't exist — centerForPick returns null
+    const result = service.centerForNode('cfn-p1', 'pick', [pick], []);
+    expect(result).toBeNull();
+  });
+
+  test('H2: dispatches to centerForRegion when nodeKind === "region"', () => {
+    const region = makeRegion('cfn-r1', [], { x: 0, y: 0, width: 100, height: 50 });
+    // Region has no member picks → centerForRegion returns null
+    const result = service.centerForNode('cfn-r1', 'region', [], [region]);
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test I: drift warning inside liveRectForRegion
+// ---------------------------------------------------------------------------
+
+describe('liveRectForRegion drift warning', () => {
+  let service: PositionService;
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    service = new PositionService();
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    service.dispose();
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  test('I1: console.warn called when liveRectForRegion detects layout drift', () => {
+    document.body.innerHTML = '<div id="drift-member" style="width:1px;height:1px">D</div>';
+    const el = document.getElementById('drift-member')!;
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      x: 50,
+      y: 100,
+      width: 100,
+      height: 60,
+      top: 100,
+      left: 50,
+      bottom: 160,
+      right: 150,
+      toJSON: () => ({}),
+    });
+    const pick = makePick('drift-p', '#drift-member');
+    // Pass a viewport_snapshot with a very different document_w to trigger drift
+    const snap = {
+      scroll_x: 0,
+      scroll_y: 0,
+      viewport_w: 1920,
+      viewport_h: 1080,
+      document_w: 3000, // far from jsdom default (0)
+      document_h: 2000, // far from jsdom default (0)
+    };
+    const region = makeRegion('drift-r', ['drift-p'], { x: 50, y: 100, width: 100, height: 60 }, snap);
+    service.liveRectForRegion(region, [pick]);
+    // Drift should be detected (scrollWidth = 0 vs stored 3000 → diff > 50)
+    expect(consoleWarnSpy).toHaveBeenCalled();
+  });
+
+  test('I2: no console.warn when no viewport_snapshot on region', () => {
+    document.body.innerHTML = '<div id="drift-m2" style="width:1px;height:1px">D</div>';
+    const el = document.getElementById('drift-m2')!;
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 80,
+      top: 10,
+      left: 10,
+      bottom: 90,
+      right: 90,
+      toJSON: () => ({}),
+    });
+    const pick = makePick('drift-p2', '#drift-m2');
+    const region = makeRegion('drift-r2', ['drift-p2'], { x: 10, y: 10, width: 80, height: 80 }, null);
+    service.liveRectForRegion(region, [pick]);
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test E: detectLayoutDrift helper
 // ---------------------------------------------------------------------------
 

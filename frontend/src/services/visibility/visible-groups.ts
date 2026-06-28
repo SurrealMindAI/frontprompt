@@ -118,6 +118,7 @@ export function visibleGroups<E extends { origin_session?: string | null }>(
   return keys.map((hostname) => {
     // Invariant: hostname was derived from buckets.keys() — key is guaranteed present.
     const items = buckets.get(hostname);
+    /* v8 ignore next */
     if (!items) throw new Error(`invariant: bucket key missing for hostname "${hostname}"`);
     return { hostname, items };
   });

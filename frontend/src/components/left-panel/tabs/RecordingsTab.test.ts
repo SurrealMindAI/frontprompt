@@ -956,3 +956,53 @@ describe('RecordingsTab — timeline detail: assertion', () => {
     expect(detail!.textContent).toContain('contains');
   });
 });
+
+// --- Tests: hostnameOf catch branch ----------------------------------------
+
+describe('RecordingsTab — hostnameOf catch branch (invalid URL)', () => {
+  test('navigation entry with invalid from_url falls back to raw string', () => {
+    // hostnameOf() tries new URL(url) — if it throws (invalid URL), returns the raw string.
+    // This covers the catch branch at RecordingsTab.svelte line 83.
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'navigation' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          from_url: 'not-a-valid-url',
+          to_url: 'https://example.com/destination',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    // The compact row shows hostnameOf(from_url) → falls back to raw string
+    expect(container.textContent).toContain('not-a-valid-url');
+  });
+});
+
+// --- Tests: formatRelativeTime — >60s branch (line 83) ---------------------
+
+describe('RecordingsTab — formatRelativeTime >60s branch (line 83)', () => {
+  test('entry >60s after recording start shows minute+second format (+1m30s)', () => {
+    const startMs = 1700000000000;
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      started_at_ms: startMs,
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          // 90 seconds after start → m=1, s=90, shows "+1m30s"
+          timestamp_ms: startMs + 90_000,
+          event_type: 'click',
+          target: 'button#late',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    // Entry renders with +1m30s format (m > 0 branch hit)
+    expect(container.textContent).toContain('+1m30s');
+  });
+});

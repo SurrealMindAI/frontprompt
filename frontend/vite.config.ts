@@ -86,6 +86,26 @@ export default defineConfig(() => {
       resolve: {
         conditions: ['browser'],
       },
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'html'],
+        // Exclude generated code (validated by pydantic-zod-codegen drift gate),
+        // the entry shim (untestable without a real browser inject context),
+        // and test files themselves.
+        exclude: [
+          'src/_generated/**',
+          'src/main.ts',
+          '**/*.test.ts',
+          '**/*.test.svelte.ts',
+          '**/*.config.*',
+        ],
+        thresholds: {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+          branches: 85,
+        },
+      },
     },
   };
 });

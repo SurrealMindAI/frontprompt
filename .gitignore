@@ -52,3 +52,11 @@ src/frontprompt/_overlay/
 # site (marketing + docs)
 site/node_modules/
 site/dist/
+
+# coverage reports (generated)
+coverage/
+frontend/coverage/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml

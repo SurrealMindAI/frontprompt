@@ -52,6 +52,7 @@ export function colorForIndex(idx: number): string {
   const hueStep = bitReverse5(normalized);
   const hue = (hueStep * 360) / PALETTE_SIZE;
   const group = Math.floor(normalized / 8);
+  /* v8 ignore next */
   const l = L_BY_GROUP[group] ?? 60;
   return `hsl(${hue.toFixed(1)}, 78%, ${l}%)`;
 }

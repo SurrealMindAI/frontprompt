@@ -80,4 +80,26 @@ describe('keyboard.subscribe', () => {
     expect(good).toHaveBeenCalledTimes(1);
     consoleSpy.mockRestore();
   });
+
+  test('calling unsubscribe twice is safe — covers if(s) false branch at line 62', () => {
+    // First unsub: deletes handler, and since it was the only one, deletes the key.
+    // Second unsub: this.handlers.get(key) → undefined → if(s) is FALSE → no-op.
+    const handler = vi.fn();
+    const unsub = keyboard.subscribe('Escape', handler);
+    unsub(); // removes handler + key
+    expect(() => unsub()).not.toThrow(); // second call: s=undefined → false branch
+    dispatchKey('Escape');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test('_reset() is a no-op when not installed — covers if(this.installed) false branch at line 71', () => {
+    // After _reset() in afterEach, installed=false.
+    // Calling _reset() again here hits the false branch of if(this.installed).
+    expect(() => keyboard._reset()).not.toThrow();
+    // Still safe to subscribe after
+    const handler = vi.fn();
+    keyboard.subscribe('ArrowUp', handler);
+    dispatchKey('ArrowUp');
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

@@ -18,6 +18,7 @@ import { describe, expect, test, vi, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/svelte';
 import Dashboard from './Dashboard.svelte';
 import DashboardRow from './DashboardRow.svelte';
+import { backendState } from '../../backend-state/backend-state.svelte';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -154,5 +155,14 @@ describe('Dashboard', () => {
   test('11: state section notes panels suppressed on about:blank', () => {
     const { container } = render(Dashboard);
     expect(container.textContent?.toLowerCase()).toContain('suppressed');
+  });
+
+  test('12: inspector active=true shows "active" text and pill--active class — covers line 86 TRUE branches', () => {
+    // Mutate the mock's active flag to true before rendering so $derived picks it up
+    (backendState.inspector as any).active = true;
+    const { container } = render(Dashboard);
+    expect(container.querySelector('.pill--active')).not.toBeNull();
+    expect(container.textContent).toContain('active');
+    (backendState.inspector as any).active = false; // restore
   });
 });

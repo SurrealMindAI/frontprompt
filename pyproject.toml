@@ -64,6 +64,7 @@ dev = [
     "hypothesis>=6.152",
     "mypy>=2.1",
     "pytest>=9",
+    "pytest-cov>=6",              # coverage measurement — configured in [tool.coverage.*]
     "pytest-rerunfailures>=15",   # retry the inherently-flaky real-Chromium-under-xvfb tests in CI
     # NOTE: do NOT add `pytest-anyio` — it is a phantom package on PyPI.
     # anyio>=4.13 (bereits in [project.dependencies]) liefert sein pytest-plugin
@@ -94,6 +95,24 @@ strict = true
 warn_unused_ignores = true
 disallow_untyped_decorators = false
 plugins = ["pydantic.mypy"]
+
+[tool.coverage.run]
+source = ["frontprompt"]
+# Build-time / codegen entrypoints — validated by the drift gate (pytest -m drift)
+# and the build pipeline itself. These are never exercised by unit tests by design.
+# */__main__.py is the package entry point (exec by `python -m frontprompt`), also build-only.
+omit = [
+    "*/build/__main__.py",
+    "*/bridge/codegen.py",
+    "*/wire.py",
+    "*/__main__.py",
+]
+parallel = true
+sigterm = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

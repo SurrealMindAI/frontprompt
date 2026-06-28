@@ -157,3 +157,143 @@ def test_transcription_module_does_not_import_mlx_whisper_at_load() -> None:
     # The transcription module's load must not (re-)import mlx_whisper (lazy-import discipline).
     mlx_keys_after = [k for k in sys.modules if k.startswith("mlx_whisper")]
     assert not mlx_keys_after, f"mlx_whisper was imported at module load: {mlx_keys_after}"
+
+
+# ---------------------------------------------------------------------------
+# Section 1g: select_backend — registry selection logic
+# ---------------------------------------------------------------------------
+
+
+class _ReadyBackend:
+    """Fake backend that is always ready."""
+
+    backend_id: str = "ready_backend"
+    display_name: str = "Ready Backend"
+
+    def probe_status(self) -> str:
+        return "ready"
+
+    async def ensure(self, progress_cb: object) -> None:
+        pass
+
+    async def transcribe(self, audio_path: object) -> list[object]:
+        return []
+
+    def set_model(self, model_id: object) -> None:
+        pass
+
+
+class _NotReadyBackend:
+    """Fake backend that is never ready."""
+
+    backend_id: str = "not_ready_backend"
+    display_name: str = "Not Ready Backend"
+
+    def probe_status(self) -> str:
+        return "unavailable"
+
+    async def ensure(self, progress_cb: object) -> None:
+        pass
+
+    async def transcribe(self, audio_path: object) -> list[object]:
+        return []
+
+    def set_model(self, model_id: object) -> None:
+        pass
+
+
+def test_select_backend_returns_none_when_registry_empty() -> None:
+    """select_backend returns None when no backends are registered (covers line 190)."""
+    from frontprompt.voice import transcription
+
+    original = list(transcription.REGISTERED_BACKENDS)
+    transcription.REGISTERED_BACKENDS.clear()
+    try:
+        result = transcription.select_backend()
+        assert result is None
+    finally:
+        transcription.REGISTERED_BACKENDS.extend(original)
+
+
+def test_select_backend_returns_none_when_no_backend_ready() -> None:
+    """select_backend returns None when all registered backends are unavailable."""
+    from frontprompt.voice import transcription
+
+    original = list(transcription.REGISTERED_BACKENDS)
+    transcription.REGISTERED_BACKENDS.clear()
+    not_ready = _NotReadyBackend()
+    transcription.REGISTERED_BACKENDS.append(not_ready)  # type: ignore[arg-type]
+    try:
+        result = transcription.select_backend()
+        assert result is None
+    finally:
+        transcription.REGISTERED_BACKENDS.clear()
+        transcription.REGISTERED_BACKENDS.extend(original)
+
+
+def test_select_backend_with_preferred_id_finds_backend() -> None:
+    """select_backend with preferred_id returns the matching ready backend (lines 183-185)."""
+    from frontprompt.voice import transcription
+
+    original = list(transcription.REGISTERED_BACKENDS)
+    transcription.REGISTERED_BACKENDS.clear()
+    ready = _ReadyBackend()
+    transcription.REGISTERED_BACKENDS.append(ready)  # type: ignore[arg-type]
+    try:
+        result = transcription.select_backend(preferred_id="ready_backend")
+        assert result is ready
+    finally:
+        transcription.REGISTERED_BACKENDS.clear()
+        transcription.REGISTERED_BACKENDS.extend(original)
+
+
+def test_select_backend_preferred_id_not_ready_falls_back() -> None:
+    """select_backend with preferred_id that is not ready falls back to auto-select."""
+    from frontprompt.voice import transcription
+
+    original = list(transcription.REGISTERED_BACKENDS)
+    transcription.REGISTERED_BACKENDS.clear()
+    not_ready = _NotReadyBackend()
+    ready = _ReadyBackend()
+    transcription.REGISTERED_BACKENDS.append(not_ready)  # type: ignore[arg-type]
+    transcription.REGISTERED_BACKENDS.append(ready)  # type: ignore[arg-type]
+    try:
+        # preferred_id=not_ready_backend exists but is not ready → falls back to first ready
+        result = transcription.select_backend(preferred_id="not_ready_backend")
+        assert result is ready
+    finally:
+        transcription.REGISTERED_BACKENDS.clear()
+        transcription.REGISTERED_BACKENDS.extend(original)
+
+
+# ---------------------------------------------------------------------------
+# Section 1h: Protocol default set_model (line 126 in transcription.py)
+# ---------------------------------------------------------------------------
+
+
+def test_protocol_set_model_default_is_noop() -> None:
+    """A class subclassing TranscriptionBackend inherits the Protocol's set_model no-op.
+
+    Calling the inherited set_model() executes line 126 (the ``return`` body).
+    """
+    from frontprompt.voice.transcription import TranscriptionBackend
+
+    class _MinimalBackend(TranscriptionBackend):  # type: ignore[misc]
+        backend_id: str = "minimal_proto"
+        display_name: str = "Minimal Proto"
+
+        def probe_status(self) -> str:
+            return "ready"
+
+        async def ensure(self, progress_cb: object) -> None:
+            pass
+
+        async def transcribe(self, audio_path: object) -> list[object]:
+            return []
+
+        # set_model intentionally NOT overridden → inherits Protocol default body
+
+    backend = _MinimalBackend()
+    # Should complete without raising — Protocol default is a bare `return`
+    backend.set_model("any_model_id")
+    backend.set_model(None)

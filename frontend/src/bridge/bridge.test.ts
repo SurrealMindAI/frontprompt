@@ -161,3 +161,200 @@ describe('bridge integrity-token validation', () => {
     expect(errorEvent.kind).toBe('integrity_token_mismatch');
   });
 });
+
+describe('bridge.send error paths', () => {
+  afterEach(() => {
+    bridge.resetForTests();
+    removeMockFp();
+  });
+
+  test('send() throws and emits error event when window.__fp is not available', async () => {
+    // No installMockFp — window.__fp is undefined
+    const errorEvents: unknown[] = [];
+    bridge.addInterceptor((event) => {
+      if (event.direction === 'error') errorEvents.push(event);
+    });
+
+    await expect(
+      bridge.send({ kind: 'overlay_ready', schema_version: '0.6.0' } as any)
+    ).rejects.toThrow();
+    expect(errorEvents.length).toBeGreaterThan(0);
+    const evt = errorEvents[0] as { kind: string };
+    expect(evt.kind).toBe('send_before_setup');
+  });
+});
+
+describe('bridge.dispatch error paths', () => {
+  afterEach(() => {
+    bridge.resetForTests();
+    removeMockFp();
+  });
+
+  test('dispatch() with non-object payload emits inbound_malformed error', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const errorEvents: unknown[] = [];
+    bridge.addInterceptor((event) => {
+      if (event.direction === 'error') errorEvents.push(event);
+    });
+
+    window.__fp!.dispatch('not-an-object');
+
+    expect(errorEvents.length).toBeGreaterThan(0);
+    const evt = errorEvents[0] as { kind: string };
+    expect(evt.kind).toBe('inbound_malformed');
+  });
+
+  test('dispatch() with null emits inbound_malformed', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const errorEvents: unknown[] = [];
+    bridge.addInterceptor((event) => {
+      if (event.direction === 'error') errorEvents.push(event);
+    });
+
+    window.__fp!.dispatch(null);
+    expect(errorEvents.some((e) => (e as { kind: string }).kind === 'inbound_malformed')).toBe(true);
+  });
+
+  test('dispatch() with object missing kind emits inbound_malformed', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const errorEvents: unknown[] = [];
+    bridge.addInterceptor((event) => {
+      if (event.direction === 'error') errorEvents.push(event);
+    });
+
+    window.__fp!.dispatch({ schema_version: '0.6.0' }); // no "kind" field
+    expect(errorEvents.some((e) => (e as { kind: string }).kind === 'inbound_malformed')).toBe(true);
+  });
+
+  test('dispatch() with async handler that rejects logs console.error', async () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    bridge.on('heartbeat', async () => {
+      throw new Error('async handler error');
+    });
+
+    window.__fp!.dispatch({
+      kind: 'heartbeat',
+      schema_version: '0.6.0',
+      seq: 1,
+      server_send_time_ns: 0,
+    });
+
+    // Wait for the rejected promise to flush
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  test('dispatch() with sync handler that throws logs console.error', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    bridge.on('heartbeat', () => {
+      throw new Error('sync handler error');
+    });
+
+    window.__fp!.dispatch({
+      kind: 'heartbeat',
+      schema_version: '0.6.0',
+      seq: 1,
+      server_send_time_ns: 0,
+    });
+
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  test('interceptor that throws does not break dispatch chain', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // First interceptor throws
+    bridge.addInterceptor(() => {
+      throw new Error('interceptor error');
+    });
+
+    // Second interceptor should still run
+    const secondInterceptorCalled = vi.fn();
+    bridge.addInterceptor(secondInterceptorCalled);
+
+    window.__fp!.dispatch({
+      kind: 'heartbeat',
+      schema_version: '0.6.0',
+      seq: 1,
+      server_send_time_ns: 0,
+    });
+
+    expect(secondInterceptorCalled).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  test('addInterceptor returns unsubscribe function that removes the interceptor', () => {
+    installMockFp();
+    setupBridge('0.6.0', null);
+
+    const interceptorFn = vi.fn();
+    const unsubscribe = bridge.addInterceptor(interceptorFn);
+
+    // Call once — should be recorded
+    window.__fp!.dispatch({ kind: 'heartbeat', schema_version: '0.6.0', seq: 1, server_send_time_ns: 0 });
+    expect(interceptorFn).toHaveBeenCalledTimes(1);
+
+    // Unsubscribe and call again — should NOT be recorded
+    unsubscribe();
+    window.__fp!.dispatch({ kind: 'heartbeat', schema_version: '0.6.0', seq: 2, server_send_time_ns: 0 });
+    expect(interceptorFn).toHaveBeenCalledTimes(1); // still just 1
+  });
+});
+
+describe('bridge.buildVersionInfo', () => {
+  afterEach(() => {
+    bridge.resetForTests();
+  });
+
+  test('buildVersionInfo returns correct schema_version', () => {
+    const info = bridge.buildVersionInfo('0.9.0');
+    expect(info.schema_version).toBe('0.9.0');
+  });
+
+  test('buildVersionInfo includes bundle_build_session', () => {
+    const info = bridge.buildVersionInfo('0.6.0');
+    expect(typeof info.bundle_build_session).toBe('string');
+  });
+});
+
+describe('setupBridge error paths', () => {
+  afterEach(() => {
+    bridge.resetForTests();
+    removeMockFp();
+  });
+
+  test('setupBridge logs error when window.__fp is not available', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // No installMockFp — window.__fp is undefined
+    setupBridge('0.6.0', null);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  test('setupBridge sets getState to Promise.resolve(null) when no getter', () => {
+    installMockFp();
+    // Also remove any existing getState
+    delete (window.__fp as any).getState;
+    setupBridge('0.6.0', null);
+    expect(typeof window.__fp!.getState).toBe('function');
+  });
+});

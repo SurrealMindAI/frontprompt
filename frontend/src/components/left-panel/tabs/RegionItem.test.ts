@@ -39,6 +39,30 @@ function makeRegion(overrides: Partial<Region> = {}): Region {
   };
 }
 
+describe('RegionItem — null fallback branches', () => {
+  test('region with null member_pick_ids shows count 0 (covers ?.length ?? 0 null branch)', () => {
+    const region = makeRegion({ member_pick_ids: null as any });
+    const { container } = render(RegionItem, { props: { region } });
+    const count = container.querySelector('.region-item__count');
+    expect(count).not.toBeNull();
+    expect(count!.textContent).toBe('0');
+  });
+
+  test('region with null color_index uses fallback 0 (covers color_index ?? 0 null branch)', () => {
+    const region = makeRegion({ color_index: null as any });
+    // Should render without throwing — colorForIndex(0) is the fallback
+    const { container } = render(RegionItem, { props: { region } });
+    expect(container.querySelector('.region-item__icon')).not.toBeNull();
+  });
+
+  test('region with non-empty note uses note as display name (covers note?.trim() truthy branch)', () => {
+    // region.note?.trim() returns truthy → displayName = region.note
+    const region = makeRegion({ note: 'My Region Note' } as any);
+    const { getByText } = render(RegionItem, { props: { region } });
+    expect(getByText('My Region Note')).toBeTruthy();
+  });
+});
+
 describe('RegionItem drift indicator', () => {
   test('shows drift badge when document dimensions differ significantly from snapshot', () => {
     // Mock document.documentElement.scrollWidth/Height to simulate layout drift

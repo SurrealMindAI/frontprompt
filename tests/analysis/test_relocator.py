@@ -83,3 +83,58 @@ def test_relocate_recovered_with_similarity() -> None:
     if results[0].status == "recovered":
         assert results[0].similarity is not None
         assert results[0].similarity > 0.5
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: sim < 0.7 with CSS still resolving (line 54)
+# ---------------------------------------------------------------------------
+
+
+def test_relocate_css_matches_but_sim_below_threshold_still_recovered() -> None:
+    """When CSS selector resolves but fingerprint sim < 0.7, status is 'recovered' (line 54).
+
+    Monkeypatching fingerprint_similarity to return 0.5 forces the third branch
+    in _relocate_one where sim < _RECOVERED_THRESHOLD (0.7).
+    """
+    from unittest.mock import patch
+
+    doc = parse_html(_HTML_ORIGINAL)  # has button#submit-btn → CSS resolves
+    pick = _make_pick_for_button()
+
+    with patch("frontprompt.analysis.relocator.fingerprint_similarity", return_value=0.5):
+        relocator = Relocator()
+        results = relocator.relocate(doc, [pick])
+
+    assert results[0].status == "recovered"
+    assert results[0].similarity == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: CSS fails, scrapling fallback with sim >= 0.7 (lines 64-66)
+# ---------------------------------------------------------------------------
+
+
+def test_relocate_fallback_recovered_when_scrapling_finds_similar() -> None:
+    """When CSS selector fails but scrapling fallback finds a similar element (lines 64-66).
+
+    Uses an HTML where 'button#submit-btn' doesn't exist, but monkeypatches
+    relocate_element to return a fake match with sim = 0.75 (>= 0.7 threshold).
+    """
+    from unittest.mock import MagicMock, patch
+
+    doc = parse_html(_HTML_ELEMENT_GONE)  # no button#submit-btn → CSS returns []
+    pick = _make_pick_for_button()
+
+    fake_match = MagicMock()
+    fake_match.css_selector = "p.fallback-found"
+
+    with (
+        patch("frontprompt.analysis.relocator.relocate_element", return_value=fake_match),
+        patch("frontprompt.analysis.relocator.fingerprint_similarity", return_value=0.75),
+    ):
+        relocator = Relocator()
+        results = relocator.relocate(doc, [pick])
+
+    assert results[0].status == "recovered"
+    assert results[0].new_selector == "p.fallback-found"
+    assert results[0].similarity == 0.75

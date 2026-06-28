@@ -581,3 +581,22 @@ def test_schema_version_is_current() -> None:
     from frontprompt.bridge.messages import SCHEMA_VERSION
 
     assert SCHEMA_VERSION == "0.11.0"
+
+
+# ---------------------------------------------------------------------------
+# hostname_for_url — scheme-only and unknown fallbacks (lines 1174-1176)
+# ---------------------------------------------------------------------------
+
+
+def test_hostname_for_url_scheme_without_host_returns_scheme_colon() -> None:
+    """about:blank has a scheme but no hostname → returns 'about:'."""
+    from frontprompt.state.state import hostname_for_url
+
+    assert hostname_for_url("about:blank") == "about:"
+
+
+def test_hostname_for_url_empty_string_returns_unknown_sentinel() -> None:
+    """Empty string has no scheme and no hostname → returns '(unknown)'."""
+    from frontprompt.state.state import hostname_for_url
+
+    assert hostname_for_url("") == "(unknown)"
