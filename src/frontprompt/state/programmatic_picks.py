@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from frontprompt.ipc.page_controller import PageController
+from frontprompt.ipc.playwright_controller.text_pseudo_selector import encode_text_pseudo_selector
 from frontprompt.state.manager import StateManager
 from frontprompt.state.state import ElementFingerprint, ElementRect, Pick, PickElement
 
@@ -117,7 +118,7 @@ class ProgrammaticPickService:
     ) -> dict[str, Any]:
         """Original impl kept for unit tests that don't wire an analyzer."""
         result = await self._pc.query_selector_all(
-            selector=_text_pseudo_selector(text, role),
+            selector=encode_text_pseudo_selector(text, role),
             parent_pick=parent_pick,
             limit=limit,
         )
@@ -164,18 +165,6 @@ class ProgrammaticPickService:
             await self._mgr.add_pick_from_programmatic_source(pick)
             pick_ids.append(pick.pick_id)
         return {"pick_ids": pick_ids, "total_matches": total, "captured": captured}
-
-
-def _text_pseudo_selector(text: str, role: str | None) -> str:
-    """Build a pseudo-selector key used by PlaywrightPageController.query_selector_all.
-
-    The key encodes both text and optional role so the concrete Playwright impl
-    can use page.get_by_role(role, name=text) for AND-semantics. The FakePageController
-    uses this string as-is as a dict key in selector_matches.
-    """
-    if role:
-        return f"__text_role__:{text}|{role}"
-    return f"__text__:{text}"
 
 
 def _build_pick_from_element_data(el_data: dict[str, Any], comment: str) -> Pick:

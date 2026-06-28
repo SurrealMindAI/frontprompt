@@ -1,7 +1,7 @@
 """XPath-based element querier — low-level escape-hatch.
 
-Returns element descriptor dicts in the same shape as
-PlaywrightPageController._ELEMENT_DATA_JS results so that
+Returns element descriptor dicts in the same shape as the shared
+``ELEMENT_DESCRIPTOR_FN`` (see :mod:`_element_data`) so that
 ProgrammaticPickService can build Picks from them without knowing
 how they were found.
 """
@@ -14,56 +14,9 @@ from typing import Any
 import structlog
 from playwright.async_api import ElementHandle, Page
 
-_LOG = structlog.get_logger(__name__)
+from frontprompt.ipc.playwright_controller._element_data import ELEMENT_DESCRIPTOR_FN
 
-# Reuse the same JS fragment as controller.py to stay DRY.
-# Deliberately duplicated here rather than importing from controller.py to
-# avoid circular dependency (controller imports xpath_query in step 5).
-# TODO: extract to shared _element_data.py if 3+ consumers emerge (YAGNI now).
-_ELEMENT_DATA_JS = """(el, i) => {
-    const r = el.getBoundingClientRect();
-    const attrs = Object.fromEntries(
-        Array.from(el.attributes).map(a => [a.name, a.value])
-    );
-    const nthIdx = Array.from(
-        el.parentElement
-            ? el.parentElement.querySelectorAll(el.tagName)
-            : [el]
-    ).indexOf(el) + 1;
-    const idPart = el.id ? `#${el.id}` : '';
-    const tag = el.tagName.toLowerCase();
-    const nth = `:nth-of-type(${nthIdx})`;
-    const generatedSel = idPart ? `${tag}${idPart}` : `${tag}${nth}`;
-    return {
-        selector: generatedSel,
-        fingerprint: {
-            tag,
-            attributes: attrs,
-            text: (el.textContent || '').trim().slice(0, 500),
-            path: [],
-            parent_name: el.parentElement
-                ? el.parentElement.tagName.toLowerCase() : null,
-            parent_attribs: el.parentElement
-                ? Object.fromEntries(
-                    Array.from(el.parentElement.attributes)
-                        .map(a => [a.name, a.value])
-                  ) : {},
-            parent_text: el.parentElement
-                ? (el.parentElement.textContent || '').trim().slice(0, 500)
-                : '',
-            siblings: Array.from(
-                el.parentElement
-                    ? el.parentElement.children : []
-            ).filter(c => c !== el).map(c => c.tagName.toLowerCase()),
-            children: Array.from(el.children).map(
-                c => c.tagName.toLowerCase()
-            ),
-        },
-        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
-        text_snippet: (el.innerText || el.textContent || '').trim().slice(0, 120),
-        color_index: i % 32,
-    };
-}"""
+_LOG = structlog.get_logger(__name__)
 
 
 async def pick_by_xpath(
@@ -104,7 +57,7 @@ async def pick_by_xpath(
     capped = all_handles[:limit]
     elements: list[dict[str, Any]] = []
     for i, h in enumerate(capped):
-        el_data: dict[str, Any] = await h.evaluate(_ELEMENT_DATA_JS, i)
+        el_data: dict[str, Any] = await h.evaluate(ELEMENT_DESCRIPTOR_FN, i)
         el_data["url"] = url
         el_data["timestamp_ms"] = ts
         elements.append(el_data)

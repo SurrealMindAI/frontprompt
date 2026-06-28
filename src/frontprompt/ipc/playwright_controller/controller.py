@@ -18,6 +18,7 @@ from playwright.async_api import Page
 
 from frontprompt.ipc.page_controller import PageController
 from frontprompt.ipc.playwright_controller import browser_actions, dom_readers, page_meta, xpath_query
+from frontprompt.ipc.playwright_controller._element_data import ELEMENT_DESCRIPTOR_FN
 from frontprompt.ipc.playwright_controller.assertion_evaluator import AssertionEvaluator
 from frontprompt.ipc.playwright_controller.element_resolver import (
     ElementResolver,
@@ -27,6 +28,10 @@ from frontprompt.ipc.playwright_controller.screenshots import (
     ScreenshotTooLargeError,
     shoot_element,
     shoot_page,
+)
+from frontprompt.ipc.playwright_controller.text_pseudo_selector import (
+    decode_text_pseudo_selector,
+    is_text_pseudo_selector,
 )
 from frontprompt.state.state import AssertionEntry, Pick
 
@@ -136,54 +141,9 @@ class PlaywrightPageController(PageController):
 
     # ── ProgrammaticPickService helper ──────────────────────────────────────
 
-    _ELEMENT_DATA_JS = """(el, i) => {
-        const r = el.getBoundingClientRect();
-        const attrs = Object.fromEntries(
-            Array.from(el.attributes).map(a => [a.name, a.value])
-        );
-        const nthIdx = Array.from(
-            el.parentElement
-                ? el.parentElement.querySelectorAll(el.tagName)
-                : [el]
-        ).indexOf(el) + 1;
-        const idPart = el.id ? `#${el.id}` : '';
-        const tag = el.tagName.toLowerCase();
-        const nth = `:nth-of-type(${nthIdx})`;
-        const generatedSel = idPart ? `${tag}${idPart}` : `${tag}${nth}`;
-        return {
-            selector: generatedSel,
-            fingerprint: {
-                tag,
-                attributes: attrs,
-                text: (el.textContent || '').trim().slice(0, 500),
-                path: [],
-                parent_name: el.parentElement
-                    ? el.parentElement.tagName.toLowerCase() : null,
-                parent_attribs: el.parentElement
-                    ? Object.fromEntries(
-                        Array.from(el.parentElement.attributes)
-                            .map(a => [a.name, a.value])
-                      ) : {},
-                parent_text: el.parentElement
-                    ? (el.parentElement.textContent || '').trim().slice(0, 500)
-                    : '',
-                siblings: Array.from(
-                    el.parentElement
-                        ? el.parentElement.children : []
-                ).filter(c => c !== el).map(c => c.tagName.toLowerCase()),
-                children: Array.from(el.children).map(
-                    c => c.tagName.toLowerCase()
-                ),
-            },
-            rect: { x: r.x, y: r.y, width: r.width, height: r.height },
-            text_snippet: (el.innerText || el.textContent || '').trim().slice(0, 120),
-            color_index: i % 32,
-        };
-    }"""
-
     async def _handle_to_element_data(self, handle: Any, color_idx: int) -> dict[str, Any]:
         """Convert a Playwright ElementHandle to the element descriptor dict."""
-        result: dict[str, Any] = await handle.evaluate(self._ELEMENT_DATA_JS, color_idx)
+        result: dict[str, Any] = await handle.evaluate(ELEMENT_DESCRIPTOR_FN, color_idx)
         return result
 
     async def query_selector_all(
@@ -200,16 +160,17 @@ class PlaywrightPageController(PageController):
         ``parent_handle.evaluate(...)`` instead of ``page.evaluate(...)``.
         Stale parent (fingerprint mismatch) → raises StalePickError.
 
-        Intercepts ``__text__:<text>`` and ``__text_role__:<text>|<role>``
-        pseudo-selectors from :func:`programmatic_picks._text_pseudo_selector` and
-        routes them to Playwright's ``get_by_text`` / ``get_by_role`` APIs for
-        proper AND-semantics. Regular CSS selectors use ``querySelectorAll``.
+        Intercepts the text / text-role pseudo-selectors produced by
+        :func:`text_pseudo_selector.encode_text_pseudo_selector` (decoded here via
+        :func:`text_pseudo_selector.decode_text_pseudo_selector`) and routes them to
+        Playwright's ``get_by_text`` / ``get_by_role`` APIs for proper AND-semantics.
+        Regular CSS selectors use ``querySelectorAll``.
         """
         url: str = self._page.url
         ts: int = int(time.time() * 1000)
 
         # --- pseudo-selector routing ---
-        if selector.startswith("__text__:") or selector.startswith("__text_role__:"):
+        if is_text_pseudo_selector(selector):
             return await self._query_by_text_pseudo(selector, parent_pick, limit, url, ts)
 
         # --- CSS querySelectorAll path ---
@@ -231,50 +192,9 @@ class PlaywrightPageController(PageController):
             const capped = all.slice(0, lim);
             return {
                 total,
-                elements: capped.map((el, _i) => {
-                    const r = el.getBoundingClientRect();
-                    const attrs = Object.fromEntries(
-                        Array.from(el.attributes).map(a => [a.name, a.value])
-                    );
-                    const nthIdx = Array.from(
-                        el.parentElement
-                            ? el.parentElement.querySelectorAll(el.tagName)
-                            : [el]
-                    ).indexOf(el) + 1;
-                    const idPart = el.id ? `#${el.id}` : '';
-                    const tag = el.tagName.toLowerCase();
-                    const nth = `:nth-of-type(${nthIdx})`;
-                    const generatedSel = idPart ? `${tag}${idPart}` : `${tag}${nth}`;
-                    return {
-                        selector: generatedSel,
-                        fingerprint: {
-                            tag,
-                            attributes: attrs,
-                            text: (el.textContent || '').trim().slice(0, 500),
-                            path: [],
-                            parent_name: el.parentElement
-                                ? el.parentElement.tagName.toLowerCase() : null,
-                            parent_attribs: el.parentElement
-                                ? Object.fromEntries(
-                                    Array.from(el.parentElement.attributes)
-                                        .map(a => [a.name, a.value])
-                                  ) : {},
-                            parent_text: el.parentElement
-                                ? (el.parentElement.textContent || '').trim().slice(0, 500)
-                                : '',
-                            siblings: Array.from(
-                                el.parentElement
-                                    ? el.parentElement.children : []
-                            ).filter(c => c !== el).map(c => c.tagName.toLowerCase()),
-                            children: Array.from(el.children).map(
-                                c => c.tagName.toLowerCase()
-                            ),
-                        },
-                        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
-                        text_snippet: (el.innerText || el.textContent || '').trim().slice(0, 120),
-                        color_index: _i % 32,
-                    };
-                }),
+                elements: capped.map("""
+            + ELEMENT_DESCRIPTOR_FN
+            + """),
             };
         }"""
         )
@@ -309,12 +229,10 @@ class PlaywrightPageController(PageController):
         """
         from playwright.async_api import Locator
 
-        if selector.startswith("__text_role__:"):
-            rest = selector[len("__text_role__:") :]
-            text, role = rest.split("|", 1)
+        text, role = decode_text_pseudo_selector(selector)
+        if role is not None:
             locator: Locator = self._page.get_by_role(role, name=text, exact=True)  # type: ignore[arg-type]
         else:
-            text = selector[len("__text__:") :]
             locator = self._page.get_by_text(text, exact=True)
 
         # Get all matching element handles
