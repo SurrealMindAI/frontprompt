@@ -26,6 +26,8 @@
     RelationRefEntry,
     NavigationEntry,
     TranscriptSegmentEntry,
+    Region,
+    Relation,
   } from '../../../_generated/state';
 
   // --- Reactive reads from backendState (PIT-037: inline, no local $state copy) ---
@@ -90,7 +92,55 @@
     );
   }
 
-  // Type-narrowing helpers for discriminated union (kind field may be optional in TS type,
+  // --- Expandable entry state (ADR-018: ephemeral localState, never backend) ---
+
+  // A Set of seq numbers for entries that are currently expanded.
+  // Reassign to new Set on each mutation to guarantee Svelte reactivity.
+  let expandedSeqs = $state(new Set<number>());
+
+  function toggleEntry(seq: number): void {
+    const next = new Set(expandedSeqs);
+    if (next.has(seq)) {
+      next.delete(seq);
+    } else {
+      next.add(seq);
+    }
+    expandedSeqs = next;
+  }
+
+  // --- Inline ref-resolvers (PIT-037: no local $state copy) ------------------
+
+  // Must stay inline (not cached in local $state) so they always read the live
+  // backendState.inspector arrays — PIT-037.
+
+  function regionFor(regionId: string): Region | null {
+    return backendState.inspector.regions.find((r) => r.region_id === regionId) ?? null;
+  }
+
+  function relationFor(relationId: string): Relation | null {
+    return backendState.inspector.relations.find((r) => r.relation_id === relationId) ?? null;
+  }
+
+  // --- Additional formatting helpers -----------------------------------------
+
+  function formatAbsoluteTime(ms: number): string {
+    return new Date(ms).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  function formatMs(ms: number): string {
+    const s = ms / 1000;
+    return `${s % 1 === 0 ? s.toFixed(0) : s.toFixed(1)}s`;
+  }
+
+  function rectStr(rect: { x: number; y: number; width: number; height: number }): string {
+    return `${Math.round(rect.x)}, ${Math.round(rect.y)} · ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+  }
+
+  // --- Type-narrowing helpers for discriminated union (kind field may be optional in TS type,
   // but Zod default ensures it is always present at runtime).
   function isPageEvent(entry: unknown): entry is PageEventEntry {
     return (entry as PageEventEntry).kind === 'page_event';
@@ -161,35 +211,149 @@
     {:else}
       <div class="timeline-list">
         {#each sortedEntries as entry (entry.seq)}
-          <div class="timeline-entry">
-            {#if isPageEvent(entry)}
-              <span class="entry-kind page-event">{entry.event_type}</span>
-              <span class="entry-target">{entry.target}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isPickRef(entry)}
-              <span class="entry-kind pick-ref">pick</span>
-              <span class="entry-target">{pickSelectorFor(entry.pick_id)}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isRegionRef(entry)}
-              <span class="entry-kind region-ref">region</span>
-              <span class="entry-target">region:{entry.region_id.slice(0, 6)}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isRelationRef(entry)}
-              <span class="entry-kind relation-ref">relation</span>
-              <span class="entry-target">relation:{entry.relation_id.slice(0, 6)}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isNavigation(entry)}
-              <span class="entry-kind navigation">nav</span>
-              <span class="entry-target">{hostnameOf(entry.from_url)} → {hostnameOf(entry.to_url)}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isAssertion(entry)}
-              <span class="entry-kind assertion">✓ {entry.assertion_type}</span>
-              <span class="entry-target">{entry.target}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
-            {:else if isTranscriptSegment(entry)}
-              <span class="entry-kind transcript-segment">🎙 voice</span>
-              <span class="entry-target entry-target--transcript">{entry.text}</span>
-              <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+          {@const isExpanded = expandedSeqs.has(entry.seq)}
+          <div class="timeline-entry" class:is-expanded={isExpanded}>
+            <!-- Compact summary row — clicking toggles the detail panel -->
+            <button
+              type="button"
+              class="timeline-entry__row"
+              onclick={() => toggleEntry(entry.seq)}
+              aria-expanded={isExpanded}
+            >
+              <span class="entry-expand-icon" aria-hidden="true">{isExpanded ? '▾' : '▸'}</span>
+              {#if isPageEvent(entry)}
+                <span class="entry-kind page-event">{entry.event_type}</span>
+                <span class="entry-target">{entry.target}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isPickRef(entry)}
+                <span class="entry-kind pick-ref">pick</span>
+                <span class="entry-target">{pickSelectorFor(entry.pick_id)}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isRegionRef(entry)}
+                <span class="entry-kind region-ref">region</span>
+                <span class="entry-target">region:{entry.region_id.slice(0, 6)}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isRelationRef(entry)}
+                <span class="entry-kind relation-ref">relation</span>
+                <span class="entry-target">relation:{entry.relation_id.slice(0, 6)}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isNavigation(entry)}
+                <span class="entry-kind navigation">nav</span>
+                <span class="entry-target">{hostnameOf(entry.from_url)} → {hostnameOf(entry.to_url)}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isAssertion(entry)}
+                <span class="entry-kind assertion">✓ {entry.assertion_type}</span>
+                <span class="entry-target">{entry.target}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {:else if isTranscriptSegment(entry)}
+                <span class="entry-kind transcript-segment">🎙 voice</span>
+                <span class="entry-target entry-target--transcript">{entry.text}</span>
+                <span class="entry-time">{formatRelativeTime(entry.timestamp_ms)}</span>
+              {/if}
+            </button>
+
+            <!-- Expanded detail panel — per-kind resolved detail (PIT-037: inline lookups) -->
+            {#if isExpanded}
+              <div class="timeline-entry__detail">
+                {#if isPageEvent(entry)}
+                  <dl class="entry-detail">
+                    <dt>seq</dt><dd>{entry.seq}</dd>
+                    <dt>event</dt><dd><code>{entry.event_type}</code></dd>
+                    <dt>target</dt><dd><code>{entry.target}</code></dd>
+                    {#if entry.target_path && entry.target_path.length > 0}
+                      <dt>path</dt><dd><code>{entry.target_path.join(' › ')}</code></dd>
+                    {/if}
+                    {#if entry.key}
+                      <dt>key</dt><dd><code>{entry.key}</code></dd>
+                    {/if}
+                    <dt>prevented</dt><dd>{entry.default_prevented ? 'yes' : 'no'}</dd>
+                    <dt>at</dt><dd>{formatAbsoluteTime(entry.timestamp_ms)}</dd>
+                    <dt>+</dt><dd>{formatRelativeTime(entry.timestamp_ms)}</dd>
+                  </dl>
+
+                {:else if isPickRef(entry)}
+                  {@const pick = backendState.inspector.picks.find((p) => p.pick_id === entry.pick_id) ?? null}
+                  {#if pick !== null}
+                    <dl class="entry-detail">
+                      <dt>selector</dt><dd><code>{pick.element.selector}</code></dd>
+                      {#if pick.comment}
+                        <dt>comment</dt><dd>{pick.comment}</dd>
+                      {/if}
+                      <dt>color</dt><dd>{pick.color_index ?? 0}</dd>
+                      <dt>rect</dt><dd><code>{rectStr(pick.element.rect)}</code></dd>
+                      <dt>url</dt><dd class="entry-detail__url">{pick.url}</dd>
+                      <dt>id</dt><dd><code>{entry.pick_id}</code></dd>
+                    </dl>
+                  {:else}
+                    <p class="entry-detail-missing">pick not found ({entry.pick_id.slice(0, 8)}…)</p>
+                  {/if}
+
+                {:else if isRegionRef(entry)}
+                  {@const region = regionFor(entry.region_id)}
+                  {#if region !== null}
+                    <dl class="entry-detail">
+                      <dt>rect</dt><dd><code>{rectStr(region.rect)}</code></dd>
+                      <dt>members</dt><dd>{(region.member_pick_ids ?? []).length}</dd>
+                      {#if region.note}
+                        <dt>note</dt><dd>{region.note}</dd>
+                      {/if}
+                      <dt>color</dt><dd>{region.color_index ?? 0}</dd>
+                      <dt>id</dt><dd><code>{entry.region_id}</code></dd>
+                    </dl>
+                  {:else}
+                    <p class="entry-detail-missing">region not found ({entry.region_id.slice(0, 6)})</p>
+                  {/if}
+
+                {:else if isRelationRef(entry)}
+                  {@const relation = relationFor(entry.relation_id)}
+                  {#if relation !== null}
+                    <dl class="entry-detail">
+                      <dt>kind</dt><dd><code>{relation.kind}</code></dd>
+                      <dt>source</dt><dd><code>{relation.source_id} ({relation.source_kind})</code></dd>
+                      <dt>target</dt><dd><code>{relation.target_id} ({relation.target_kind})</code></dd>
+                      {#if relation.note}
+                        <dt>note</dt><dd>{relation.note}</dd>
+                      {/if}
+                      <dt>id</dt><dd><code>{entry.relation_id}</code></dd>
+                    </dl>
+                  {:else}
+                    <p class="entry-detail-missing">relation not found ({entry.relation_id.slice(0, 6)})</p>
+                  {/if}
+
+                {:else if isNavigation(entry)}
+                  <dl class="entry-detail">
+                    <dt>from</dt><dd class="entry-detail__url">{entry.from_url}</dd>
+                    <dt>to</dt><dd class="entry-detail__url">{entry.to_url}</dd>
+                    <dt>at</dt><dd>{formatAbsoluteTime(entry.timestamp_ms)}</dd>
+                    <dt>+</dt><dd>{formatRelativeTime(entry.timestamp_ms)}</dd>
+                  </dl>
+
+                {:else if isAssertion(entry)}
+                  <dl class="entry-detail">
+                    <dt>type</dt><dd><code>{entry.assertion_type}</code></dd>
+                    {#if entry.target}
+                      <dt>target</dt><dd><code>{entry.target}</code></dd>
+                    {/if}
+                    {#if entry.expected}
+                      <dt>expected</dt><dd><code>{entry.expected}</code></dd>
+                    {/if}
+                    <dt>comparator</dt><dd><code>{entry.comparator}</code></dd>
+                    {#if entry.description}
+                      <dt>desc</dt><dd>{entry.description}</dd>
+                    {/if}
+                    <dt>id</dt><dd><code>{entry.assertion_id.slice(0, 8)}</code></dd>
+                  </dl>
+
+                {:else if isTranscriptSegment(entry)}
+                  <dl class="entry-detail">
+                    <dt>text</dt><dd class="entry-detail__text">{entry.text}</dd>
+                    <dt>timing</dt><dd><code>{formatMs(entry.start_ms)} – {formatMs(entry.end_ms)}</code></dd>
+                    <dt>seq</dt><dd>{entry.seq}</dd>
+                    <dt>at</dt><dd>{formatAbsoluteTime(entry.timestamp_ms)}</dd>
+                    <dt>backend</dt><dd><code>{entry.backend_id}</code></dd>
+                  </dl>
+                {/if}
+              </div>
             {/if}
           </div>
         {/each}
@@ -439,12 +603,102 @@
   }
 
   .timeline-entry {
+    border-bottom: 1px solid var(--fp-color-border-subtle);
+    font-size: 11px;
+  }
+
+  /* Compact summary row — full-width button replacing the old div row */
+  .timeline-entry__row {
     display: flex;
     align-items: baseline;
     gap: 6px;
     padding: 5px 10px;
-    border-bottom: 1px solid var(--fp-color-border-subtle);
-    font-size: 11px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    color: var(--fp-color-text-primary);
+    transition: background 80ms ease;
+  }
+
+  .timeline-entry__row:hover {
+    background: var(--fp-color-surface-secondary);
+  }
+
+  .entry-expand-icon {
+    font-size: 8px;
+    color: var(--fp-color-text-muted);
+    flex-shrink: 0;
+    width: 10px;
+    text-align: center;
+    line-height: 1;
+    align-self: center;
+  }
+
+  /* Detail panel — expanded per-kind resolved content */
+  .timeline-entry__detail {
+    padding: 0 10px 8px 26px;
+    background: rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--fp-color-border-subtle);
+  }
+
+  .entry-detail {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 10px;
+    row-gap: 4px;
+    margin: 6px 0 0 0;
+    padding: 0;
+    font-size: 10px;
+  }
+
+  .entry-detail dt {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fp-color-text-muted);
+    align-self: baseline;
+    padding-top: 1px;
+  }
+
+  .entry-detail dd {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-all;
+    color: var(--fp-color-text-primary);
+  }
+
+  .entry-detail code {
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 10px;
+    background: var(--fp-color-surface-secondary);
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+
+  .entry-detail__url {
+    font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    color: var(--fp-color-text-secondary);
+    word-break: break-all;
+  }
+
+  .entry-detail__text {
+    font-style: italic;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .entry-detail-missing {
+    margin: 6px 0 0 0;
+    font-size: 10px;
+    color: var(--fp-color-text-muted);
+    font-style: italic;
   }
 
   .entry-kind {

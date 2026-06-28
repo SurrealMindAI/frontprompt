@@ -23,7 +23,7 @@ import { describe, expect, test, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import RecordingsTab from './RecordingsTab.svelte';
 import { backendState } from '../../../backend-state/backend-state.svelte';
-import type { RecordingMeta, Recording, ReplayProgress } from '../../../_generated/state';
+import type { RecordingMeta, Recording, ReplayProgress, Region, Relation } from '../../../_generated/state';
 import type { Pick as PickType } from '../../../_generated/state';
 
 afterEach(() => {
@@ -36,6 +36,8 @@ afterEach(() => {
   backendState.recordings.activeRecordingId = null;
   backendState.recordings.activeReplayProgress = null;
   backendState.inspector.picks = [];
+  backendState.inspector.regions = [];
+  backendState.inspector.relations = [];
 });
 
 // --- Fixtures ---------------------------------------------------------------
@@ -66,7 +68,7 @@ function makeDetailRecording(overrides: Partial<Recording> = {}): Recording {
   } as unknown as Recording;
 }
 
-function makePick(pickId: string, selector: string): PickType {
+function makePick(pickId: string, selector: string, overrides: Partial<PickType> = {}): PickType {
   return {
     pick_id: pickId,
     url: 'https://example.com',
@@ -90,7 +92,37 @@ function makePick(pickId: string, selector: string): PickType {
     comment: '',
     color_index: 0,
     origin_session: null,
+    ...overrides,
   } as unknown as PickType;
+}
+
+function makeRegion(regionId: string, overrides: Partial<Region> = {}): Region {
+  return {
+    region_id: regionId,
+    rect: { x: 10, y: 20, width: 100, height: 50 },
+    member_pick_ids: [],
+    note: null,
+    timestamp_ms: 1700000000000,
+    color_index: 0,
+    viewport_snapshot: null,
+    origin_session: null,
+    ...overrides,
+  } as unknown as Region;
+}
+
+function makeRelation(relationId: string, overrides: Partial<Relation> = {}): Relation {
+  return {
+    relation_id: relationId,
+    source_id: 'src-pick-001',
+    source_kind: 'pick',
+    target_id: 'tgt-region-001',
+    target_kind: 'region',
+    kind: 'relates_to',
+    note: null,
+    timestamp_ms: 1700000000000,
+    origin_session: null,
+    ...overrides,
+  } as unknown as Relation;
 }
 
 // --- Tests: list view (empty) -----------------------------------------------
@@ -396,5 +428,531 @@ describe('RecordingsTab — replay progress bar', () => {
     expect(bar).not.toBeNull();
     expect(bar!.textContent).toContain('3');
     expect(bar!.textContent).toContain('1');
+  });
+});
+
+// --- Tests: timeline expand/collapse (accordion) ----------------------------
+
+describe('RecordingsTab — timeline entry expand/collapse', () => {
+  test('detail panel is hidden by default (collapsed)', () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#test',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.timeline-entry__detail')).toBeNull();
+  });
+
+  test('clicking a timeline row reveals the detail panel', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#test',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rowBtn = container.querySelector('.timeline-entry__row');
+    expect(rowBtn).not.toBeNull();
+    await fireEvent.click(rowBtn!);
+    expect(container.querySelector('.timeline-entry__detail')).not.toBeNull();
+  });
+
+  test('clicking the row again collapses the detail panel', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#test',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rowBtn = container.querySelector('.timeline-entry__row');
+    await fireEvent.click(rowBtn!);
+    expect(container.querySelector('.timeline-entry__detail')).not.toBeNull();
+    await fireEvent.click(rowBtn!);
+    expect(container.querySelector('.timeline-entry__detail')).toBeNull();
+  });
+
+  test('expand icon shows ▸ when collapsed and ▾ when expanded', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#test',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rowBtn = container.querySelector('.timeline-entry__row');
+    expect(rowBtn!.textContent).toContain('▸');
+    await fireEvent.click(rowBtn!);
+    expect(rowBtn!.textContent).toContain('▾');
+  });
+
+  test('row has aria-expanded reflecting expand state', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#test',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rowBtn = container.querySelector('.timeline-entry__row');
+    expect(rowBtn!.getAttribute('aria-expanded')).toBe('false');
+    await fireEvent.click(rowBtn!);
+    expect(rowBtn!.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('expanding one entry does not expand others', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#first',
+          default_prevented: false,
+        },
+        {
+          kind: 'page_event' as const,
+          seq: 2,
+          timestamp_ms: 1700000006000,
+          event_type: 'click',
+          target: 'button#second',
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    const rows = container.querySelectorAll('.timeline-entry__row');
+    await fireEvent.click(rows[0]!);
+    const details = container.querySelectorAll('.timeline-entry__detail');
+    expect(details).toHaveLength(1);
+  });
+});
+
+// --- Tests: timeline detail: page_event ------------------------------------
+
+describe('RecordingsTab — timeline detail: page_event', () => {
+  test('expanded detail shows full target_path chain', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#submit',
+          target_path: ['html', 'body', 'main', 'form', 'button#submit'],
+          default_prevented: false,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('html');
+    expect(detail!.textContent).toContain('body › main');
+  });
+
+  test('expanded detail shows key for keydown events', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          event_type: 'keydown',
+          target: 'input#search',
+          default_prevented: false,
+          key: 'Enter',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail!.textContent).toContain('Enter');
+  });
+
+  test('expanded detail shows seq and default_prevented', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'page_event' as const,
+          seq: 42,
+          timestamp_ms: 1700000005000,
+          event_type: 'click',
+          target: 'button#x',
+          default_prevented: true,
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail!.textContent).toContain('42');
+    expect(detail!.textContent).toContain('yes');
+  });
+});
+
+// --- Tests: timeline detail: pick_ref ---------------------------------------
+
+describe('RecordingsTab — timeline detail: pick_ref', () => {
+  test('resolved pick shows selector and comment in detail', async () => {
+    backendState.inspector.picks = [
+      makePick('pick-001', 'div.hero-section', { comment: 'Important hero element' }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'pick_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          pick_id: 'pick-001',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('div.hero-section');
+    expect(detail!.textContent).toContain('Important hero element');
+  });
+
+  test('resolved pick shows color_index and pick_id in detail', async () => {
+    backendState.inspector.picks = [
+      makePick('pick-abc-123', 'span.nav-link', { color_index: 7 }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'pick_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          pick_id: 'pick-abc-123',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail!.textContent).toContain('7');
+    expect(detail!.textContent).toContain('pick-abc-123');
+  });
+
+  test('missing pick shows graceful fallback with id prefix', async () => {
+    backendState.inspector.picks = [];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'pick_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          pick_id: 'missing-pick-deadbeef',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('not found');
+    expect(detail!.textContent).toContain('missing');
+  });
+});
+
+// --- Tests: timeline detail: region_ref -------------------------------------
+
+describe('RecordingsTab — timeline detail: region_ref', () => {
+  test('resolved region shows rect and member count (not just id stub)', async () => {
+    backendState.inspector.regions = [
+      makeRegion('region-001', {
+        rect: { x: 10, y: 20, width: 100, height: 50 },
+        member_pick_ids: ['p1', 'p2', 'p3'],
+        note: 'my test region',
+      }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'region_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          region_id: 'region-001',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    // Shows rect (not just id stub)
+    expect(detail!.textContent).toContain('10');  // rect.x
+    expect(detail!.textContent).toContain('100'); // rect.width
+    // Shows member count
+    expect(detail!.textContent).toContain('3');
+    // Shows note
+    expect(detail!.textContent).toContain('my test region');
+  });
+
+  test('resolved region shows region_id in detail', async () => {
+    backendState.inspector.regions = [
+      makeRegion('region-xyzabc', {
+        rect: { x: 0, y: 0, width: 50, height: 50 },
+        member_pick_ids: [],
+      }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'region_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          region_id: 'region-xyzabc',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail!.textContent).toContain('region-xyzabc');
+  });
+
+  test('missing region shows graceful fallback', async () => {
+    backendState.inspector.regions = [];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'region_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          region_id: 'gone-region-abc',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('not found');
+  });
+});
+
+// --- Tests: timeline detail: relation_ref -----------------------------------
+
+describe('RecordingsTab — timeline detail: relation_ref', () => {
+  test('resolved relation shows kind and source/target endpoints', async () => {
+    backendState.inspector.relations = [
+      makeRelation('rel-001', {
+        source_id: 'src-pick-xyz',
+        source_kind: 'pick',
+        target_id: 'tgt-region-abc',
+        target_kind: 'region',
+        kind: 'triggers',
+        note: 'trigger note',
+      }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'relation_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          relation_id: 'rel-001',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('triggers');
+    expect(detail!.textContent).toContain('pick');
+    expect(detail!.textContent).toContain('region');
+    expect(detail!.textContent).toContain('trigger note');
+  });
+
+  test('resolved relation shows relation_id in detail', async () => {
+    backendState.inspector.relations = [
+      makeRelation('rel-fullid-001', {
+        source_id: 'src',
+        source_kind: 'pick',
+        target_id: 'tgt',
+        target_kind: 'pick',
+        kind: 'part_of',
+      }),
+    ];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'relation_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          relation_id: 'rel-fullid-001',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail!.textContent).toContain('rel-fullid-001');
+  });
+
+  test('missing relation shows graceful fallback', async () => {
+    backendState.inspector.relations = [];
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'relation_ref' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          relation_id: 'gone-relation-xyz',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('not found');
+  });
+});
+
+// --- Tests: timeline detail: navigation ------------------------------------
+
+describe('RecordingsTab — timeline detail: navigation', () => {
+  test('expanded detail shows full from_url and to_url (not just hostnames)', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'navigation' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          from_url: 'https://example.com/path/to/page?q=test',
+          to_url: 'https://other.example.org/new/destination',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    // Full URLs (not just hostnames like compact row shows)
+    expect(detail!.textContent).toContain('https://example.com/path/to/page?q=test');
+    expect(detail!.textContent).toContain('https://other.example.org/new/destination');
+  });
+});
+
+// --- Tests: timeline detail: transcript_segment ----------------------------
+
+describe('RecordingsTab — timeline detail: transcript_segment', () => {
+  test('expanded detail shows full text and timing range', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'transcript_segment' as const,
+          seq: 5,
+          timestamp_ms: 1700000003000,
+          start_ms: 3000,
+          end_ms: 6500,
+          text: 'This is the full narration text for the transcript',
+          backend_id: 'mlx_whisper',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('This is the full narration text for the transcript');
+    // start timing visible in some form (3.0s or 3s or 3000)
+    expect(detail!.textContent).toMatch(/3[.,]?0?s|3000/);
+    // end timing visible
+    expect(detail!.textContent).toMatch(/6[.,]?5s|6500/);
+  });
+});
+
+// --- Tests: timeline detail: assertion -------------------------------------
+
+describe('RecordingsTab — timeline detail: assertion', () => {
+  test('expanded assertion detail shows type, target, expected, comparator', async () => {
+    backendState.recordings.activeDetailRecordingId = 'rec-0001';
+    backendState.recordings.detailRecording = makeDetailRecording({
+      entries: [
+        {
+          kind: 'assertion' as const,
+          seq: 1,
+          timestamp_ms: 1700000005000,
+          assertion_id: 'assert-001-uuid',
+          assertion_type: 'text_contains',
+          target: 'h1.title',
+          target_kind: 'selector',
+          expected: 'Welcome',
+          comparator: 'contains',
+          description: 'Page has welcome heading',
+        },
+      ],
+    });
+    const { container } = render(RecordingsTab, {});
+    await fireEvent.click(container.querySelector('.timeline-entry__row')!);
+    const detail = container.querySelector('.timeline-entry__detail');
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toContain('text_contains');
+    expect(detail!.textContent).toContain('h1.title');
+    expect(detail!.textContent).toContain('Welcome');
+    expect(detail!.textContent).toContain('contains');
   });
 });
