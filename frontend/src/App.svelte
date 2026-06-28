@@ -303,6 +303,14 @@
     --fp-color-accent-text: #0b1220;
     --fp-color-error: #ff6b6b;
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
+    /* Keyboard-focus indicator — consumed by the global :focus-visible rule
+       below and overridable per-component. Single source of truth. */
+    --fp-focus-ring-color: #6ea8fe;
+    --fp-focus-ring-width: 2px;
+    --fp-focus-ring-offset: 2px;
+    /* Motion scale — referenced by the reduced-motion guard. */
+    --fp-motion-fast: 120ms;
+    --fp-motion-base: 220ms;
   }
 
   /* ── Global scrollbar restyle ───────────────────────────────────────────
@@ -333,6 +341,37 @@
   }
   :global(::-webkit-scrollbar-corner) {
     background: transparent;
+  }
+
+  /* ── Keyboard focus ring ────────────────────────────────────────────────
+     One consistent, branded focus indicator for EVERY interactive control in
+     the HUD — shown only on keyboard focus (:focus-visible), never on pointer.
+     Before this, focus styling existed in just 5 of the components that hold
+     62 buttons, so most controls were invisible to keyboard users (WCAG 2.4.7).
+     :global() reaches nested components; CE-mode keeps it inside the shadow
+     root, so the host page's own focus styles are untouched. Component-scoped
+     :focus-visible rules have higher specificity and still win where present. */
+  :global(:focus-visible) {
+    outline: var(--fp-focus-ring-width) solid var(--fp-focus-ring-color);
+    outline-offset: var(--fp-focus-ring-offset);
+  }
+  /* Never paint a focus ring on pointer focus (mouse/touch). */
+  :global(:focus:not(:focus-visible)) {
+    outline: none;
+  }
+
+  /* ── Reduced motion ─────────────────────────────────────────────────────
+     Respect prefers-reduced-motion: collapse every transition/animation in the
+     HUD to near-instant. Only 1 component guarded this before, while ~50
+     transitions ran unconditionally (WCAG 2.3.3, vestibular safety). Scoped to
+     the shadow root via :global(*), so the host page is unaffected. */
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   .grid {
