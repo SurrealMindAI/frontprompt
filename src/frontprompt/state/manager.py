@@ -1646,23 +1646,6 @@ class StateManager:
         await self._notify_listeners(snap)
         return snap
 
-    async def _post_mutate(self) -> StateSnapshot:
-        """Compat shim — must only be called from within an async with self._lock: block.
-
-        Builds snapshot inside lock, then returns it. Callers that hold the lock
-        and call this directly cannot benefit from the lock-free listener fix.
-        Use _post_mutate_locked() + _notify_and_return() instead.
-
-        This shim is kept for compatibility with any call-sites that cannot easily
-        be restructured. The listener call happens outside the lock via
-        _notify_and_return after the lock is implicitly released on return.
-
-        NOTE: This method intentionally does NOT call _notify_listeners —
-        that is the responsibility of each mutation method which uses the
-        _post_mutate_locked() / _notify_and_return() split pattern.
-        """
-        return self._post_mutate_locked()
-
     async def _notify_listeners(self, snap: StateSnapshot) -> None:
         for fn in self._listeners:
             try:

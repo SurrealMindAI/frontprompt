@@ -99,11 +99,6 @@ class BridgeManager:
         """True nachdem das Overlay ``OverlayReady`` gesendet hat."""
         return self._overlay_ready is not None
 
-    @property
-    def overlay_ready_message(self) -> OverlayReady | None:
-        """Die ``OverlayReady``-message wenn empfangen, sonst ``None``."""
-        return self._overlay_ready
-
     def on(self, message_type: type[T], handler: Callable[[T], Awaitable[None] | None]) -> None:
         """Register handler für eine spezifische outbound message-type.
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable, ClassVar, Literal, get_args, runtime_checkable
+from typing import TYPE_CHECKING, Awaitable, Callable, ClassVar, Literal, runtime_checkable
 
 from typing_extensions import Protocol
 
@@ -159,13 +159,6 @@ This registry is what sub-plan 04's CLI ``bootstrap --voice`` and sub-plan 06's
 e2e tests iterate over. E2E tests inject a mock backend by appending it before the
 test and removing it after (see ``test_fake_backend_can_be_registered_and_deregistered``).
 """
-
-# ---------------------------------------------------------------------------
-# Validation helper — ensure TranscriptionBackendStatus matches state.py
-# ---------------------------------------------------------------------------
-
-_VALID_STATUSES: frozenset[str] = frozenset(get_args(TranscriptionBackendStatus))
-"""Frozenset of valid backend status strings for runtime guard in select_backend()."""
 
 
 def select_backend(preferred_id: str | None = None) -> TranscriptionBackend | None:

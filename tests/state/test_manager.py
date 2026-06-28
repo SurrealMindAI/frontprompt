@@ -593,7 +593,7 @@ async def test_update_region_patches_note() -> None:
 async def test_notify_listeners_called_outside_lock() -> None:
     """Listener that schedules a nested mutation must complete without deadlock.
 
-    Before the fix: _post_mutate holds the lock while calling listeners.
+    Before the fix: state finalization held the lock while calling listeners.
     The nested mutation tries to acquire the same lock → deadlock (anyio.fail_after
     triggers as TimeoutError).
 

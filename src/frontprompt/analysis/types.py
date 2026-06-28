@@ -227,8 +227,6 @@ InspectField = Literal[
     "outline",
 ]
 
-_DEFAULT_INSPECT_FIELDS: list[InspectField] = ["text", "role", "visible", "enabled"]
-
 
 class InspectResult(BaseModel):
     """Per-element inspect result. Fields not requested are absent (None)."""

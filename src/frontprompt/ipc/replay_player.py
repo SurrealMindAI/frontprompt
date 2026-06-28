@@ -213,11 +213,9 @@ class ReplayPlayer:
         # Normal completion
         await self._state_manager.set_active_replay_progress(None)
 
-        all_ok = all(r.ok for r in results)
-        status: str = "completed" if all_ok else "completed"
-        # status="completed" even if some steps failed (assertion failures or step errors)
-        # status="failed" only on unrecoverable abort (handled above)
-
+        # status is always "completed" here (even if individual steps failed via
+        # assertion/step errors); a "failed" status is set only on the
+        # unrecoverable-abort path handled above.
         report = ReplayReport(
             replay_id=replay_id,
             recording_id=recording_id,

@@ -118,7 +118,7 @@ async def test_on_overlay_send_overlay_ready_build_session_mismatch() -> None:
                 "bundle_build_session": "different-session",
             }
         )
-    assert bridge.overlay_ready_message is not None
+    assert bridge.is_ready
 
 
 # ── _on_overlay_send: handler via task_group ──────────────────────────────────
