@@ -63,3 +63,8 @@ coverage.xml
 
 # git worktrees (isolated dev checkouts)
 .worktrees/
+
+# Playwright — overlay visual-regression harness (baselines under tests-visual/__screenshots__ ARE committed)
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
