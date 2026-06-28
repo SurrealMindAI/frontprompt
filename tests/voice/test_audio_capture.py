@@ -132,7 +132,7 @@ async def test_start_and_stop_produces_valid_wav(tmp_path: Path) -> None:
             assert started is True, "start() should return True on success"
 
             # Simulate frames arriving from the C-callback (thread-safe put_nowait)
-            # 1600 samples × 2 bytes = 3200 bytes of 16-bit mono audio at 16 kHz → 0.1 s
+            # 1600 samples x 2 bytes = 3200 bytes of 16-bit mono audio at 16 kHz → 0.1 s
             frame_data = b"\x00\x01" * 1600
             assert manager._queue is not None
             manager._queue.put_nowait(frame_data)
@@ -179,7 +179,7 @@ async def test_frames_arrive_in_drainer_queue(tmp_path: Path) -> None:
             tg.cancel_scope.cancel()
 
     with wave.open(str(wav_path), "rb") as wf:
-        # 3 × 800 samples = 2400 frames total
+        # 3 x 800 samples = 2400 frames total
         assert wf.getnframes() == 2400
 
 
@@ -235,7 +235,7 @@ async def test_wav_duration_matches_frames(tmp_path: Path) -> None:
         wav_path = tmp_path / "recording-dur.wav"
         recording_id = "test-duration"
         n_samples = 1000
-        frame_data = b"\x00\x01" * n_samples  # 1000 samples × 2 bytes (int16)
+        frame_data = b"\x00\x01" * n_samples  # 1000 samples x 2 bytes (int16)
 
         async with anyio.create_task_group() as tg:
             manager = AudioCaptureManager(tg)

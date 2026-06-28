@@ -13,14 +13,18 @@ Covers:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import patch
+
+if TYPE_CHECKING:
+    from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 
 
-def _fresh_backend():
+def _fresh_backend() -> MlxWhisperBackend:
     """Return a freshly constructed MlxWhisperBackend instance."""
     from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
 

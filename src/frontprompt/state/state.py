@@ -1025,7 +1025,7 @@ class TranscriptionBackendInfo(BaseModel):
     status: TranscriptionBackendStatus = Field(description="Aktueller Verfügbarkeitsstatus.")
     download_progress: float | None = Field(
         default=None,
-        description="0.0–1.0 während Download; None sonst. Ephemer (nicht persistiert).",
+        description="0.0-1.0 während Download; None sonst. Ephemer (nicht persistiert).",
     )
     error_message: str | None = Field(
         default=None,

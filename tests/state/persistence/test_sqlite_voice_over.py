@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from frontprompt.state.state import (
     Recording,
@@ -19,12 +20,15 @@ from frontprompt.state.state import (
     TranscriptSegmentEntry,
 )
 
+if TYPE_CHECKING:
+    from frontprompt.state.persistence.sqlite import SqlitePersistence
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_sqlite(tmp_path: Path):  # type: ignore[no-untyped-def]
+def _make_sqlite(tmp_path: Path) -> SqlitePersistence:
     from frontprompt.state.persistence.sqlite import SqlitePersistence
 
     return SqlitePersistence(tmp_path / "test_vo.db")

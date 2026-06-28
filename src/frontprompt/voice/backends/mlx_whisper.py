@@ -25,7 +25,7 @@ import importlib.util
 import platform
 import sys
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import structlog
 
@@ -220,7 +220,7 @@ class MlxWhisperBackend:
                 # and forward via the stored anyio event loop.
                 import anyio
 
-                anyio.from_thread.run_sync(lambda f=fraction: None)
+                anyio.from_thread.run_sync(lambda: None)
                 # Direct approach: store the fraction for deferred dispatch
                 self._last_fraction = fraction
 
@@ -270,7 +270,7 @@ class MlxWhisperBackend:
 
             _hf_hub.snapshot_download(
                 repo_id=active_repo_id,
-                tqdm_class=_ProgressTqdmCollecting,  # type: ignore[arg-type]
+                tqdm_class=_ProgressTqdmCollecting,
             )
 
             # Drain collected fractions (incremental progress, if any)
@@ -307,7 +307,7 @@ class MlxWhisperBackend:
         Raises:
             RuntimeError: If mlx_whisper transcription fails.
         """
-        import mlx_whisper  # lazy — Apple Silicon only
+        import mlx_whisper  # type: ignore[import-untyped]  # lazy — Apple Silicon only
 
         _LOG.info("mlx_whisper.transcribe.start", audio_path=str(audio_path))
 
@@ -322,7 +322,7 @@ class MlxWhisperBackend:
             raise RuntimeError(f"mlx_whisper transcription failed: {exc}") from exc
 
         # mlx_whisper returns {"segments": [{"start": float_s, "end": float_s, "text": str}, ...]}
-        raw_segments: list[dict] = result.get("segments", [])
+        raw_segments: list[dict[str, Any]] = result.get("segments", [])
         segments = [
             TranscriptSegment(
                 start_ms=int(seg["start"] * 1000),

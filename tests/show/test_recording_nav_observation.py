@@ -14,12 +14,17 @@ mock of the BridgeManager + BrowserSessionManager surface — no real Chromium.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from frontprompt.state import StateManager
 from frontprompt.state.state import NavigationEntry
+
+if TYPE_CHECKING:
+    from frontprompt.ipc.session import SessionMetadata
+    from frontprompt.show_session import ShowSession
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -36,7 +41,7 @@ def _make_session_with_manager(session_id: str = "test-nav") -> tuple:
 
 
 async def _invoke_overlay_ready_handler(
-    session,
+    session: ShowSession,
     sm: StateManager,
     *,
     current_url: str,
@@ -57,18 +62,18 @@ async def _invoke_overlay_ready_handler(
     captured_handler = None
 
     class _CapturingBridge:
-        def on(self, msg_cls, handler):
+        def on(self, msg_cls: object, handler: object) -> None:
             nonlocal captured_handler
             if msg_cls is OverlayReady:
                 captured_handler = handler
 
-        async def send(self, msg):
+        async def send(self, msg: object) -> None:
             pass  # no-op for snapshot sends
 
-        def set_task_group(self, tg):
+        def set_task_group(self, tg: object) -> None:
             pass
 
-        def wait_until_ready(self):
+        def wait_until_ready(self) -> None:
             pass
 
     # Mock browser.page.url (synchronous str property)
@@ -102,10 +107,10 @@ async def _invoke_overlay_ready_handler(
         mock_meta = SessionMetadata.for_current_process(session_id="test-nav", url="https://example.com")
 
         class _FakeLifecycle:
-            async def __aenter__(self):
+            async def __aenter__(self) -> SessionMetadata:
                 return mock_meta
 
-            async def __aexit__(self, *args):
+            async def __aexit__(self, *args: object) -> None:
                 pass
 
         mock_lifecycle.return_value = _FakeLifecycle()
@@ -124,7 +129,7 @@ async def _invoke_overlay_ready_handler(
         mock_injector_cls.return_value = injector
 
         # Cancel after the handlers are registered (before waiting for page close)
-        async def _wait_until_closed_cancel():
+        async def _wait_until_closed_cancel() -> None:
             raise anyio.get_cancelled_exc_class()()
 
         mock_browser.wait_until_closed = AsyncMock(side_effect=_wait_until_closed_cancel)

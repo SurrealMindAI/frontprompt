@@ -11,10 +11,19 @@ Covers COL-2, COL-3, COL-6, COL-8:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from frontprompt.state.persistence.in_memory import InMemoryPersistence
 from frontprompt.state.state import TranscriptionBackendInfo, TranscriptionState
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from frontprompt.state.manager import StateManager
+    from frontprompt.state.state import StateSnapshot
+    from frontprompt.voice.transcription import ProgressCallback, TranscriptSegment
 
 # ---------------------------------------------------------------------------
 # Fake backend (implements TranscriptionBackend Protocol)
@@ -37,10 +46,10 @@ class _FakeBackend:
     def set_model(self, model_id: str | None) -> None:
         self.set_model_calls.append(model_id)
 
-    async def ensure(self, progress_cb) -> None:
+    async def ensure(self, progress_cb: ProgressCallback) -> None:
         pass
 
-    async def transcribe(self, audio_path):
+    async def transcribe(self, audio_path: Path) -> list[TranscriptSegment]:
         return []
 
 
@@ -53,7 +62,7 @@ def _make_manager(
     *,
     transcription_state: TranscriptionState | None = None,
     persistence: InMemoryPersistence | None = None,
-):
+) -> StateManager:
     from frontprompt.state.manager import StateManager
 
     return StateManager(
@@ -116,7 +125,7 @@ async def test_set_mlx_whisper_model_broadcasts() -> None:
 
     broadcasts = []
 
-    def _listener(snap) -> None:
+    def _listener(snap: StateSnapshot) -> None:
         broadcasts.append(snap)
 
     manager.add_snapshot_listener(_listener)

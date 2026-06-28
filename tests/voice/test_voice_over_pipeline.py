@@ -173,7 +173,9 @@ async def test_transcript_entry_timestamp_equals_started_at_ms_plus_start_ms() -
 
     # Check timestamp_ms = started_at_ms + start_ms for each segment
     expected = [(1000, started_at_ms + 1000), (3000, started_at_ms + 3000)]
-    for entry, (expected_start_ms, expected_ts) in zip(sorted(transcript_entries, key=lambda e: e.start_ms), expected):
+    for entry, (expected_start_ms, expected_ts) in zip(
+        sorted(transcript_entries, key=lambda e: e.start_ms), expected, strict=True
+    ):
         assert entry.start_ms == expected_start_ms, f"Expected start_ms={expected_start_ms}, got {entry.start_ms}"
         assert entry.timestamp_ms == expected_ts, (
             f"Expected timestamp_ms={expected_ts} (started_at_ms={started_at_ms} + "

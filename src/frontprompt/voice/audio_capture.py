@@ -41,6 +41,8 @@ import anyio
 import structlog
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     import anyio.abc
 
     from frontprompt.state import StateManager
@@ -59,7 +61,7 @@ _SAMPLE_WIDTH: int = 2  # bytes — 16-bit PCM
 # The callable must create the WAV file at wav_path before returning True.
 # See tests/_subprocess_bootstrap/sitecustomize.py for the test-tree injection pattern.
 # ---------------------------------------------------------------------------
-capture_source_override: object = None
+capture_source_override: Callable[[str, int | None, Path], Awaitable[bool]] | None = None
 
 
 class AudioCaptureManager:
@@ -129,7 +131,7 @@ class AudioCaptureManager:
         # Extension seam: alternative capture source (set from test-tree bootstrap only).
         # Production code must never set capture_source_override. See tests/_subprocess_bootstrap/.
         if capture_source_override is not None:
-            started: bool = await capture_source_override(recording_id, device_id, wav_path)  # type: ignore[misc]
+            started: bool = await capture_source_override(recording_id, device_id, wav_path)
             if started:
                 self._current_recording_id = recording_id
                 self._current_wav_path = wav_path
@@ -141,7 +143,7 @@ class AudioCaptureManager:
                 )
             return started
 
-        import sounddevice as sd  # COL-2: lazy import — defer PortAudio init until capture needed
+        import sounddevice as sd  # type: ignore[import-untyped]  # COL-2: lazy import — defer PortAudio init until capture needed
 
         # Reset per-capture state
         self._queue = queue.Queue()
@@ -172,7 +174,7 @@ class AudioCaptureManager:
         # Open sounddevice InputStream — may raise PortAudioError (COL-7)
         def _callback(indata: object, frames: int, time_info: object, status: object) -> None:
             # C-callback: must only call thread-safe operations (no anyio, no await)
-            self._queue.put_nowait(bytes(indata))  # type: ignore[union-attr]
+            self._queue.put_nowait(bytes(indata))  # type: ignore[union-attr, call-overload]
 
         try:
             stream = sd.InputStream(

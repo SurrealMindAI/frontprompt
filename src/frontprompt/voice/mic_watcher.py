@@ -86,7 +86,7 @@ class MicrophoneWatcher:
             sounddevice is a core dependency; the lazy import is kept to defer PortAudio
             initialization until the watcher task actually runs.
         """
-        import sounddevice as sd  # COL-2: lazy import inside run() — defer PortAudio init
+        import sounddevice as sd  # type: ignore[import-untyped]  # COL-2: lazy import inside run() — defer PortAudio init
 
         from frontprompt.state.state import MicrophoneDevice  # also lazy — avoids circular
 

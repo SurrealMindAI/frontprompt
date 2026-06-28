@@ -7,6 +7,7 @@ per-entity WAL JSON-blob pattern analog dem Recorder's Persistenz.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -16,13 +17,16 @@ from frontprompt.state.state import (
     ReplayStepResult,
 )
 
+if TYPE_CHECKING:
+    from frontprompt.state.persistence.sqlite import SqlitePersistence
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def sqlite_persistence(tmp_path: Path):
+def sqlite_persistence(tmp_path: Path) -> SqlitePersistence:
     """Frische SqlitePersistence für jeden Test (kein shared state)."""
     from frontprompt.state.persistence.sqlite import SqlitePersistence
 
@@ -67,7 +71,7 @@ def _make_report(
 # ---------------------------------------------------------------------------
 
 
-def test_save_and_get_replay_report_roundtrip(sqlite_persistence) -> None:
+def test_save_and_get_replay_report_roundtrip(sqlite_persistence: SqlitePersistence) -> None:
     """save_replay_report + get_replay_report round-trip."""
     report = _make_report()
     sqlite_persistence.save_replay_report(report)
@@ -81,13 +85,13 @@ def test_save_and_get_replay_report_roundtrip(sqlite_persistence) -> None:
     assert retrieved.ended_at_ms == 2000
 
 
-def test_get_replay_report_unknown_returns_none(sqlite_persistence) -> None:
+def test_get_replay_report_unknown_returns_none(sqlite_persistence: SqlitePersistence) -> None:
     """get_replay_report('unknown-id') liefert None."""
     result = sqlite_persistence.get_replay_report("does-not-exist")
     assert result is None
 
 
-def test_step_results_survive_roundtrip(sqlite_persistence) -> None:
+def test_step_results_survive_roundtrip(sqlite_persistence: SqlitePersistence) -> None:
     """step_results überleben den SQLite round-trip inkl. assertion_actual und skipped_reason."""
     steps = [
         ReplayStepResult(
@@ -130,7 +134,7 @@ def test_step_results_survive_roundtrip(sqlite_persistence) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_list_replay_reports_meta_returns_all(sqlite_persistence) -> None:
+def test_list_replay_reports_meta_returns_all(sqlite_persistence: SqlitePersistence) -> None:
     """list_replay_reports_meta(recording_id=None) liefert alle Reports als ReplayReportMeta."""
     sqlite_persistence.save_replay_report(_make_report(replay_id="rep-001", recording_id="rec-A"))
     sqlite_persistence.save_replay_report(_make_report(replay_id="rep-002", recording_id="rec-B"))
@@ -145,7 +149,7 @@ def test_list_replay_reports_meta_returns_all(sqlite_persistence) -> None:
         assert not hasattr(meta, "step_results") or not hasattr(meta.model_fields, "step_results")
 
 
-def test_list_replay_reports_meta_filtered_by_recording_id(sqlite_persistence) -> None:
+def test_list_replay_reports_meta_filtered_by_recording_id(sqlite_persistence: SqlitePersistence) -> None:
     """list_replay_reports_meta(recording_id='rec-A') liefert nur Reports für diese Recording."""
     sqlite_persistence.save_replay_report(_make_report(replay_id="rep-001", recording_id="rec-A"))
     sqlite_persistence.save_replay_report(_make_report(replay_id="rep-002", recording_id="rec-A"))
@@ -156,7 +160,7 @@ def test_list_replay_reports_meta_filtered_by_recording_id(sqlite_persistence) -
     assert all(m.recording_id == "rec-A" for m in metas)
 
 
-def test_two_reports_same_recording_both_retrievable(sqlite_persistence) -> None:
+def test_two_reports_same_recording_both_retrievable(sqlite_persistence: SqlitePersistence) -> None:
     """Zwei Reports für dieselbe Recording sind getrennt abrufbar und unterscheidbar."""
     report_1 = _make_report(replay_id="rep-X1", recording_id="rec-shared", status="completed")
     report_2 = _make_report(replay_id="rep-X2", recording_id="rec-shared", status="failed")

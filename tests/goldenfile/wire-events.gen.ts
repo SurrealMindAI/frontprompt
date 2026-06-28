@@ -725,7 +725,7 @@ export interface TranscriptionBackendInfo {
    */
   status: "unavailable" | "missing_dep" | "needs_download" | "downloading" | "ready" | "error";
   /**
-   * 0.0–1.0 während Download; None sonst. Ephemer (nicht persistiert).
+   * 0.0-1.0 während Download; None sonst. Ephemer (nicht persistiert).
    */
   download_progress?: number | null;
   /**

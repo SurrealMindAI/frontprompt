@@ -195,50 +195,50 @@ __codegen_roots__ = [
 ]
 
 __all__ = [
+    # Bridge messages — Replay-Assertion-Authoring (Schema 0.9.0)
+    "AssertionAddedToRecordingRequested",
     # State types — core
     "AssertionComparator",
+    "AssertionDeletedRequested",
     "AssertionEntry",
     "AssertionType",
+    "AssertionUpdatedRequested",
+    # State types — voice-over (Schema 0.10.0)
+    "MicrophoneDevice",
+    "MicrophoneState",
     "NavigationEntry",
     "PageEventEntry",
     "ParameterDeclaration",
     "PickRefEntry",
+    # Bridge messages — Recording
+    "RecordedEventCapturedRequested",
     "Recording",
     "RecordingMeta",
-    "RecordingsState",
+    "RecordingRenameRequested",
+    "RecordingSelectedRequested",
+    "RecordingStartRequested",
     "RecordingStatus",
+    "RecordingStopRequested",
+    "RecordingsState",
     "RegionRefEntry",
     "RelationRefEntry",
     "ReplayProgress",
     "ReplayReport",
     "ReplayStatus",
     "ReplayStepResult",
+    # Bridge messages — Voice-Over-Mutations (Schema 0.10.0)
+    "SetMicDeviceRequested",
+    "SetTranscriptionBackendRequested",
+    # Bridge messages — Transcription-Model-Selection (Schema 0.11.0)
+    "SetTranscriptionModelRequested",
+    "SettingsState",
     "TimelineEntry",
     "TimelineEntryKind",
-    # State types — voice-over (Schema 0.10.0)
-    "MicrophoneDevice",
-    "MicrophoneState",
-    "SettingsState",
+    "TranscriptSegmentEntry",
     "TranscriptionBackendInfo",
     "TranscriptionBackendStatus",
     "TranscriptionModelSpec",
     "TranscriptionState",
-    "TranscriptSegmentEntry",
     "TranscriptionStatus",
-    # Bridge messages — Recording
-    "RecordedEventCapturedRequested",
-    "RecordingRenameRequested",
-    "RecordingSelectedRequested",
-    "RecordingStartRequested",
-    "RecordingStopRequested",
-    # Bridge messages — Replay-Assertion-Authoring (Schema 0.9.0)
-    "AssertionAddedToRecordingRequested",
-    "AssertionDeletedRequested",
-    "AssertionUpdatedRequested",
-    # Bridge messages — Voice-Over-Mutations (Schema 0.10.0)
-    "SetMicDeviceRequested",
-    "SetTranscriptionBackendRequested",
     "TriggerModelDownloadRequested",
-    # Bridge messages — Transcription-Model-Selection (Schema 0.11.0)
-    "SetTranscriptionModelRequested",
 ]

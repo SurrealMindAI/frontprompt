@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 import anyio
 import structlog
@@ -956,7 +957,7 @@ class StateManager:
             else:
                 ended_at_ms = self._stop_recording_locked(recording_id)
                 snap = self._post_mutate_locked(
-                    lambda r_id=recording_id, ts=ended_at_ms: self._persistence.mark_recording_stopped(r_id, ts)
+                    lambda: self._persistence.mark_recording_stopped(recording_id, ended_at_ms)
                 )
         return await self._notify_and_return(snap)
 
@@ -996,7 +997,7 @@ class StateManager:
                         break
                 self._log.info("state.manager.rename_recording", recording_id=recording_id, name=name)
                 snap = self._post_mutate_locked(
-                    lambda r_id=recording_id, n=name, d=description: self._persistence.update_recording_meta(r_id, n, d)
+                    lambda: self._persistence.update_recording_meta(recording_id, name, description)
                 )
         return await self._notify_and_return(snap)
 
@@ -1067,7 +1068,7 @@ class StateManager:
     async def add_assertion_to_timeline(
         self,
         recording_id: str,
-        entry_payload: dict,
+        entry_payload: dict[str, Any],
         insert_after_seq: int | None = None,
     ) -> StateSnapshot:
         """Append or insert an AssertionEntry into a recording's timeline.
@@ -1130,9 +1131,7 @@ class StateManager:
             else:
                 before = len(recording.entries)
                 recording.entries = [
-                    e
-                    for e in recording.entries
-                    if not (e.kind == "assertion" and e.assertion_id == assertion_id)  # type: ignore[attr-defined]
+                    e for e in recording.entries if not (e.kind == "assertion" and e.assertion_id == assertion_id)
                 ]
                 removed = before - len(recording.entries)
                 if removed == 0:
@@ -1157,7 +1156,7 @@ class StateManager:
         self,
         recording_id: str,
         assertion_id: str,
-        patch: dict,
+        patch: dict[str, Any],
     ) -> StateSnapshot:
         """Partial update of an AssertionEntry in a recording's timeline.
 
@@ -1172,7 +1171,7 @@ class StateManager:
             else:
                 mutated = False
                 for entry in recording.entries:
-                    if entry.kind == "assertion" and entry.assertion_id == assertion_id:  # type: ignore[attr-defined]
+                    if entry.kind == "assertion" and entry.assertion_id == assertion_id:
                         for field, value in patch.items():
                             if hasattr(entry, field):
                                 setattr(entry, field, value)

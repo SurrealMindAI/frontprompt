@@ -26,7 +26,7 @@ import secrets
 import signal as _signal
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import anyio
 import click
@@ -470,7 +470,7 @@ class ShowSession:
         None-valued fields in the message are sentinel for "don't change this field".
         Only non-None fields are included in the patch dict.
         """
-        patch: dict = {}
+        patch: dict[str, Any] = {}
         if msg.assertion_type is not None:
             patch["assertion_type"] = msg.assertion_type
         if msg.target is not None:
@@ -827,7 +827,7 @@ class ShowSession:
 
                             tg.start_soon(self._heartbeat_sender, bridge)
                             # Voice-over: mic topology watcher runs for the lifetime of the session
-                            tg.start_soon(self._mic_watcher.run, self._sm)  # type: ignore[attr-defined]
+                            tg.start_soon(self._mic_watcher.run, self._sm)
 
                             await browser.wait_until_closed()
                             self._log.info("show.page.closed_by_user")

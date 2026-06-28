@@ -13,6 +13,11 @@ Covers:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 # ---------------------------------------------------------------------------
 # TranscriptionModelSpec
 # ---------------------------------------------------------------------------
@@ -125,7 +130,7 @@ def test_in_memory_persistence_model_id_round_trip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_sqlite_persistence_model_id_round_trip(tmp_path) -> None:
+def test_sqlite_persistence_model_id_round_trip(tmp_path: Path) -> None:
     """SqlitePersistence: save then load mlx_whisper_model_id returns same value."""
     from frontprompt.state.persistence.sqlite import SqlitePersistence
 

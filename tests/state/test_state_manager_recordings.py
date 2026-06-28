@@ -366,7 +366,7 @@ async def test_append_timeline_entry_monotonic_across_all_kinds() -> None:
 async def test_snapshot_includes_live_recordings_state_col2() -> None:
     """StateSnapshot.recordings_state enthält laufende Aufnahme (COL-2 fix)."""
     sm = StateManager(session_id="test-session")
-    snap = await sm.start_recording(name="Visible in Snapshot")
+    await sm.start_recording(name="Visible in Snapshot")
 
     # snapshot() must surface the live recordings_state
     live_snap = sm.snapshot()

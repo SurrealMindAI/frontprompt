@@ -770,7 +770,7 @@ class SqlitePersistence:
         row = self._conn.execute("SELECT value FROM settings WHERE key = 'mlx_whisper_model_id'").fetchone()
         if row is None or not row[0]:
             return None
-        return row[0]
+        return str(row[0])
 
     # ------------------------------------------------------------------
     # Replay-report domain (sub-plan 01)

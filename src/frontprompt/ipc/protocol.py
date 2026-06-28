@@ -928,6 +928,8 @@ class ReplayReportMeta(BaseModel):
 
 __all__ = [
     "IPC_SCHEMA_VERSION",
+    # Schema 0.8.0 — replay write-side
+    "AddAssertionRequest",
     "AnnotationEntry",
     "AttributesReaderResult",
     "CondensedHtmlResult",
@@ -955,6 +957,7 @@ __all__ = [
     "GetPicksRequest",
     "GetRecordingRequest",
     "GetRecordingsRequest",
+    "GetReplayReportRequest",
     "GetSnapshotRequest",
     "GetStateRequest",
     "GetStateSummaryRequest",
@@ -964,6 +967,7 @@ __all__ = [
     "InspectElementsResult",
     "IpcRequest",
     "IpcResponse",
+    "ListReplayReportsRequest",
     "NavigateRequest",
     "OutlineNode",
     "OutlineReaderResult",
@@ -980,19 +984,15 @@ __all__ = [
     "PingRequest",
     "RelocatePicksRequest",
     "RelocatePicksResult",
+    "ReplayReportMeta",
+    "RunReplayRequest",
     "ScreenshotElementRequest",
     "ScreenshotPageRequest",
     "ScreenshotResult",
     "ScrollToRequest",
     "ScrollToResult",
-    "StateReaderResult",
-    "TextReaderResult",
-    # Schema 0.8.0 — replay write-side
-    "AddAssertionRequest",
-    "GetReplayReportRequest",
-    "ListReplayReportsRequest",
-    "ReplayReportMeta",
-    "RunReplayRequest",
     "StartRecordingRequest",
+    "StateReaderResult",
     "StopRecordingRequest",
+    "TextReaderResult",
 ]

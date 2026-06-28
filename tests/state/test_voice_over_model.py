@@ -7,6 +7,8 @@ TranscriptionState.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
@@ -26,12 +28,15 @@ from frontprompt.state.state import (
     TranscriptSegmentEntry,
 )
 
+if TYPE_CHECKING:
+    from frontprompt.state.state import PanelStateView
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _panel_state():  # type: ignore[no-untyped-def]
+def _panel_state() -> PanelStateView:
     from frontprompt.state.state import PanelStateView, PanelView
 
     return PanelStateView(

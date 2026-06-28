@@ -107,7 +107,7 @@ def _bind_params(text: str, params: dict[str, str]) -> str:
     'missing parameter: <name>' if a placeholder has no value.
     """
 
-    def _replace(match: re.Match) -> str:
+    def _replace(match: re.Match[str]) -> str:
         name = match.group(1)
         if name not in params:
             raise ValueError(f"missing parameter: {name}")
@@ -234,7 +234,7 @@ class ReplayPlayer:
             replay_id=replay_id,
             recording_id=recording_id,
             parameters=merged_params,
-            status="completed",  # type: ignore[arg-type]
+            status="completed",
             started_at_ms=started_at,
             ended_at_ms=_now_ms(),
             step_results=results,

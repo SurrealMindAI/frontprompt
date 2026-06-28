@@ -260,7 +260,7 @@ async def test_recorded_event_captured_unknown_recording_is_noop() -> None:
     """_on_recorded_event_captured with unknown recording_id is a no-op (no exception)."""
     from frontprompt.bridge.messages import RecordedEventCapturedRequested
 
-    session, sm = _make_session()
+    session, _sm = _make_session()
     entry = _make_page_event_entry()
     await session._on_recorded_event_captured(RecordedEventCapturedRequested(recording_id="unknown", entry=entry))
     # No exception raised

@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+if TYPE_CHECKING:
+    from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
 
-def _fresh_backend():  # type: ignore[no-untyped-def]
+
+def _fresh_backend() -> MlxWhisperBackend:
     from frontprompt.voice.backends.mlx_whisper import MlxWhisperBackend
 
     return MlxWhisperBackend()

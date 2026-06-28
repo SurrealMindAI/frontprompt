@@ -83,7 +83,7 @@ async def test_find_one_with_parent_pick() -> None:
     parent_pick = _make_pick("#parent")
     query = FindByCss(selector="button")
     # Should not raise — parent_pick is resolved in snapshot
-    result = await pa.find_one(query, comment="test", parent_pick=parent_pick)
+    await pa.find_one(query, comment="test", parent_pick=parent_pick)
     # Result may be None or a Pick depending on parsing — just verify no exception
 
 

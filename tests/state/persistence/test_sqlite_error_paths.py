@@ -16,7 +16,12 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
+
+if TYPE_CHECKING:
+    from frontprompt.state.persistence.sqlite import SqlitePersistence
+    from frontprompt.state.state import PanelStateView, Pick, Recording, Region, Relation
 
 
 def _broken_conn() -> MagicMock:
@@ -31,13 +36,13 @@ def _broken_conn() -> MagicMock:
     return mock
 
 
-def _make_fresh_persistence(tmp_path: Path):  # type: ignore[no-untyped-def]
+def _make_fresh_persistence(tmp_path: Path) -> SqlitePersistence:
     from frontprompt.state.persistence.sqlite import SqlitePersistence
 
     return SqlitePersistence(tmp_path / "test.db")
 
 
-def _make_pick(pick_id: str):  # type: ignore[no-untyped-def]
+def _make_pick(pick_id: str) -> Pick:
     from frontprompt.state.state import ElementFingerprint, ElementRect, Pick, PickElement
 
     return Pick(
@@ -53,7 +58,7 @@ def _make_pick(pick_id: str):  # type: ignore[no-untyped-def]
     )
 
 
-def _make_region(region_id: str):  # type: ignore[no-untyped-def]
+def _make_region(region_id: str) -> Region:
     from frontprompt.state.state import ElementRect, Region
 
     return Region(
@@ -63,7 +68,7 @@ def _make_region(region_id: str):  # type: ignore[no-untyped-def]
     )
 
 
-def _make_relation(relation_id: str):  # type: ignore[no-untyped-def]
+def _make_relation(relation_id: str) -> Relation:
     from frontprompt.state.state import Relation
 
     return Relation(
@@ -77,7 +82,7 @@ def _make_relation(relation_id: str):  # type: ignore[no-untyped-def]
     )
 
 
-def _make_recording(recording_id: str):  # type: ignore[no-untyped-def]
+def _make_recording(recording_id: str) -> Recording:
     from frontprompt.state.state import Recording
 
     return Recording(
@@ -88,7 +93,7 @@ def _make_recording(recording_id: str):  # type: ignore[no-untyped-def]
     )
 
 
-def _make_panel_state():  # type: ignore[no-untyped-def]
+def _make_panel_state() -> PanelStateView:
     from frontprompt.state.state import PanelStateView, PanelView
 
     return PanelStateView(

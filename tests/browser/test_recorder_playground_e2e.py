@@ -277,7 +277,7 @@ async def test_fixture_equality_round_trip(anyio_backend: str) -> None:
     )
 
     # Assert each entry's normalized shape matches fixture
-    for i, (actual, expected) in enumerate(zip(entries, fixture["entries"])):
+    for i, (actual, expected) in enumerate(zip(entries, fixture["entries"], strict=True)):
         norm = _normalize_entry(actual)
         assert norm["kind"] == expected["kind"], f"Entry {i}: kind mismatch — {norm['kind']!r} != {expected['kind']!r}"
         assert norm["event_type"] == expected.get("event_type"), (

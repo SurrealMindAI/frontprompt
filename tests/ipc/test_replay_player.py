@@ -75,7 +75,7 @@ class FakeReplayPageController:
         return self.evaluate_assertion_result
 
 
-def _make_recording(entries: list = None, parameters: list = None) -> Recording:
+def _make_recording(entries: list | None = None, parameters: list | None = None) -> Recording:
     return Recording(
         recording_id="rec-001",
         name="Test Recording",
@@ -211,7 +211,7 @@ async def test_page_event_keydown_printable_calls_keyboard_type() -> None:
     recording = _make_recording(entries=[_make_page_event(seq=0, event_type="keydown", target="input#name", key="a")])
 
     player = ReplayPlayer(recording=recording, parameters={}, page_controller=controller, state_manager=sm)
-    report = await player.run()
+    await player.run()
 
     assert controller.keyboard_type_calls == ["a"]
     assert controller.keyboard_press_calls == []

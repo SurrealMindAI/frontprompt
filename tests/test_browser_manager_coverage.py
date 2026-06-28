@@ -40,7 +40,6 @@ def test_chromium_present_with_no_chromium_dirs(tmp_path: pytest.TempPath) -> No
     Patches os.path.expanduser so the default macOS/Linux cache dirs resolve to
     empty tmp directories — isolates the test from real installed playwright.
     """
-    empty_dir = str(tmp_path / "empty-playwright")
     (tmp_path / "empty-playwright").mkdir()
 
     def fake_expanduser(path: str) -> str:

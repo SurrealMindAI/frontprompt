@@ -148,7 +148,7 @@ async def test_handler_model_id_none_calls_set_model_with_none() -> None:
     """model_id=None → backend.set_model(None) called exactly once (revert to default)."""
     from frontprompt.bridge.messages import SetTranscriptionModelRequested
 
-    s, sm = _build_session_with_manager()
+    s, _sm = _build_session_with_manager()
     mock_backend = _make_mock_backend("mlx_whisper")
 
     msg = SetTranscriptionModelRequested(

@@ -120,7 +120,7 @@ class TranscriptionBackend(Protocol):
         silently. (COL-6: single caller is StateManager.set_mlx_whisper_model).
         """
         # Default no-op — backends that only have one model inherit this.
-        return  # type: ignore[return-value]
+        return
 
     async def ensure(self, progress_cb: ProgressCallback) -> None:
         """Ensure the backend is ready (download model if needed).

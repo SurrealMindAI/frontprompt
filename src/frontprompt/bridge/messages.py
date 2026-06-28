@@ -107,7 +107,7 @@ Jeder Envelope-Docstring trägt:
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -614,7 +614,7 @@ class AssertionAddedToRecordingRequested(BaseModel):
     kind: Literal["assertion_added_to_recording_requested"] = "assertion_added_to_recording_requested"
     schema_version: str = SCHEMA_VERSION
     recording_id: str = Field(description="UUID der Aufnahme, zu der die Assertion hinzugefügt wird.")
-    assertion: dict = Field(
+    assertion: dict[str, Any] = Field(
         description=(
             "Assertion-Payload ohne ``seq`` — alle Felder aus AssertionEntry "
             "ausser seq (Python stamps seq). Enthält: assertion_id, assertion_type, "

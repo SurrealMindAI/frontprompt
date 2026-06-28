@@ -100,7 +100,7 @@ class AssertionEvaluator:
         return {"ok": True, "assertion_passed": False, "assertion_actual": "not visible"}
 
     def _check_url_equals(self, page: Page, entry: AssertionEntry) -> dict[str, Any]:
-        current_url: str = page.url  # type: ignore[attr-defined]
+        current_url: str = page.url
         expected = entry.expected or ""
         passed = current_url == expected
         return {

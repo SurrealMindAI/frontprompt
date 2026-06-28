@@ -182,8 +182,8 @@ async def _dispatch(
             ok=True,
             data={
                 "recording_id": recording_id,
-                "name": recording.name if recording is not None else request.name,  # type: ignore[union-attr]
-                "started_at_ms": recording.started_at_ms if recording is not None else 0,  # type: ignore[union-attr]
+                "name": recording.name if recording is not None else request.name,
+                "started_at_ms": recording.started_at_ms if recording is not None else 0,
             },
         )
 
@@ -243,14 +243,14 @@ async def _dispatch(
         return IpcResponse(ok=True, data=report.model_dump(mode="json"))
 
     if isinstance(request, GetReplayReportRequest):
-        report = await state_manager.get_replay_report(request.replay_id)
-        if report is None:
+        replay_report = await state_manager.get_replay_report(request.replay_id)
+        if replay_report is None:
             return IpcResponse(ok=False, error=f"replay report not found: {request.replay_id}")
-        return IpcResponse(ok=True, data=report.model_dump(mode="json"))
+        return IpcResponse(ok=True, data=replay_report.model_dump(mode="json"))
 
     if isinstance(request, ListReplayReportsRequest):
-        metas = await state_manager.list_replay_reports_meta(request.recording_id)
-        return IpcResponse(ok=True, data=[m.model_dump(mode="json") for m in metas])
+        replay_metas = await state_manager.list_replay_reports_meta(request.recording_id)
+        return IpcResponse(ok=True, data=[m.model_dump(mode="json") for m in replay_metas])
 
     snap = state_manager.snapshot()
 

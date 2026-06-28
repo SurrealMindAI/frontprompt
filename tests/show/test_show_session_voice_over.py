@@ -319,12 +319,10 @@ async def test_mic_watcher_task_started_in_run() -> None:
     """ShowSession.run() starts the MicrophoneWatcher background task."""
     import sys
 
-    from frontprompt.show_session import ShowSession
-
-    mic_watcher_run_called = False
-
     # Build fake sounddevice for the lazy imports in audio_capture + mic_watcher
     import types
+
+    from frontprompt.show_session import ShowSession
 
     fake_sd = types.ModuleType("sounddevice")
 

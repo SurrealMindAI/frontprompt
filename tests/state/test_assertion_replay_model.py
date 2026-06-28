@@ -283,7 +283,7 @@ def test_replay_status_rejects_unknown() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_step_result(**kwargs) -> dict:
+def _make_step_result(**kwargs: object) -> dict:
     defaults = {
         "seq": 0,
         "kind": "page_event",
@@ -359,7 +359,7 @@ def test_replay_step_result_skipped() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_replay_report(**kwargs) -> dict:
+def _make_replay_report(**kwargs: object) -> dict:
     defaults: dict = {
         "replay_id": "rep-001",
         "recording_id": "rec-001",

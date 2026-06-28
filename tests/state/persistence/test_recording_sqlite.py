@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from frontprompt.state.state import NavigationEntry, PageEventEntry, Recording
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _make_recording(recording_id: str = "rec-001", name: str = "Test Recording") -> Recording:
-    from frontprompt.state.state import Recording
-
     return Recording(
         recording_id=recording_id,
         name=name,
@@ -28,8 +28,6 @@ def _make_recording(recording_id: str = "rec-001", name: str = "Test Recording")
 
 
 def _make_page_event(seq: int = 0, timestamp_ms: int = 1000) -> PageEventEntry:
-    from frontprompt.state.state import PageEventEntry
-
     return PageEventEntry(
         kind="page_event",
         seq=seq,
@@ -43,8 +41,6 @@ def _make_page_event(seq: int = 0, timestamp_ms: int = 1000) -> PageEventEntry:
 
 
 def _make_nav_entry(seq: int = 0, timestamp_ms: int = 2000) -> NavigationEntry:
-    from frontprompt.state.state import NavigationEntry
-
     return NavigationEntry(
         kind="navigation",
         seq=seq,
@@ -75,7 +71,6 @@ def test_load_recordings_empty_db(tmp_path: Path) -> None:
 def test_upsert_and_load_recording_roundtrip(tmp_path: Path) -> None:
     """upsert_recording + load_recordings round-trip preserves alle Felder."""
     from frontprompt.state.persistence.sqlite import SqlitePersistence
-    from frontprompt.state.state import Recording
 
     db_path = tmp_path / "fp.db"
     rec = _make_recording("rec-rt-001", "My Recording")
@@ -104,8 +99,6 @@ def test_upsert_recording_is_idempotent(tmp_path: Path) -> None:
 
     rec1 = _make_recording("rec-idem", "Original")
     db.upsert_recording(rec1)
-
-    from frontprompt.state.state import Recording
 
     rec2 = Recording(
         recording_id="rec-idem",

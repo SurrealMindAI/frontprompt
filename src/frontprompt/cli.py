@@ -394,11 +394,11 @@ def assertions_add_command(
             session_id,
             AddAssertionRequest(
                 recording_id=recording_id,
-                assertion_type=assertion_type,  # type: ignore[arg-type]
+                assertion_type=assertion_type,
                 target=target,
-                target_kind=target_kind,  # type: ignore[arg-type]
+                target_kind=target_kind,
                 expected=expected,
-                comparator=comparator,  # type: ignore[arg-type]
+                comparator=comparator,
                 description=description,
                 insert_after_seq=insert_after_seq,
             ),
@@ -581,12 +581,17 @@ async def _ensure_voice_backends(progress_prefix: str = "  ") -> None:
             click.echo(f"{progress_prefix}[..] voice:{bid} ... downloading model ({name})...")
             _progress_log: list[str] = []
 
-            async def _progress_cb(fraction: float, _bid: str = bid, _prefix: str = progress_prefix) -> None:
+            async def _progress_cb(
+                fraction: float,
+                _bid: str = bid,
+                _prefix: str = progress_prefix,
+                _log: list[str] = _progress_log,
+            ) -> None:
                 pct = int(fraction * 100)
                 # Only log at 25% intervals to avoid spamming the terminal
                 key = f"{pct // 25 * 25}%"
-                if key not in _progress_log:
-                    _progress_log.append(key)
+                if key not in _log:
+                    _log.append(key)
                     click.echo(f"{_prefix}      ... {pct}%")
 
             await backend.ensure(_progress_cb)

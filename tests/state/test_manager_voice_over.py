@@ -14,6 +14,8 @@ Covers:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import anyio
 import pytest
 
@@ -27,6 +29,10 @@ from frontprompt.state.state import (
     TranscriptSegmentEntry,
 )
 
+if TYPE_CHECKING:
+    from frontprompt.state.manager import StateManager
+    from frontprompt.state.state import StateSnapshot
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -36,7 +42,7 @@ def _make_manager(
     *,
     transcription_state: TranscriptionState | None = None,
     persistence: InMemoryPersistence | None = None,
-):
+) -> StateManager:
     """Build a StateManager with an InMemoryPersistence and a test session-id."""
     from frontprompt.state.manager import StateManager
 
@@ -47,16 +53,16 @@ def _make_manager(
     )
 
 
-def _make_recording_in_manager(manager):
+def _make_recording_in_manager(manager: StateManager) -> object:
     """Synchronously start a recording via anyio.from_thread.run_sync wrapper."""
 
-    async def _run():
+    async def _run() -> StateSnapshot:
         return await manager.start_recording(name="VO Test Recording")
 
     return anyio.from_thread.run_sync(anyio.from_thread.run_sync)
 
 
-async def _start(manager) -> str:
+async def _start(manager: StateManager) -> str:
     """Start a recording and return its recording_id."""
     snap = await manager.start_recording(name="Voice Test")
     return snap.recordings_state.active_recording_id
@@ -315,7 +321,7 @@ async def test_append_transcript_segments_broadcasts_once() -> None:
 
     broadcast_count = 0
 
-    def _listener(snap):
+    def _listener(snap: StateSnapshot) -> None:
         nonlocal broadcast_count
         broadcast_count += 1
 
@@ -396,7 +402,7 @@ async def test_update_microphone_state_no_broadcast_on_same_topology() -> None:
 
     broadcast_count = 0
 
-    def _listener(snap):
+    def _listener(snap: StateSnapshot) -> None:
         nonlocal broadcast_count
         broadcast_count += 1
 

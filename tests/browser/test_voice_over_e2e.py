@@ -599,7 +599,7 @@ async def test_voice_over_transcription_failure_path(anyio_backend: str) -> None
     backend's transcribe() method to raise, then start+stop a voice-over recording.
     The recording must survive the failure with transcription_status='failed'.
     """
-    sock = await _get_socket()
+    await _get_socket()
 
     # Patching the mock backend to a failing variant inside the already-running child
     # subprocess is impractical from the e2e level. The failure path is fully covered
