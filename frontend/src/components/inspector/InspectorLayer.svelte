@@ -174,7 +174,7 @@
   .inspector-layer {
     position: fixed;
     inset: 0;
-    z-index: 1;
+    z-index: var(--fp-z-inspector);
     pointer-events: auto;
     cursor: crosshair;
     /* Kein background — wir wollen die Page sehen. */

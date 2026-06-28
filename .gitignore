@@ -60,3 +60,6 @@ htmlcov/
 .coverage
 .coverage.*
 coverage.xml
+
+# git worktrees (isolated dev checkouts)
+.worktrees/

@@ -171,7 +171,7 @@
     position: fixed;
     right: 16px;
     bottom: 16px;
-    z-index: 12;
+    z-index: var(--fp-z-quickcomment);
     pointer-events: auto;
     display: flex;
     align-items: center;
@@ -258,7 +258,7 @@
     /* Default (null rect): sit just above the bottom-right box. */
     right: 16px;
     bottom: 64px;
-    z-index: 13;
+    z-index: var(--fp-z-quickcomment-input);
     pointer-events: auto;
   }
 

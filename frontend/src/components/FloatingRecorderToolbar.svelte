@@ -181,7 +181,7 @@
 <style>
   .rec-toolbar {
     position: fixed;
-    z-index: 100;
+    z-index: var(--fp-z-chrome);
     display: flex;
     flex-direction: column;
     background: rgba(18, 18, 26, 0.96);
