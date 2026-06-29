@@ -42,8 +42,10 @@ frontprompt is a **local developer tool**, and its security posture reflects tha
 
 ## Dependency posture
 
-frontprompt pins **`scrapling==0.4.8`** exactly and isolates it behind a thin
-adapter so it can be swapped without touching the rest of the codebase. A CI drift
+frontprompt pins **`scrapling==0.4.8`** exactly and uses it only as an lxml-backed
+HTML parser for DOM fingerprint matching, isolated behind
+`analysis/_impl/scrapling_bridge.py` so it can be swapped without touching the rest
+of the codebase (the browser itself is driven by Playwright, not Scrapling). A CI drift
 gate keeps the generated TypeScript types in lock-step with their Pydantic source
 of truth. See [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Architecture Decision Records](docs/adr/index.md) for the rationale.

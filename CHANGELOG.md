@@ -86,7 +86,8 @@ see the [Architecture Decision Records](docs/adr/index.md)).
   …), screenshots, and read-only state access (`get_state_summary`, `get_snapshot`,
   `get_picks`). Each invocation owns a private, lazily-spawned browser session.
 - **SQLite persistence** (WAL, JSON-blob) so annotations outlive the process.
-- **Scrapling** browser substrate, pinned and isolated behind a thin adapter.
+- **Playwright** drives the headful browser; **Scrapling** (pinned `==0.4.8`) is an
+  isolated, parser-only dependency for DOM fingerprint matching.
 - **Self-contained wheel.** The Svelte overlay is built and embedded into the
   package, so the installed tool needs no Bun or Node at runtime.
 

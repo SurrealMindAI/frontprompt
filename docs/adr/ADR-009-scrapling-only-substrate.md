@@ -2,9 +2,17 @@
 
 > Part of the frontprompt [Architecture Decision Records](./index.md).
 
-**Status**: accepted
+**Status**: accepted · **amended** (2026-06-29)
 **Date**: 2026-05-14
 **Cross-References**: `../user-directive-corrections.md` Korrektur 1, `../../sources/scrapling-context7-snapshot.md`, `../failure-mode-budget.md` F-4, F-5, [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md)
+
+> **Amendment (2026-06-29):** This decision was never realised in code. Phase 1
+> drives the browser with **Playwright directly** (`browser/` + `ipc/playwright_controller/`);
+> the Scrapling *navigation substrate* (`ScraplingAdapter`/`SubstrateRouter`) was
+> built but never wired and has since been **removed**. Scrapling survives only as a
+> parser-only dependency behind `analysis/_impl/scrapling_bridge.py` (DOM fingerprint
+> matching). The "Scrapling-as-only-substrate" decision recorded below is kept as the
+> historical record, not as a description of the current code.
 
 ---
 
