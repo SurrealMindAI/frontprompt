@@ -170,6 +170,36 @@ uv run ruff format --check src tests
 
 Real-Chromium integration tests live under `tests/browser/`.
 
+## Local-first CI (GitHub Actions)
+
+CI lives in `.github/workflows/` — `ci.yml` (lint + type-check + frontend + pytest),
+`pages.yml` (docs site → GitHub Pages), `release.yml`. **Validate and run it locally
+before pushing** — the same local-first discipline as `gitlab-ci-local` on the GitLab
+side:
+
+```bash
+brew install actionlint act          # one-time (or: gh extension install nektos/gh-act)
+
+actionlint                           # static pre-flight — typed ${{ }} expressions,
+                                     # action-input typos, shellcheck of every `run:`
+                                     # block. No Docker; run it after any workflow edit.
+act -l                               # list the jobs the workflows would run
+act -n                               # dry-run: parse + plan, no execution
+act -j quality                       # run one job (needs Docker; Linux containers only)
+act push                             # run the push-triggered jobs end-to-end (Docker)
+```
+
+- **`actionlint`** is the cheap gate (no container) — the analog of our `local-ci`
+  validator. Run it on every workflow change.
+- **`act`** is the local runner (Docker) — the analog of `gitlab-ci-local`. It only
+  emulates Linux runners (not macOS/Windows) and does not fully simulate the Actions
+  cache. Start Docker Desktop yourself first; never script it.
+
+> **Why both matter:** `ci.yml` and `pages.yml` have **different build surfaces** —
+> only `pages.yml` builds `site/`. A change green under `ci.yml` can still break the
+> Pages deploy (this exact gap once shipped a broken deploy). `ci.yml` now also builds
+> `site/`, and `act push` lets you exercise every job locally before it reaches GitHub.
+
 ## Dev-time state is disposable
 
 The persisted state DB at `~/.local/state/frontprompt/state.db` (picks, regions,
