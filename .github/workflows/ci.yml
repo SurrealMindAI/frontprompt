@@ -40,6 +40,12 @@ jobs:
       - name: Frontend tests
         run: cd frontend && bun run test
 
+      # The docs site imports shared CSS from frontend/src/lib/tokens + theme.
+      # ci.yml never built site/ before, so a deletion of those files passed CI
+      # yet broke the Pages deploy (pages.yml). Build it here to catch that class.
+      - name: Build docs site
+        run: cd site && bun install --frozen-lockfile && bun run build
+
   test:
     name: pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest

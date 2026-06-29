@@ -1,0 +1,10 @@
+/* frontprompt Design Tokens — Aggregator
+ *
+ * Importiert von src/app.html oder +layout.svelte.
+ * Reihenfolge: primitive erst, dann abgeleitet.
+ */
+@import './colors.css';
+@import './spacing.css';
+@import './typography.css';
+@import './radius.css';
+@import './shadow.css';

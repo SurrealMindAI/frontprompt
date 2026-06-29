@@ -1,0 +1,46 @@
+/* frontprompt Design Tokens — Color Palette (primitive layer)
+ *
+ * Diese Farben haben keine semantische Bedeutung.
+ * Sie werden im theme/-Layer auf semantische Namen gemappt.
+ */
+:root {
+  /* Blue scale */
+  --fp-blue-50: #eff6ff;
+  --fp-blue-100: #dbeafe;
+  --fp-blue-200: #bfdbfe;
+  --fp-blue-300: #93c5fd;
+  --fp-blue-400: #60a5fa;
+  --fp-blue-500: #3b82f6;
+  --fp-blue-600: #2563eb;
+  --fp-blue-700: #1d4ed8;
+  --fp-blue-800: #1e40af;
+  --fp-blue-900: #1e3a5f;
+
+  /* Gray scale */
+  --fp-gray-50: #f9fafb;
+  --fp-gray-100: #f3f4f6;
+  --fp-gray-200: #e5e7eb;
+  --fp-gray-300: #d1d5db;
+  --fp-gray-400: #9ca3af;
+  --fp-gray-500: #6b7280;
+  --fp-gray-600: #4b5563;
+  --fp-gray-700: #374151;
+  --fp-gray-800: #1f2937;
+  --fp-gray-900: #111827;
+
+  /* Red scale */
+  --fp-red-500: #ef4444;
+  --fp-red-600: #dc2626;
+
+  /* Green scale */
+  --fp-green-500: #22c55e;
+  --fp-green-600: #16a34a;
+
+  /* Yellow/Amber scale */
+  --fp-yellow-500: #eab308;
+  --fp-yellow-600: #ca8a04;
+
+  /* White + Black */
+  --fp-white: #ffffff;
+  --fp-black: #000000;
+}
