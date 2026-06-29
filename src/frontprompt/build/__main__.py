@@ -82,7 +82,9 @@ def _strip_dead_duplicates(path: Path) -> int:
     total = n_interface + n_const
     if total > 0:
         path.write_text(content, encoding="utf-8")
-        _log(f"  stripped {total} dead duplicate block(s) from {path.name} ({original_len - len(content)} bytes removed)")
+        _log(
+            f"  stripped {total} dead duplicate block(s) from {path.name} ({original_len - len(content)} bytes removed)"
+        )
     return total
 
 
