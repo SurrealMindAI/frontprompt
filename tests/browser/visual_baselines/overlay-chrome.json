@@ -11,46 +11,27 @@
     {
       "ariaLabel": "hide picks overlay",
       "ariaPressed": "true",
+      "color": "rgba(230, 230, 240, 0.72)",
       "glyph": null,
-      "icon": "eye",
-      "rect": {
-        "h": 13,
-        "w": 22,
-        "x": 991,
-        "y": 10
-      }
+      "icon": "eye"
     },
     {
       "ariaLabel": "hide regions overlay",
       "ariaPressed": "true",
+      "color": "rgba(230, 230, 240, 0.72)",
       "glyph": null,
-      "icon": "eye",
-      "rect": {
-        "h": 13,
-        "w": 22,
-        "x": 1109,
-        "y": 10
-      }
+      "icon": "eye"
     },
     {
       "ariaLabel": "hide relations overlay",
       "ariaPressed": "true",
+      "color": "rgba(230, 230, 240, 0.72)",
       "glyph": null,
-      "icon": "eye",
-      "rect": {
-        "h": 13,
-        "w": 22,
-        "x": 1233,
-        "y": 10
-      }
+      "icon": "eye"
     }
   ],
   "toolbar": {
-    "rect": {
-      "h": 13,
-      "w": 1252,
-      "x": 14,
-      "y": 10
-    }
+    "background-color": "rgba(0, 0, 0, 0)",
+    "present": true
   }
 }

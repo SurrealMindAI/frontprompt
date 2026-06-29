@@ -5,11 +5,13 @@ not fit an *injected* shadow-DOM widget (it scores whole host pages, not a
 component), so instead we run three deterministic, dependency-free checks against
 the real, rendered overlay in headless Chromium:
 
-  1. **Visual regression** — a computed-style + geometry snapshot of the overlay
-     chrome (toolbar, visibility toggles, stat pills) is diffed against a
-     committed JSON baseline. Geometry is rounded to integers under a fixed
-     viewport, so the snapshot is stable yet catches layout/colour drift that a
-     jsdom test is structurally blind to. Regenerate with ``FP_VISUAL_UPDATE=1``.
+  1. **Visual regression** — a structural + computed-style snapshot of the overlay
+     chrome (toolbar, visibility toggles, stat pills, brand) is diffed against a
+     committed JSON baseline. It captures counts, icon names, aria state, and
+     computed CSS values (declared colours/fonts — font-independent), NOT absolute
+     geometry, so the baseline is portable across the macOS author and the Linux CI
+     runner. A full-page PNG (below) carries the human-visual layout check.
+     Regenerate with ``FP_VISUAL_UPDATE=1``.
   2. **Accessibility audit** — every interactive control in the shadow root must
      have a non-empty accessible name; the keyboard focus-ring and reduced-motion
      guards must be present in the *rendered* shadow-root stylesheet (not just the
@@ -82,10 +84,6 @@ _COLLECT_JS = r"""
   const root = ce && ce.shadowRoot;
   if (!root) return { mounted: false };
 
-  const rect = (el) => {
-    const r = el.getBoundingClientRect();
-    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
-  };
   const style = (el, props) => {
     const cs = getComputedStyle(el);
     const out = {};
@@ -95,7 +93,12 @@ _COLLECT_JS = r"""
   const accName = (el) =>
     (el.getAttribute('aria-label') || el.textContent || '').trim();
 
-  // --- chrome snapshot (visual regression target) ---
+  // --- chrome snapshot (structural + computed-style regression target) ---
+  // Deliberately NO absolute geometry: x/y/size derive from system-font text
+  // metrics and drift between the macOS author and the Linux CI runner. We
+  // snapshot structure (counts, icons, aria) + computed CSS values (declared
+  // colours/fonts, font-independent), which catches token/colour/icon/markup
+  // regressions portably. The PNG artifact (below) carries the visual layout check.
   const toolbar = root.querySelector('.toolbar');
   const brand = root.querySelector('.brand__text');
   const toggles = [...root.querySelectorAll('.pill-toggle')].map((b) => ({
@@ -103,11 +106,11 @@ _COLLECT_JS = r"""
     ariaPressed: b.getAttribute('aria-pressed'),
     icon: b.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? null,
     glyph: b.querySelector('svg') ? null : b.textContent.trim(),
-    rect: rect(b),
+    ...style(b, ['color']),
   }));
   const chrome = {
     mounted: true,
-    toolbar: toolbar ? { rect: rect(toolbar) } : null,
+    toolbar: toolbar ? { present: true, ...style(toolbar, ['background-color']) } : null,
     brand: brand ? { text: brand.textContent.trim(), ...style(brand, ['font-size', 'font-weight', 'text-transform']) } : null,
     statPills: root.querySelectorAll('[class*="pill"]').length,
     toggles,
