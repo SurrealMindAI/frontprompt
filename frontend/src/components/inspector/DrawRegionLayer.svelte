@@ -90,7 +90,7 @@
   .draw-region-layer {
     position: fixed;
     inset: 0;
-    z-index: 2;
+    z-index: var(--fp-z-region);
     pointer-events: auto;
     cursor: crosshair;
     background: rgba(10, 12, 24, 0.06);

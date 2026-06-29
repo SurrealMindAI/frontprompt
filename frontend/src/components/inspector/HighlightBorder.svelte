@@ -49,7 +49,7 @@
       0 0 0 4px color-mix(in srgb, var(--fp-hl) 22%, transparent),
       0 0 16px color-mix(in srgb, var(--fp-hl) 45%, transparent);
     border-radius: 2px;
-    z-index: 2;
+    z-index: var(--fp-z-region);
     transition:
       left 100ms cubic-bezier(0.2, 0.8, 0.2, 1),
       top 100ms cubic-bezier(0.2, 0.8, 0.2, 1),

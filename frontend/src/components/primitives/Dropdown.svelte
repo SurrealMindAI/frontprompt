@@ -238,7 +238,7 @@
     border: 1px solid var(--fp-color-text-muted);
     border-radius: 4px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    z-index: 100;
+    z-index: var(--fp-z-popover);
     display: flex;
     flex-direction: column;
     overflow: hidden;

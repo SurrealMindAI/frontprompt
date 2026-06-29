@@ -282,27 +282,57 @@
 {/if}
 
 <style>
-  /* ── HUD theme tokens ──────────────────────────────────────────────────
-     Single source of truth for panel colours — one fixed dark set, page-
-     independent (no light mode, no per-page adaptation). Components consume
-     these via var(--fp-color-*). Custom properties inherit across the shadow
-     boundary, so defining them on .grid reaches every panel + nested component.
-     Values are inlined (not via the primitive scale) to stay self-contained
-     inside the injected bundle. */
-  .grid {
+  /* ── Overlay design tokens — single source of truth ─────────────────────
+     Defined on :host (the <fp-overlay> shadow host) so EVERY node in the
+     shadow tree inherits them — both the .grid panels AND the sibling layers
+     (InspectorLayer / RelationsLayer / DrawRegionLayer / FloatingRecorder)
+     that render OUTSIDE .grid and would otherwise miss the colour set.
+     Custom properties pierce the shadow boundary via inheritance. One fixed
+     dark HUD set, page-independent (no light mode, no per-page adaptation). */
+  :host {
+    /* Surfaces */
     --fp-color-surface-primary: rgb(18, 18, 26);
     --fp-color-surface-secondary: rgba(42, 42, 56, 0.92);
     --fp-color-surface-overlay: rgba(28, 28, 38, 0.96);
+    /* Text */
     --fp-color-text-primary: #e6e6f0;
     --fp-color-text-secondary: rgba(230, 230, 240, 0.72);
     --fp-color-text-muted: rgba(230, 230, 240, 0.45);
+    /* Borders */
     --fp-color-border: rgba(255, 255, 255, 0.12);
     --fp-color-border-strong: rgba(255, 255, 255, 0.24);
     --fp-color-border-subtle: rgba(255, 255, 255, 0.06);
+    /* Accent + state */
     --fp-color-accent: #6ea8fe;
     --fp-color-accent-text: #0b1220;
     --fp-color-error: #ff6b6b;
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
+
+    /* Motion — durations + easings, consumed app-wide. Neutralised in one
+       place under prefers-reduced-motion (see the :global rule below). */
+    --fp-duration-fast: 120ms;
+    --fp-duration-base: 180ms;
+    --fp-duration-slow: 240ms;
+    --fp-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --fp-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Elevation — a named z-index scale matching the documented stack:
+       svg-relations(base) < inspector < region/highlight < panels <
+       quick-comment < floating chrome < popovers. Naming the tiers removes
+       the two ad-hoc z-index:100 collisions (recorder toolbar vs dropdown). */
+    --fp-z-base: 0;
+    --fp-z-inspector: 1;
+    --fp-z-region: 2;
+    --fp-z-panel: 10;
+    --fp-z-quickcomment: 12;
+    --fp-z-quickcomment-input: 13;
+    --fp-z-chrome: 100;
+    --fp-z-popover: 110;
+
+    /* Crisp HUD text rendering. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   /* ── Global scrollbar restyle ───────────────────────────────────────────
@@ -335,6 +365,27 @@
     background: transparent;
   }
 
+  /* ── Accessibility: one consistent keyboard-focus ring for EVERY control ──
+     :focus-visible only (pointer interaction stays ring-free). Outline-based
+     so it survives Windows high-contrast / forced-colors mode. :global reaches
+     every nested component; CE-mode keeps it inside the shadow root. */
+  :global(:focus-visible) {
+    outline: 2px solid var(--fp-color-accent);
+    outline-offset: 1px;
+  }
+
+  /* ── Accessibility: honour reduced-motion for the WHOLE overlay in one place.
+     Neutralises the 30+ ad-hoc transitions/animations scattered across
+     components without having to touch each one. */
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   .grid {
     display: grid;
     grid-template-areas:
@@ -349,8 +400,8 @@
        eingeblendet. Verhindert pop-in flash beim ersten paint. */
     opacity: 0;
     transition:
-      grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1),
-      grid-template-columns 220ms cubic-bezier(0.4, 0, 0.2, 1),
+      grid-template-rows 220ms var(--fp-ease-standard),
+      grid-template-columns 220ms var(--fp-ease-standard),
       opacity 280ms ease;
   }
 
@@ -382,7 +433,7 @@
        SVG. Ohne explizites z-index wären die panels position:static und
        würden gegen position:fixed-siblings (Inspector/Relations) verlieren. */
     position: relative;
-    z-index: 10;
+    z-index: var(--fp-z-panel);
   }
 
   .area--top {

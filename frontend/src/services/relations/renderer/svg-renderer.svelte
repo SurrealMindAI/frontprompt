@@ -265,7 +265,7 @@
     pointer-events: none;
     /* z-index 0: hinter den HUD-Panels (.area = z-index 10) aber vor der Page.
        InspectorLayer (z-index 1) sitzt zwischen SVG und Panels wenn aktiv. */
-    z-index: 0;
+    z-index: var(--fp-z-base);
     overflow: visible;
   }
 
