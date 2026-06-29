@@ -97,7 +97,7 @@ class ElementFingerprint(BaseModel):
     Mirror von Scrapling's ``_StorageTools.element_to_dict`` shape
     (scrapling/core/utils/_utils.py:element_to_dict). **Field-Namen sind
     1:1 mit Scrapling** damit ``Selector.relocate(fp.model_dump())`` direkt
-    funktioniert — verifiziert durch :file:`tests/scrapling/test_fingerprint_compatibility.py`.
+    funktioniert — verifiziert durch :file:`tests/state/test_fingerprint_scrapling_compat.py`.
 
     Phase 1: nur gespeichert, nicht genutzt.
     Phase 2: an Scrapling's ``Selector.relocate(fingerprint_dict, percentage=)``

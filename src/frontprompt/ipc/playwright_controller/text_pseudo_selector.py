@@ -35,7 +35,14 @@ def is_text_pseudo_selector(selector: str) -> bool:
 
 
 def decode_text_pseudo_selector(selector: str) -> tuple[str, str | None]:
-    """Decode a pseudo-selector into ``(text, role | None)`` — inverse of encode."""
+    """Decode a pseudo-selector into ``(text, role | None)``.
+
+    Round-trips :func:`encode_text_pseudo_selector` for the common case, but is
+    NOT a total inverse: a ``text`` that itself contains the ``|`` delimiter would
+    split at the first ``|`` (role := everything after it). This mirrors the
+    original behaviour — picked text with a literal ``|`` is unsupported by the
+    get_by_role routing.
+    """
     if selector.startswith(TEXT_ROLE_PREFIX):
         text, role = selector[len(TEXT_ROLE_PREFIX) :].split(ROLE_DELIMITER, 1)
         return text, role

@@ -308,13 +308,10 @@
     --fp-color-error: #ff6b6b;
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
 
-    /* Motion — durations + easings, consumed app-wide. Neutralised in one
-       place under prefers-reduced-motion (see the :global rule below). */
-    --fp-duration-fast: 120ms;
-    --fp-duration-base: 180ms;
-    --fp-duration-slow: 240ms;
+    /* Easing — the standard curve, consumed by the .grid reveal transition.
+       Durations stay literal at their use sites; prefers-reduced-motion
+       neutralises them all in one place via the :global rule below. */
     --fp-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-    --fp-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
     /* Elevation — a named z-index scale matching the documented stack:
        svg-relations(base) < inspector < region/highlight < panels <
