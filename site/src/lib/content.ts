@@ -10,7 +10,14 @@
 //   ../../../            → frontprompt repo root
 // ============================================================================
 
-export type NavGroup = 'Overview' | 'Architecture' | 'Guides' | 'Services' | 'Specs' | 'Project';
+export type NavGroup =
+  | 'Overview'
+  | 'Architecture'
+  | 'Decisions'
+  | 'Guides'
+  | 'Services'
+  | 'Specs'
+  | 'Project';
 
 export interface Doc {
   slug: string;
@@ -22,7 +29,15 @@ export interface Doc {
   raw: string;
 }
 
-const GROUP_ORDER: NavGroup[] = ['Overview', 'Architecture', 'Guides', 'Services', 'Specs', 'Project'];
+const GROUP_ORDER: NavGroup[] = [
+  'Overview',
+  'Architecture',
+  'Decisions',
+  'Guides',
+  'Services',
+  'Specs',
+  'Project',
+];
 
 // Raw Markdown globs. Each pattern is a static string literal so Vite can
 // analyse it at build time. eager → values are the file contents directly.
@@ -70,6 +85,18 @@ function classify(path: string, raw: string): Omit<Doc, 'raw' | 'source'> | null
   if (path === 'DEVELOPMENT.md') return { slug: 'development', title: 'Development', group: 'Project', order: 0 };
   if (path === 'CONTRIBUTING.md') return { slug: 'contributing', title: 'Contributing', group: 'Project', order: 1 };
   if (path === 'CHANGELOG.md') return { slug: 'changelog', title: 'Changelog', group: 'Project', order: 2 };
+
+  // Architecture Decision Records under docs/adr/.
+  if (path === 'docs/adr/index.md')
+    return { slug: 'decisions', title: 'Decision Records', group: 'Decisions', order: -1 };
+  const adr = path.match(/^docs\/adr\/ADR-(\d+)-.*\.md$/);
+  if (adr) {
+    const num = adr[1];
+    const h1 = firstHeading(raw) ?? `ADR-${num}`;
+    const m = h1.match(/ADR-\d+\s*[—–-]\s*([^:]+)/);
+    const short = (m ? m[1] : h1).trim();
+    return { slug: `adr-${num}`, title: `ADR-${num} · ${short}`, group: 'Decisions', order: Number(num) };
+  }
 
   // Guides under docs/ (but not the dated specs).
   if (path === 'docs/wire-protocol.md')

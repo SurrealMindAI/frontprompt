@@ -346,6 +346,126 @@ pre,
   color: inherit;
   text-decoration: none;
 }
+.prose :is(h2, h3) {
+  scroll-margin-top: 96px; /* clear the sticky top-nav when deep-linking */
+}
+
+/* ===========================================================================
+   Code blocks — copy button + highlight.js token theme (blueprint palette)
+   =========================================================================== */
+.prose pre {
+  /* room for the copy button so long first lines don't slide under it */
+  padding-top: 1.7em;
+}
+.prose pre .copy-btn {
+  position: absolute;
+  top: 0.55em;
+  right: 0.6em;
+  z-index: 2;
+  padding: 0.2em 0.7em;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  background: rgba(7, 9, 15, 0.7);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.prose pre:hover .copy-btn,
+.prose pre .copy-btn:focus-visible {
+  opacity: 1;
+}
+.prose pre .copy-btn:hover {
+  color: var(--accent-bright);
+  border-color: var(--accent);
+}
+.prose pre .copy-btn.ok {
+  color: var(--ok);
+  border-color: var(--ok);
+  opacity: 1;
+}
+
+/* highlight.js tokens — mapped onto the inspector palette. No external CSS. */
+.prose .hljs {
+  color: var(--text-dim);
+  background: none;
+}
+.prose .hljs-comment,
+.prose .hljs-quote {
+  color: var(--text-mute);
+  font-style: italic;
+}
+.prose .hljs-keyword,
+.prose .hljs-selector-tag,
+.prose .hljs-literal,
+.prose .hljs-section,
+.prose .hljs-doctag,
+.prose .hljs-type,
+.prose .hljs-name,
+.prose .hljs-strong {
+  color: var(--accent);
+}
+.prose .hljs-string,
+.prose .hljs-regexp,
+.prose .hljs-addition,
+.prose .hljs-attribute,
+.prose .hljs-meta .hljs-string {
+  color: #7ee0b8;
+}
+.prose .hljs-number,
+.prose .hljs-symbol,
+.prose .hljs-bullet,
+.prose .hljs-link,
+.prose .hljs-template-variable,
+.prose .hljs-variable {
+  color: var(--select);
+}
+.prose .hljs-title,
+.prose .hljs-title.function_,
+.prose .hljs-built_in,
+.prose .hljs-class .hljs-title,
+.prose .hljs-attr {
+  color: var(--accent-bright);
+}
+.prose .hljs-meta,
+.prose .hljs-comment .hljs-doctag {
+  color: var(--text-mute);
+}
+.prose .hljs-emphasis {
+  font-style: italic;
+}
+
+/* ===========================================================================
+   Mermaid diagrams — rendered client-side, framed like an inspector panel
+   =========================================================================== */
+.prose .mermaid-diagram {
+  margin: 0 0 1.6em;
+  padding: 1.4em 1.2em;
+  background:
+    linear-gradient(180deg, #0a0e16, #0c1119) padding-box,
+    linear-gradient(120deg, var(--accent), var(--select) 130%) border-box;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(7, 9, 15, 0.6),
+    0 20px 45px -28px var(--accent-glow);
+  overflow-x: auto;
+  text-align: center;
+}
+.prose .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.prose pre.mermaid-error {
+  border-color: var(--warn);
+}
 
 /* --- Reduced motion -------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {

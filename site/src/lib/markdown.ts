@@ -11,10 +11,29 @@
 
 import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
+import hljs from 'highlight.js/lib/common';
 import { slugByPath } from './content';
 import { BASE } from './routes.svelte';
 
 const GITHUB_BLOB = 'https://github.com/SurrealMindAI/frontprompt/blob/main/';
+
+/**
+ * Syntax highlight a fenced code block. `mermaid` blocks are left untouched so
+ * the language-mermaid class survives to the client-side diagram renderer
+ * (DocsView). Unknown languages fall through to markdown-it's default escaping.
+ */
+function highlight(code: string, lang: string): string {
+  if (lang === 'mermaid') return '';
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      const out = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+      return `<pre class="hljs"><code class="hljs language-${lang}">${out}</code></pre>`;
+    } catch {
+      /* fall through to default */
+    }
+  }
+  return '';
+}
 
 /** Normalise a relative link against the directory of the doc that contains it. */
 function resolveRepoPath(sourcePath: string, href: string): string {
@@ -38,6 +57,7 @@ export function renderMarkdown(raw: string, sourcePath: string): string {
     linkify: true,
     typographer: true,
     breaks: false,
+    highlight,
   });
 
   md.use(anchor, {
