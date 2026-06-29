@@ -43,7 +43,6 @@ frontprompt/
 │   ├── state/          # StateManager (single-writer) + Pydantic types + SQLite persistence
 │   ├── ipc/            # show.sock read-only API + Playwright page controller + replay player
 │   ├── analysis/       # PageAnalyzer scout tools (outline, finders, inspect) — Scrapling-isolated
-│   ├── scrapling/      # Scrapling navigation substrate adapter (pinned, isolated)
 │   ├── voice/          # voice-over: audio capture + mic watcher + mlx-whisper transcription
 │   ├── build/          # canonical build pipeline (python -m frontprompt.build)
 │   └── cli.py          # `frontprompt` entry point

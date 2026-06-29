@@ -161,9 +161,6 @@ shadow boundary resolves cleanly.
   element inspection, snapshot, pick relocation) that backs the agent-facing
   scout tools. Scrapling stays behind an isolation seam
   (`analysis/_impl/scrapling_bridge.py`).
-- `scrapling/` — the Scrapling **navigation substrate adapter**
-  (`ScraplingAdapter`, `SubstrateRouter`, `user_data_dir`): the thin, pinned
-  isolation boundary around the library (see the README risk note).
 - `voice/` — **voice-over** for recordings: audio capture, a microphone
   watcher, and local transcription (`mlx-whisper` backend + model catalog).
 
