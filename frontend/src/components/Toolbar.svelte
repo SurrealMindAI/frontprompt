@@ -17,6 +17,7 @@
   import { backendState } from '../backend-state/backend-state.svelte';
   import { uiPrefs } from '../local-state/ui-prefs.svelte';
   import { eventInterceptor, isHudChrome } from '../services/event-interceptor';
+  import { Icon } from '../lib/icons';
   import StatMetric from './primitives/StatMetric.svelte';
   import StatPill from './primitives/StatPill.svelte';
 
@@ -211,7 +212,7 @@
           aria-label={uiPrefs.picksVisible ? 'hide picks overlay' : 'show picks overlay'}
           aria-pressed={uiPrefs.picksVisible}
         >
-          {uiPrefs.picksVisible ? '◉' : '○'}
+          <Icon name={uiPrefs.picksVisible ? 'eye' : 'eye-off'} size={13} />
         </button>
       {/snippet}
     </StatPill>
@@ -233,7 +234,7 @@
           aria-label={uiPrefs.regionsVisible ? 'hide regions overlay' : 'show regions overlay'}
           aria-pressed={uiPrefs.regionsVisible}
         >
-          {uiPrefs.regionsVisible ? '◉' : '○'}
+          <Icon name={uiPrefs.regionsVisible ? 'eye' : 'eye-off'} size={13} />
         </button>
       {/snippet}
     </StatPill>
@@ -262,7 +263,7 @@
             : 'show relations overlay'}
           aria-pressed={uiPrefs.relationsVisible}
         >
-          {uiPrefs.relationsVisible ? '◉' : '○'}
+          <Icon name={uiPrefs.relationsVisible ? 'eye' : 'eye-off'} size={13} />
         </button>
       {/snippet}
     </StatPill>

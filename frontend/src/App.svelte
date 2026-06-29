@@ -329,6 +329,12 @@
     --fp-z-chrome: 100;
     --fp-z-popover: 110;
 
+    /* Keyboard-focus ring — dedicated tokens, consumed by the global
+       :focus-visible rule below and overridable per-component. */
+    --fp-focus-ring-color: #6ea8fe;
+    --fp-focus-ring-width: 2px;
+    --fp-focus-ring-offset: 2px;
+
     /* Crisp HUD text rendering. */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -365,18 +371,26 @@
     background: transparent;
   }
 
-  /* ── Accessibility: one consistent keyboard-focus ring for EVERY control ──
-     :focus-visible only (pointer interaction stays ring-free). Outline-based
-     so it survives Windows high-contrast / forced-colors mode. :global reaches
-     every nested component; CE-mode keeps it inside the shadow root. */
+  /* ── Accessibility: keyboard-focus ring for EVERY control ────────────────
+     One consistent, branded focus indicator shown only on keyboard focus
+     (:focus-visible), never on pointer. Before this, focus styling existed in
+     just 5 of the components holding 62 buttons, so most controls were invisible
+     to keyboard users (WCAG 2.4.7). Outline-based so it survives Windows high
+     -contrast / forced-colors mode. :global() reaches nested components; CE-mode
+     keeps it inside the shadow root, so the host page's focus styles are
+     untouched. Component-scoped :focus-visible rules still win where present. */
   :global(:focus-visible) {
-    outline: 2px solid var(--fp-color-accent);
-    outline-offset: 1px;
+    outline: var(--fp-focus-ring-width) solid var(--fp-focus-ring-color);
+    outline-offset: var(--fp-focus-ring-offset);
+  }
+  /* Never paint a focus ring on pointer focus (mouse/touch). */
+  :global(:focus:not(:focus-visible)) {
+    outline: none;
   }
 
   /* ── Accessibility: honour reduced-motion for the WHOLE overlay in one place.
-     Neutralises the 30+ ad-hoc transitions/animations scattered across
-     components without having to touch each one. */
+     Neutralises the ~50 ad-hoc transitions/animations scattered across
+     components (WCAG 2.3.3, vestibular safety) without touching each one. */
   @media (prefers-reduced-motion: reduce) {
     :global(*) {
       animation-duration: 0.01ms !important;

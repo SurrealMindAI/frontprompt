@@ -163,8 +163,19 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="inspector-layer" onpointermove={onPointerMove} onclick={onClick} onwheel={onWheel}>
+<!-- A full-viewport pointer-capture pick surface. role="application" gives it a
+     real ARIA role (it is an interactive region, not static markup) and an
+     accessible name; Escape-to-cancel is wired via the keyboard service in the
+     $effect above, so pointer-only clicks are intentional here. -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+<div
+  class="inspector-layer"
+  role="application"
+  aria-label="Element inspector — move to highlight, click to pick, Escape to cancel"
+  onpointermove={onPointerMove}
+  onclick={onClick}
+  onwheel={onWheel}
+>
   {#if rect}
     <HighlightBorder {rect} element={hoveredEl} />
   {/if}

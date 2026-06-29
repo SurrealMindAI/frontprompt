@@ -68,3 +68,7 @@ coverage.xml
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
+
+# Visual-harness PNG artifacts (human-review only; the JSON baselines in
+# tests/browser/visual_baselines/ ARE committed as the regression reference)
+tests/browser/visual_artifacts/

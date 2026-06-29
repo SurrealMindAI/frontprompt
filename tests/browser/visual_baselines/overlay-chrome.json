@@ -1,0 +1,56 @@
+{
+  "brand": {
+    "font-size": "12px",
+    "font-weight": "600",
+    "text": "frontprompt",
+    "text-transform": "lowercase"
+  },
+  "mounted": true,
+  "statPills": 12,
+  "toggles": [
+    {
+      "ariaLabel": "hide picks overlay",
+      "ariaPressed": "true",
+      "glyph": null,
+      "icon": "eye",
+      "rect": {
+        "h": 13,
+        "w": 22,
+        "x": 991,
+        "y": 10
+      }
+    },
+    {
+      "ariaLabel": "hide regions overlay",
+      "ariaPressed": "true",
+      "glyph": null,
+      "icon": "eye",
+      "rect": {
+        "h": 13,
+        "w": 22,
+        "x": 1109,
+        "y": 10
+      }
+    },
+    {
+      "ariaLabel": "hide relations overlay",
+      "ariaPressed": "true",
+      "glyph": null,
+      "icon": "eye",
+      "rect": {
+        "h": 13,
+        "w": 22,
+        "x": 1233,
+        "y": 10
+      }
+    }
+  ],
+  "toolbar": {
+    "rect": {
+      "h": 13,
+      "w": 1252,
+      "x": 14,
+      "y": 10
+    }
+  }
+}
