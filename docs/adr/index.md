@@ -41,7 +41,7 @@ Legend: 🟢 accepted · 🟡 accepted with later amendment · 🔴 superseded.
 ## How the decisions relate
 
 ```mermaid
-%%{init: {"flowchart": {"defaultRenderer": "elk"}}}%%
+%%{init: {"layout": "elk"}}%%
 flowchart TD
     subgraph domain["Domain model"]
         A001["ADR-001<br/>Two Bounded Contexts"]

@@ -19,6 +19,7 @@
     "vite": "^8.0.7"
   },
   "dependencies": {
+    "@mermaid-js/layout-elk": "^0.2.2",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
     "markdown-it-anchor": "^9.2.0",
