@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: overview.md §4 Stack-Inventar, [ADR-008 Svelte 5 Runes](./ADR-008-svelte-5-runes.md), [ADR-004 Pydantic 2.13 SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), `../user-directive-corrections.md`
+**Cross-References**: overview.md §4 Stack-Inventar, [ADR-008 Svelte 5 Runes](./ADR-008-svelte-5-runes.md), [ADR-004 Pydantic 2.13 SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), user-directive-corrections (historische atlas-Recherche, nicht extrahiert)
 
 ---
 
@@ -14,7 +14,7 @@ Der 12-Hub konvergierte initial auf TypeScript-end-to-end (Polyglots Eröffnung:
 
 Im Konsortium-Hub kippte das. Krall stellte seinen unausgesprochenen Python-Prior explizit; PKR lieferte die GIL-Analyse mit klaren Tragfähigkeits-Bedingungen; HTM stützte die Pydantic-SSoT-Asymmetrie; SKH dokumentierte den Disziplin-Defekt der unausgesprochenen Präferenz. Die Konsortiums-Empfehlung wurde: Python 3.13 für Backend, TypeScript für Frontend.
 
-Die User-Direktive (`../user-directive-corrections.md` Korrektur 3) korrigierte das Frontend-Framework von SolidJS auf **Svelte 5 mit Runes** (Team-Erfahrung).
+Die User-Direktive (user-directive-corrections Korrektur 3, historische atlas-Recherche, nicht extrahiert) korrigierte das Frontend-Framework von SolidJS auf **Svelte 5 mit Runes** (Team-Erfahrung).
 
 ---
 

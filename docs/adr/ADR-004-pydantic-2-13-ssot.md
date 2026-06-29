@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: overview.md §4, [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), `../failure-mode-budget.md` F-1, F-2, `../../sources/pydantic-version-policy-snapshot.md`, `../user-directive-corrections.md` Korrektur 2
+**Cross-References**: overview.md §4, [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert), user-directive-corrections Korrektur 2 (historische atlas-Recherche, nicht extrahiert)
 
 ---
 
@@ -21,9 +21,9 @@ Vier Begründungs-Punkte für **Pydantic-als-Source** (HTM §5):
 3. **Single-Writer-Erzwingung**: Pydantic-as-Source erzwingt einen einzigen Writer für Schema-Mutationen — den Python-Entwickler. ([ADR-002](./ADR-002-single-writer-helland.md) verlangt das.)
 4. **Audit-Trail**: Pydantic-Modelle und `_generated/*.ts` leben beide in git; Drift = git-diff.
 
-Der konkrete Pin ist **v2.13.x** — gewählt nach Context7-Verifikation 2026-04-13. v2.13.0 ist die aktuelle Production-Release-Linie. v3 ist Roadmap, nicht released. Auf v2.10.x zu pinnen (Konsortium-Default) wäre ein bewusster Backstep um drei Minor-Versions. Snapshot der Verifikation: `../../sources/pydantic-version-policy-snapshot.md`.
+Der konkrete Pin ist **v2.13.x** — gewählt nach Context7-Verifikation 2026-04-13. v2.13.0 ist die aktuelle Production-Release-Linie. v3 ist Roadmap, nicht released. Auf v2.10.x zu pinnen (Konsortium-Default) wäre ein bewusster Backstep um drei Minor-Versions. Snapshot der Verifikation: pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert).
 
-User-Korrektur 2 hat den Pin von v2.10.x auf v2.13.x angehoben — autoritative Begründung in `../user-directive-corrections.md`.
+User-Korrektur 2 hat den Pin von v2.10.x auf v2.13.x angehoben — autoritative Begründung in user-directive-corrections (historische atlas-Recherche, nicht extrahiert).
 
 ---
 

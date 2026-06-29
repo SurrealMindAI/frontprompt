@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: `../nursery-per-pagesession-explained.md`, [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), `../failure-mode-budget.md` F-6
+**Cross-References**: nursery-per-pagesession-explained (historische atlas-Recherche, nicht extrahiert), [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-6
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), `../failure-mode-budget.md` F-7
+**Cross-References**: [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-7
 
 ---
 

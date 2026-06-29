@@ -4,17 +4,17 @@
 
 **Status**: accepted (closed)
 **Date**: 2026-05-14
-**Cross-References**: `../failure-mode-budget.md` (Volltabelle), `../user-directive-corrections.md` Korrektur 5
+**Cross-References**: failure-mode-budget Volltabelle (historische atlas-Recherche, nicht extrahiert), user-directive-corrections Korrektur 5 (historische atlas-Recherche, nicht extrahiert)
 
 ---
 
 ## Context
 
-Kralls Charter-Bedingung 4 (`../consortium-of-brain-verdict.md` §1 Pre-emptive Eviszerationen, HISTORICAL):
+Kralls Charter-Bedingung 4 (consortium-of-brain-verdict §1 Pre-emptive Eviszerationen, historische atlas-Recherche, nicht extrahiert):
 
 > Spezifiziere die Failure-Mode-Budget. Was kinds of failure are tolerable, what kinds are not. Legacy spent its lifetime treating "Chrome crashed" und "MV3 didn't inject" und "STT detection lied" als bugs to be fixed individually rather than as classes of failure to be designed against. The successor must declare its budget *before* its tools.
 
-Das Konsortium identifizierte 5 Klassen (Discriminated-Union-Branch-Drift, Validator-Semantik-Drift unter Tristate, Recursion-Cycle-Drift, Substrate-Detection-Failure, Silent-Match-Drift) und ließ das Budget offen, mit Krall persönlich als Owner. User-Korrektur 5 (`../user-directive-corrections.md`) schloss das Budget mit einer **7-Klassen-Tabelle** und expliziter Detection/Response/Recovery-Pflicht pro Klasse.
+Das Konsortium identifizierte 5 Klassen (Discriminated-Union-Branch-Drift, Validator-Semantik-Drift unter Tristate, Recursion-Cycle-Drift, Substrate-Detection-Failure, Silent-Match-Drift) und ließ das Budget offen, mit Krall persönlich als Owner. User-Korrektur 5 (user-directive-corrections, historische atlas-Recherche, nicht extrahiert) schloss das Budget mit einer **7-Klassen-Tabelle** und expliziter Detection/Response/Recovery-Pflicht pro Klasse.
 
 ---
 
@@ -34,7 +34,7 @@ Das Failure-Mode-Budget des Successors umfasst **genau 7 Klassen**, geschlossen.
 | **F-6** | PageSession-OOM (Chromium-RAM oder >50 MB DOM) | TOLERABEL (Nursery-Cancellation <2s) |
 | **F-7** | Idempotency-Key-Replay mit World-State-Drift | NEIN — HTTP 409 mit Drift-Diagnose |
 
-Volltabelle mit Trigger / Detection / Response / Recovery-SLA pro Klasse in `../failure-mode-budget.md`. Diese ADR enthält nur Executive-Summary und Strukturelle Begründung.
+Volltabelle mit Trigger / Detection / Response / Recovery-SLA pro Klasse in der failure-mode-budget Volltabelle (historische atlas-Recherche, nicht extrahiert). Diese ADR enthält nur Executive-Summary und Strukturelle Begründung.
 
 ---
 
@@ -60,7 +60,7 @@ Volltabelle mit Trigger / Detection / Response / Recovery-SLA pro Klasse in `../
 
 - **Chrome-Crash**: tolerabel implizit via F-6 (PageSession-OOM hat denselben Cancellation-Pfad). Wir trennen nicht "Chrome ist abgestürzt" von "Chromium-RAM-overflow" — beides löst F-6 aus.
 - **MCP-Wire-Disconnect**: tolerabel implizit. MCP-Client ist verantwortlich für Reconnect; der Daemon (persistent) bleibt aktiv. Idempotency-Key-Replay greift bei Re-Send.
-- **WS-Disconnect** (Frontend-Tab): tolerabel implizit. WS-Reconnect mit Client-Cursor (siehe 12-Hub-Protocol-Synthese in `../12-hub-final-synthesis.md` Phase 1, HISTORICAL). Annotation-State persistiert im Daemon, geht beim Tab-Reload nicht verloren.
+- **WS-Disconnect** (Frontend-Tab): tolerabel implizit. WS-Reconnect mit Client-Cursor (siehe 12-Hub-Protocol-Synthese in 12-hub-final-synthesis Phase 1, historische atlas-Recherche, nicht extrahiert). Annotation-State persistiert im Daemon, geht beim Tab-Reload nicht verloren.
 
 ---
 

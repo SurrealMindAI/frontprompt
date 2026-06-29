@@ -5,7 +5,7 @@
 **Status**: accepted with amendments (2026-05-18: §UI-Surface revoked, Two-BC-Axiom deferred)
 **Date**: 2026-05-14
 **Amendment-Date**: 2026-05-18
-**Cross-References**: overview.md §3 Bounded Contexts, [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), `../single-writer-helland-explained.md`, [ADR-014 Daemon-Singleton via Lockfile](./ADR-014-daemon-singleton-via-lockfile.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
+**Cross-References**: overview.md §3 Bounded Contexts, [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), single-writer-helland-explained (historische atlas-Recherche, nicht extrahiert), [ADR-014 Daemon-Singleton via Lockfile](./ADR-014-daemon-singleton-via-lockfile.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
 
 ---
 

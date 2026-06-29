@@ -5,7 +5,7 @@
 **Status**: accepted with amendment (2026-05-18: SvelteKit Static-SPA-Build explizit erlaubt)
 **Date**: 2026-05-14
 **Amendment-Date**: 2026-05-18
-**Cross-References**: [ADR-003 Stack](./ADR-003-python-svelte-stack.md), `../user-directive-corrections.md` Korrektur 3, [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
+**Cross-References**: [ADR-003 Stack](./ADR-003-python-svelte-stack.md), user-directive-corrections Korrektur 3 (historische atlas-Recherche, nicht extrahiert), [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
 
 ---
 
@@ -18,7 +18,7 @@ Das Frontend des frontprompt-Successors ist das **Annotation UI**, das im extern
 - Visualisierung des aktuellen Page-State (DOM-Snapshot via Server-Side-Rendered Preview oder native iframe-Embed).
 - Annotation-Workflow (User wählt ein Element, kommentiert es; das fließt zurück zum Daemon).
 
-User-Korrektur 3 (`../user-directive-corrections.md`) hat das Framework auf **Svelte 5 mit Runes** festgelegt — autoritativ, gegen die Konsortiums-Empfehlung SolidJS.
+User-Korrektur 3 (user-directive-corrections, historische atlas-Recherche, nicht extrahiert) hat das Framework auf **Svelte 5 mit Runes** festgelegt — autoritativ, gegen die Konsortiums-Empfehlung SolidJS.
 
 ---
 
@@ -34,7 +34,7 @@ User-Korrektur 3 (`../user-directive-corrections.md`) hat das Framework auf **Sv
 
 **Persistierter State**:
 
-- **Keiner** im Frontend. Beim Tab-Reload geht der lokale UI-State verloren; die Wahrheit lebt im Daemon. WS-Reconnect mit Cursor (`../12-hub-final-synthesis.md` Phase 1 Protocol-Synthese, HISTORICAL) holt den State erneut.
+- **Keiner** im Frontend. Beim Tab-Reload geht der lokale UI-State verloren; die Wahrheit lebt im Daemon. WS-Reconnect mit Cursor (12-hub-final-synthesis Phase 1 Protocol-Synthese, historische atlas-Recherche, nicht extrahiert) holt den State erneut.
 - Bewusste Architektur-Entscheidung: der Frontend ist **Stateless-Client**, der Daemon ist die Truth-Quelle. Das vermeidet die "Local-vs-Remote-State-Drift"-Klasse, die im Patient (`OverlayState`-Pydantic-Aggregate-Singleton mit Browser-Side-Mirror) eine Bug-Quelle war.
 
 ---

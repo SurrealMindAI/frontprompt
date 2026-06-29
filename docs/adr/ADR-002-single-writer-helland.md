@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: `../single-writer-helland-explained.md`, [ADR-001 Two BCs](./ADR-001-two-bounded-contexts.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), `../failure-mode-budget.md`
+**Cross-References**: single-writer-helland-explained (historische atlas-Recherche, nicht extrahiert), [ADR-001 Two BCs](./ADR-001-two-bounded-contexts.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md)
 
 ---
 

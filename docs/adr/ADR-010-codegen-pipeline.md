@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: [ADR-004 Pydantic SSoT](./ADR-004-pydantic-2-13-ssot.md), `../failure-mode-budget.md` F-1, F-2, F-3, `../../sources/pydantic-version-policy-snapshot.md`
+**Cross-References**: [ADR-004 Pydantic SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, F-3, pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert)
 
 ---
 
@@ -12,7 +12,7 @@
 
 [ADR-004](./ADR-004-pydantic-2-13-ssot.md) etabliert Pydantic v2.13.x als Schema-Source-of-Truth. Diese ADR ist die **operative Detail-Spezifikation**, wie die Schemas in das Frontend (Zod 3.24.1) und in die MCP-Wire-Manifests (JSON-Schema 2020-12) übersetzt werden, und welche Drift-Klassen strukturell vermieden werden müssen.
 
-HTM's Konsortiums-Analyse (`../consortium-of-brain-verdict.md` §2.1, HISTORICAL) listete vier Drift-Klassen bei deterministischen totalen Generatoren:
+HTM's Konsortiums-Analyse (consortium-of-brain-verdict §2.1, historische atlas-Recherche, nicht extrahiert) listete vier Drift-Klassen bei deterministischen totalen Generatoren:
 
 1. **Hand-Edition** (eliminierbar via pre-commit-Hook + CI-Drift-Gate)
 2. **Validation-Default-Divergenz** (`additionalProperties` als `extra="forbid"` ↔ Zod `.strict()`)

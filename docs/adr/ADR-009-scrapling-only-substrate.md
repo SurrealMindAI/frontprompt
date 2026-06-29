@@ -4,7 +4,7 @@
 
 **Status**: accepted · **amended** (2026-06-29)
 **Date**: 2026-05-14
-**Cross-References**: `../user-directive-corrections.md` Korrektur 1, `../../sources/scrapling-context7-snapshot.md`, `../failure-mode-budget.md` F-4, F-5, [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md)
+**Cross-References**: user-directive-corrections Korrektur 1 (historische atlas-Recherche, nicht extrahiert), scrapling-context7-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-4, F-5, [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md)
 
 > **Amendment (2026-06-29):** This decision was never realised in code. Phase 1
 > drives the browser with **Playwright directly** (`browser/` + `ipc/playwright_controller/`);
@@ -18,15 +18,15 @@
 
 ## Context
 
-Das Konsortium (`../consortium-of-brain-verdict.md` §2.3 + §2.4 + §2.5, HISTORICAL) empfahl drei Browser-Substrate-Implementierungen als Co-Equal hinter einem `BrowserSubstrate`-Protocol: `PlaywrightSubstrate` (default), `UCSeleniumSubstrate` (Cloudflare Tier-3), `ScraplingStealthySubstrate` (One-Shot Pure-Scrape). Routing-Policy in der Application-Schicht, Substrate-Swap-als-First-Class-Operation als Konfiguration plus Hot-Reload.
+Das Konsortium (consortium-of-brain-verdict §2.3 + §2.4 + §2.5, historische atlas-Recherche, nicht extrahiert) empfahl drei Browser-Substrate-Implementierungen als Co-Equal hinter einem `BrowserSubstrate`-Protocol: `PlaywrightSubstrate` (default), `UCSeleniumSubstrate` (Cloudflare Tier-3), `ScraplingStealthySubstrate` (One-Shot Pure-Scrape). Routing-Policy in der Application-Schicht, Substrate-Swap-als-First-Class-Operation als Konfiguration plus Hot-Reload.
 
-User-Korrektur 1 (`../user-directive-corrections.md`) überschrieb diese Empfehlung: **ein** Substrate, **Scrapling**. Begründung im Korrektur-Dokument festgehalten:
+User-Korrektur 1 (user-directive-corrections, historische atlas-Recherche, nicht extrahiert) überschrieb diese Empfehlung: **ein** Substrate, **Scrapling**. Begründung im Korrektur-Dokument festgehalten:
 
 - Scrapling sitzt drunter auf Playwright (`DynamicFetcher` / `StealthyFetcher` nutzen Playwright + Chromium + CDP-Patches + Canvas-Noise) und auf curl-cffi (`Fetcher` / `AsyncFetcher`). Playwright-Funktionalität kommt durch Scrapling, ohne ein zweites Substrate.
 - Three-substrates-with-protocol ist Premature-Generalization, ohne dass je gemessen wurde, dass die Bypass-Rate strukturell unzureichend wäre.
 - UC-Selenium-Eskalation bleibt **Reserve** für F-4 (Substrate-Detection-Failure), nicht Front-Door-Substrate.
 
-Scrapling-API-Snapshot in `../../sources/scrapling-context7-snapshot.md`.
+Scrapling-API-Snapshot in scrapling-context7-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert).
 
 ---
 
@@ -50,7 +50,7 @@ Der Successor verwendet **Scrapling** als **einziges Browser-Substrate**, mit di
 
 **UC-Selenium-Eskalation als zukünftiger Engineering-Task**:
 
-Wenn F-4 (Substrate-Detection-Failure) empirisch greift — Scrapling-StealthySession-Bypass-Rate fällt unter 60% in einer Rolling-Window-Sampling-Strategie (`../failure-mode-budget.md` F-4) — wird ein Audit-Event `ROOT_CAUSE_BOT_DETECTION` emittiert und ein **Engineering-Backlog-Item** ausgelöst: "UC-Selenium als zweite Substrate-Variante evaluieren".
+Wenn F-4 (Substrate-Detection-Failure) empirisch greift — Scrapling-StealthySession-Bypass-Rate fällt unter 60% in einer Rolling-Window-Sampling-Strategie ([ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-4) — wird ein Audit-Event `ROOT_CAUSE_BOT_DETECTION` emittiert und ein **Engineering-Backlog-Item** ausgelöst: "UC-Selenium als zweite Substrate-Variante evaluieren".
 
 Das ist **explizit kein Hot-Path-Auto-Failover**. Der User soll wissen, wenn die Bypass-Rate kollabiert; UC-Selenium-Integration ist eine architektonische Entscheidung, kein Runtime-Fallback. Im Moment des Triggers wird ein neues ADR-Update geschrieben, das die Integration spezifiziert; UC-Selenium kommt erst rein, wenn diese ADR-Erweiterung committed ist.
 
@@ -67,11 +67,11 @@ Wir bauen die Telemetrie **selbst** in die Replay-Engine ein:
 - Jeder adaptive Re-Match emittiert ein Audit-Log-Event mit `confidence_score: float ∈ [0,1]`.
 - Match-Confidence-Score < 0.85 triggert F-5 (Silent-Match-Drift): Replay wird mit `non_deterministic=true` markiert; manuelle Review-Pflicht im Annotation-UI.
 
-Siehe `../failure-mode-budget.md` F-5 für volle Detection/Response-Spezifikation.
+Siehe [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-5 für volle Detection/Response-Spezifikation.
 
 **Verifikations-Spike**:
 
-PKR's IDK-Punkte (`../consortium-of-brain-verdict.md` §2.4 + §6, HISTORICAL) sind autoritativ **offen** und werden im overview.md §10 Offene Punkte als 2. Punkt geführt:
+PKR's IDK-Punkte (consortium-of-brain-verdict §2.4 + §6, historische atlas-Recherche, nicht extrahiert) sind autoritativ **offen** und werden im overview.md §10 Offene Punkte als 2. Punkt geführt:
 
 - Threadsafety unter geteiltem Browser-Pool.
 - Empirische Bypass-Rate gegen aktuellen Cloudflare-Stand.
