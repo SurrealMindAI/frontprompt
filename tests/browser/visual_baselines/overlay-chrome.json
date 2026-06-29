@@ -6,7 +6,7 @@
     "text-transform": "lowercase"
   },
   "mounted": true,
-  "statPills": 12,
+  "statPills": 16,
   "toggles": [
     {
       "ariaLabel": "hide picks overlay",

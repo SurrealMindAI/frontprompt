@@ -119,6 +119,12 @@ _COLLECT_JS = r"""
   // --- a11y audit ---
   const buttons = [...root.querySelectorAll('button, [role="button"]')];
   const unnamed = buttons.filter((b) => accName(b) === '' && !b.querySelector('svg[aria-label]')).length;
+  // WCAG nested-interactive: an interactive element must not contain another
+  // (invalid HTML + breaks keyboard/AT). The stat pills used to be a <button>
+  // wrapping the visibility-toggle <button>; the pill is now a <div> container.
+  const nestedInteractive = root.querySelectorAll(
+    'button button, button a[href], button [tabindex], [role="button"] button, a[href] button'
+  ).length;
 
   // rendered shadow-root stylesheet (CE-mode injects <style> into the shadow root)
   const css = [...root.querySelectorAll('style')].map((s) => s.textContent).join('\n');
@@ -128,6 +134,7 @@ _COLLECT_JS = r"""
     a11y: {
       buttonCount: buttons.length,
       unnamedButtons: unnamed,
+      nestedInteractive,
       hasFocusVisibleRule: css.includes(':focus-visible'),
       hasReducedMotionRule: css.includes('prefers-reduced-motion'),
     },
@@ -179,6 +186,7 @@ async def test_a11y_every_control_named_and_focus_motion_guards_present(overlay_
     a11y = data["a11y"]
     assert a11y["buttonCount"] > 0
     assert a11y["unnamedButtons"] == 0, "interactive controls without an accessible name"
+    assert a11y["nestedInteractive"] == 0, "WCAG nested-interactive: an interactive element contains another"
     assert a11y["hasFocusVisibleRule"], ":focus-visible ring missing from rendered shadow root"
     assert a11y["hasReducedMotionRule"], "prefers-reduced-motion guard missing from rendered shadow root"
 

@@ -203,6 +203,8 @@
     >
       {#snippet content()}
         <StatMetric num={picksCount} label="picks" />
+      {/snippet}
+      {#snippet action()}
         <button
           type="button"
           class="pill-toggle"
@@ -225,6 +227,8 @@
     >
       {#snippet content()}
         <StatMetric num={regionsCount} label="regions" />
+      {/snippet}
+      {#snippet action()}
         <button
           type="button"
           class="pill-toggle"
@@ -247,10 +251,13 @@
     >
       {#snippet content()}
         <StatMetric num={relationsCount} label="relations" />
+      {/snippet}
+      {#snippet action()}
         <!--
           Inline visibility-toggle als kleines Icon — Doppel-funktion: pill-click
           öffnet tab + macht overlay sichtbar, dieses kleine icon togglet NUR
-          visibility (stop-propagation). Spart einen extra-Button im actions-strip.
+          visibility (stop-propagation). Sibling des pill__open-Buttons (NICHT
+          verschachtelt) — sonst button-in-button / nested-interactive.
         -->
         <button
           type="button"
