@@ -15,6 +15,10 @@ palette (kept as a JS literal — it is the in-page convention, not a Python con
 
 from __future__ import annotations
 
+from typing import Any
+
+from playwright.async_api import ElementHandle
+
 #: Arrow function ``(el, i) => descriptor``. Usable directly as an
 #: ``ElementHandle.evaluate`` callback or as an ``Array.prototype.map`` callback
 #: (``.map`` passes ``(element, index)`` which matches ``(el, i)``).
@@ -63,4 +67,41 @@ ELEMENT_DESCRIPTOR_FN = """(el, i) => {
     };
 }"""
 
-__all__ = ["ELEMENT_DESCRIPTOR_FN"]
+#: In-page predicate ``(parent, child) => parent.contains(child)`` — hoisted once
+#: so every parent-scoping path shares the exact same containment check.
+_CONTAINS_FN = "(parent, child) => parent.contains(child)"
+
+
+async def filter_descendants(
+    parent_handle: ElementHandle,
+    handles: list[ElementHandle],
+) -> list[ElementHandle]:
+    """Keep only the handles that are descendants of ``parent_handle``."""
+    kept: list[ElementHandle] = []
+    for h in handles:
+        if await parent_handle.evaluate(_CONTAINS_FN, h):
+            kept.append(h)
+    return kept
+
+
+async def handles_to_descriptors(
+    handles: list[ElementHandle],
+    limit: int,
+    url: str,
+    ts: int,
+) -> list[dict[str, Any]]:
+    """Cap ``handles`` at ``limit`` and enrich each into an element-descriptor dict.
+
+    Evaluates :data:`ELEMENT_DESCRIPTOR_FN` per handle and stamps ``url`` +
+    ``timestamp_ms`` — the shared tail of the xpath and text-pseudo query paths.
+    """
+    descriptors: list[dict[str, Any]] = []
+    for i, h in enumerate(handles[:limit]):
+        el: dict[str, Any] = await h.evaluate(ELEMENT_DESCRIPTOR_FN, i)
+        el["url"] = url
+        el["timestamp_ms"] = ts
+        descriptors.append(el)
+    return descriptors
+
+
+__all__ = ["ELEMENT_DESCRIPTOR_FN", "filter_descendants", "handles_to_descriptors"]

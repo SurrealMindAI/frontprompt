@@ -18,7 +18,11 @@ from playwright.async_api import Page
 
 from frontprompt.ipc.page_controller import PageController
 from frontprompt.ipc.playwright_controller import browser_actions, dom_readers, page_meta, xpath_query
-from frontprompt.ipc.playwright_controller._element_data import ELEMENT_DESCRIPTOR_FN
+from frontprompt.ipc.playwright_controller._element_data import (
+    ELEMENT_DESCRIPTOR_FN,
+    filter_descendants,
+    handles_to_descriptors,
+)
 from frontprompt.ipc.playwright_controller.assertion_evaluator import AssertionEvaluator
 from frontprompt.ipc.playwright_controller.element_resolver import (
     ElementResolver,
@@ -141,11 +145,6 @@ class PlaywrightPageController(PageController):
 
     # ── ProgrammaticPickService helper ──────────────────────────────────────
 
-    async def _handle_to_element_data(self, handle: Any, color_idx: int) -> dict[str, Any]:
-        """Convert a Playwright ElementHandle to the element descriptor dict."""
-        result: dict[str, Any] = await handle.evaluate(ELEMENT_DESCRIPTOR_FN, color_idx)
-        return result
-
     async def query_selector_all(
         self,
         selector: str,
@@ -244,23 +243,10 @@ class PlaywrightPageController(PageController):
             parent_handle = await self._resolver.resolve(parent_pick)
             if parent_handle is None:
                 raise StalePickError(f"parent pick {parent_pick.pick_id} no longer matches the DOM")
-            # Filter: keep only handles that are descendants of parent_handle
-            filtered = []
-            for h in all_handles:
-                is_descendant: bool = await parent_handle.evaluate("(parent, child) => parent.contains(child)", h)
-                if is_descendant:
-                    filtered.append(h)
-            all_handles = filtered
+            all_handles = await filter_descendants(parent_handle, all_handles)
             total = len(all_handles)
 
-        capped = all_handles[:limit]
-        elements: list[dict[str, Any]] = []
-        for i, h in enumerate(capped):
-            el_data = await self._handle_to_element_data(h, i)
-            el_data["url"] = url
-            el_data["timestamp_ms"] = ts
-            elements.append(el_data)
-
+        elements = await handles_to_descriptors(all_handles, limit, url, ts)
         return {"total_matches": total, "elements": elements}
 
     # ── Dynamic field evaluation (for Inspector) ────────────────────────────

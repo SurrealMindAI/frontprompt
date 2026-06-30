@@ -14,7 +14,10 @@ from typing import Any
 import structlog
 from playwright.async_api import ElementHandle, Page
 
-from frontprompt.ipc.playwright_controller._element_data import ELEMENT_DESCRIPTOR_FN
+from frontprompt.ipc.playwright_controller._element_data import (
+    filter_descendants,
+    handles_to_descriptors,
+)
 
 _LOG = structlog.get_logger(__name__)
 
@@ -46,21 +49,10 @@ async def pick_by_xpath(
 
     # Scope to parent subtree if given
     if parent_handle is not None:
-        filtered: list[ElementHandle] = []
-        for h in all_handles:
-            is_desc: bool = await parent_handle.evaluate("(parent, child) => parent.contains(child)", h)
-            if is_desc:
-                filtered.append(h)
-        all_handles = filtered
+        all_handles = await filter_descendants(parent_handle, all_handles)
 
     total = len(all_handles)
-    capped = all_handles[:limit]
-    elements: list[dict[str, Any]] = []
-    for i, h in enumerate(capped):
-        el_data: dict[str, Any] = await h.evaluate(ELEMENT_DESCRIPTOR_FN, i)
-        el_data["url"] = url
-        el_data["timestamp_ms"] = ts
-        elements.append(el_data)
+    elements = await handles_to_descriptors(all_handles, limit, url, ts)
 
     _LOG.info("pick_by_xpath.done", total_matches=total, captured=len(elements))
     return {"total_matches": total, "elements": elements}
