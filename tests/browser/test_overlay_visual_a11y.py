@@ -36,12 +36,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 from playwright.async_api import Browser, Page, async_playwright
+
+from tests._support.chromium import chromium_binary_available
 
 _REPO_ROOT = Path(__file__).parents[2]
 _BUNDLE = _REPO_ROOT / "frontend" / "dist" / "overlay.iife.js"
@@ -54,20 +55,10 @@ _VIEWPORT = {"width": 1280, "height": 800}
 _FP_STUB = "window.__fp = { getState: () => Promise.resolve(null) };"
 
 
-def _chromium_binary_available() -> bool:
-    for cache in (
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ):
-        if cache.is_dir() and any(p.name.startswith("chromium-") for p in cache.iterdir()):
-            return True
-    return shutil.which("chromium") is not None
-
-
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.integration,
-    pytest.mark.skipif(not _chromium_binary_available(), reason="Chromium binary not installed."),
+    pytest.mark.skipif(not chromium_binary_available(), reason="Chromium binary not installed."),
     pytest.mark.skipif(
         not _BUNDLE.is_file(),
         reason="overlay bundle not built — run `cd frontend && FRONTPROMPT_BUILD_SESSION=1 bunx vite build`.",
@@ -76,7 +67,7 @@ pytestmark = [
 
 
 # In-page collector: reach into the overlay shadow root and snapshot the chrome.
-# Returns a JSON-serialisable dict — geometry rounded to int for stable diffs.
+# Returns a JSON-serialisable dict — structure + computed CSS, no geometry (see below).
 _COLLECT_JS = r"""
 () => {
   const host = document.getElementById('__frontprompt_overlay_host__');
@@ -216,7 +207,7 @@ async def test_hud_control_is_keyboard_focusable(overlay_page: Page) -> None:
 
 
 async def test_visual_regression_chrome_snapshot(overlay_page: Page) -> None:
-    """Computed-style + geometry snapshot diff against a committed baseline."""
+    """Structural + computed-style snapshot diff against a committed baseline."""
     data = await _collect(overlay_page)
     current = data["chrome"]
 

@@ -9,15 +9,13 @@ wenn Playwright-Binary nicht installiert.
 
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
-
 import pytest
 
 from frontprompt.browser import (
     BrowserNotReadyError,
     BrowserSessionManager,
 )
+from tests._support.chromium import chromium_binary_available
 
 # ---- Unit tests (no browser binary needed) ----------------------------------
 
@@ -85,26 +83,9 @@ def test_headless_can_be_overridden_for_tests() -> None:
 # ---- Integration test (skipped if no playwright binary) ----------------------
 
 
-def _chromium_binary_available() -> bool:
-    """Check ob Playwright's Chromium-Binary installiert ist.
-
-    Playwright cached Browsers in ~/Library/Caches/ms-playwright/ (macOS)
-    oder ~/.cache/ms-playwright/ (Linux). Wenn das Cache-Dir nicht existiert
-    oder kein chromium-* darin liegt, skippen wir den integration-test.
-    """
-    candidates = [
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ]
-    for cache in candidates:
-        if cache.is_dir() and any(p.name.startswith("chromium-") for p in cache.iterdir()):
-            return True
-    return shutil.which("chromium") is not None  # fallback: system chromium
-
-
 @pytest.mark.anyio
 @pytest.mark.skipif(
-    not _chromium_binary_available(),
+    not chromium_binary_available(),
     reason="Playwright Chromium binary not installed (run `playwright install chromium`).",
 )
 async def test_real_chromium_navigate_about_blank() -> None:
@@ -122,7 +103,7 @@ async def test_real_chromium_navigate_about_blank() -> None:
 
 @pytest.mark.anyio
 @pytest.mark.skipif(
-    not _chromium_binary_available(),
+    not chromium_binary_available(),
     reason="Playwright Chromium binary not installed.",
 )
 async def test_real_chromium_browser_session_id_stable_across_navigate() -> None:

@@ -16,9 +16,7 @@ Skipped automatically if Playwright's chromium binary is not installed.
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import AsyncIterator, Awaitable, Callable
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -31,6 +29,7 @@ from frontprompt.ipc.playwright_controller.screenshots import (
     shoot_page,
 )
 from frontprompt.overlay.injector import DEFAULT_MARKER_ID
+from tests._support.chromium import chromium_binary_available
 
 _INJECT_OVERLAY_JS = f"""() => {{
     if (document.getElementById('{DEFAULT_MARKER_ID}')) return;
@@ -43,21 +42,10 @@ _INJECT_OVERLAY_JS = f"""() => {{
 }}"""
 
 
-def _chromium_binary_available() -> bool:
-    candidates = [
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ]
-    for cache in candidates:
-        if cache.is_dir() and any(p.name.startswith("chromium-") for p in cache.iterdir()):
-            return True
-    return shutil.which("chromium") is not None
-
-
 pytestmark = [
     pytest.mark.anyio,
     pytest.mark.skipif(
-        not _chromium_binary_available(),
+        not chromium_binary_available(),
         reason="Playwright Chromium binary not installed.",
     ),
 ]

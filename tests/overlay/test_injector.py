@@ -6,8 +6,6 @@ Integration tests: real Chromium (headless=True). Skipped if no Playwright binar
 
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,6 +18,7 @@ from frontprompt.overlay import (
     OverlayNotMountedError,
     load_overlay_bundle,
 )
+from tests._support.chromium import chromium_binary_available
 
 # ---- Unit tests (mocked browser) --------------------------------------------
 
@@ -162,20 +161,9 @@ def test_repr_indicates_install_state() -> None:
 # ---- Integration tests (real Chromium) --------------------------------------
 
 
-def _chromium_binary_available() -> bool:
-    candidates = [
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ]
-    for cache in candidates:
-        if cache.is_dir() and any(p.name.startswith("chromium-") for p in cache.iterdir()):
-            return True
-    return shutil.which("chromium") is not None
-
-
 @pytest.mark.anyio
 @pytest.mark.skipif(
-    not _chromium_binary_available(),
+    not chromium_binary_available(),
     reason="Playwright Chromium binary not installed.",
 )
 async def test_real_chromium_inject_and_verify_svelte_bundle() -> None:
@@ -205,7 +193,7 @@ async def test_real_chromium_inject_and_verify_svelte_bundle() -> None:
 
 @pytest.mark.anyio
 @pytest.mark.skipif(
-    not _chromium_binary_available(),
+    not chromium_binary_available(),
     reason="Playwright Chromium binary not installed.",
 )
 async def test_real_chromium_svelte_bundle_idempotent_on_navigate() -> None:

@@ -37,25 +37,15 @@ from frontprompt.ipc.protocol import (
     ScreenshotPageRequest,
 )
 from frontprompt.mcp_server import LazyBrowserSessionProvider
+from tests._support.chromium import chromium_binary_available
 
 # ---------------------------------------------------------------------------
 # Chromium availability guard
 # ---------------------------------------------------------------------------
 
 
-def _chromium_binary_available() -> bool:
-    candidates = [
-        Path.home() / "Library" / "Caches" / "ms-playwright",
-        Path.home() / ".cache" / "ms-playwright",
-    ]
-    for cache in candidates:
-        if cache.is_dir() and any(p.name.startswith("chromium-") for p in cache.iterdir()):
-            return True
-    return shutil.which("chromium") is not None
-
-
 _SKIP = pytest.mark.skipif(
-    not _chromium_binary_available(),
+    not chromium_binary_available(),
     reason="Playwright Chromium binary not installed.",
 )
 
