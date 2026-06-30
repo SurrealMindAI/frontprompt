@@ -34,7 +34,6 @@ from frontprompt.state.state import (
     PanelId,
     PanelStateView,
     PanelView,
-    ParameterDeclaration,
     Pick,
     PickRefEntry,
     Recording,
@@ -1189,38 +1188,6 @@ class StateManager:
                         recording_id=recording_id,
                         assertion_id=assertion_id,
                     )
-                snap = self._post_mutate_locked()
-        return await self._notify_and_return(snap)
-
-    # ----- Mutation API: Parameters (single-writer) ------------------
-
-    async def add_parameter_to_recording(
-        self,
-        recording_id: str,
-        param: ParameterDeclaration,
-    ) -> StateSnapshot:
-        """Append a ParameterDeclaration to a recording.
-
-        Enforces name uniqueness — raises ``ValueError`` if ``param.name`` is
-        already declared on the recording. No-op (with warning) if recording
-        is unknown. Broadcasts snapshot.
-        """
-        async with self._lock:
-            recording = self._full_recordings.get(recording_id)
-            if recording is None:
-                self._log.warning("state.manager.add_parameter.unknown_recording", recording_id=recording_id)
-                snap = self._post_mutate_locked()
-            else:
-                existing_names = {p.name for p in recording.parameters}
-                if param.name in existing_names:
-                    raise ValueError(f"Parameter name '{param.name}' already declared on recording {recording_id!r}.")
-                recording.parameters.append(param)
-                self._log.info(
-                    "state.manager.add_parameter",
-                    recording_id=recording_id,
-                    param_name=param.name,
-                    param_type=param.param_type,
-                )
                 snap = self._post_mutate_locked()
         return await self._notify_and_return(snap)
 

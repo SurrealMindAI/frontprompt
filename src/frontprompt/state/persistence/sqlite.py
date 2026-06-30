@@ -498,18 +498,6 @@ class SqlitePersistence:
             return
         self._log.debug("state.persistence.sqlite.upsert_recording.ok", recording_id=recording.recording_id)
 
-    def delete_recording(self, recording_id: str) -> None:
-        """Delete recording + all timeline_entries (cascade). Idempotent."""
-        try:
-            with self._conn:
-                # Delete entries first (no FK cascade in SQLite without PRAGMA foreign_keys)
-                self._conn.execute("DELETE FROM timeline_entries WHERE recording_id = ?", (recording_id,))
-                self._conn.execute("DELETE FROM recordings WHERE recording_id = ?", (recording_id,))
-        except sqlite3.Error as exc:
-            self._log.warning("state.persistence.save.failed", method="delete_recording", error=str(exc))
-            return
-        self._log.debug("state.persistence.sqlite.delete_recording.ok", recording_id=recording_id)
-
     def load_recordings(self) -> list[Recording]:
         """Return all recordings with their timeline entries, ordered by started_at_ms.
 

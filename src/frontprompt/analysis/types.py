@@ -38,25 +38,6 @@ class FindByRegex(BaseModel):
     field: Literal["text", "attribute", "any"] = "text"
 
 
-class FindByLabel(BaseModel):
-    """Find elements by accessible-name / aria-label."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["label"] = "label"
-    label_text: str = Field(min_length=1)
-
-
-class FindByRole(BaseModel):
-    """Find elements by ARIA role, optionally filtered by accessible name."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["role"] = "role"
-    role: str = Field(min_length=1)
-    name: str | None = None
-
-
 class FindByCss(BaseModel):
     """Low-level CSS selector finder. Prefer text/role/label when possible."""
 
@@ -67,7 +48,7 @@ class FindByCss(BaseModel):
 
 
 FindQuery = Annotated[
-    FindByText | FindByRegex | FindByLabel | FindByRole | FindByCss,
+    FindByText | FindByRegex | FindByCss,
     Field(discriminator="kind"),
 ]
 """Discriminated union for snapshot-based element queries."""
@@ -373,9 +354,7 @@ __all__ = [
     "DomPatchOp",
     "ElementContext",
     "FindByCss",
-    "FindByLabel",
     "FindByRegex",
-    "FindByRole",
     # FindQuery variants
     "FindByText",
     "FindQuery",

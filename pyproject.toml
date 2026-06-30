@@ -29,10 +29,7 @@ dependencies = [
     "curl-cffi>=0.7,<1",          # scrapling AsyncFetcher HTTP backend
     "msgspec>=0.18,<1",           # scrapling Adaptor selector cache
     "playwright>=1.50,<2",        # scrapling AsyncDynamicSession Chromium driver
-    "starlette>=1.0,<2",          # HTTP Mutation Endpoint — explizit pinnen statt transitivem sse-starlette
-    "uvicorn>=0.34,<1",           # ASGI server für run_http_server()
     "structlog>=25.1,<26",
-    "websockets>=14,<17",         # wire/ws_server.py uses websockets.asyncio.server.serve() directly
     "pydantic-zod-codegen>=1.0,<2",
     # Voice-over — CORE feature, always installed.
     # sounddevice and huggingface_hub are cross-platform (PortAudio + HF cache).

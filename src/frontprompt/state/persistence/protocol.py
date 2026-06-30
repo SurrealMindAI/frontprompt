@@ -106,10 +106,6 @@ class StatePersistence(Protocol):
         """
         ...
 
-    def delete_recording(self, recording_id: str) -> None:
-        """Delete recording + all its timeline entries (cascade). Idempotent."""
-        ...
-
     def load_recordings(self) -> list[Recording]:
         """Return all recordings with their timeline entries, ordered by started_at_ms."""
         ...

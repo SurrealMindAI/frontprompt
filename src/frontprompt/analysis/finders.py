@@ -100,13 +100,6 @@ def _query_to_dict(query: Any) -> dict[str, Any]:
         pattern = query.get("pattern") if isinstance(query, dict) else getattr(query, "pattern", "")
         field = query.get("field", "text") if isinstance(query, dict) else getattr(query, "field", "text")
         return {"regex": pattern, "field": field}
-    elif kind == "label":
-        label = query.get("label_text") if isinstance(query, dict) else getattr(query, "label_text", "")
-        return {"label": label}
-    elif kind == "role":
-        role = query.get("role") if isinstance(query, dict) else getattr(query, "role", "")
-        name = query.get("name") if isinstance(query, dict) else getattr(query, "name", None)
-        return {"role": role, "name": name}
     else:
         # fallback: treat as CSS
         selector = query.get("selector", "") if isinstance(query, dict) else str(query)

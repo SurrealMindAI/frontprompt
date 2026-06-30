@@ -604,7 +604,7 @@ def _build_tool_list() -> list[types.Tool]:
                 "properties": {
                     "query": {
                         "type": "object",
-                        "description": "FindQuery: {kind: 'text'|'css'|'role'|'label'|'placeholder'|'alt', ...}",
+                        "description": "FindQuery: {kind: 'text'|'css'|'regex', ...}",
                     },
                     "comment": {"type": "string", "minLength": 1},
                     "parent_pick_id": {"type": "string"},
@@ -626,7 +626,7 @@ def _build_tool_list() -> list[types.Tool]:
                 "properties": {
                     "query": {
                         "type": "object",
-                        "description": "FindQuery: {kind: 'text'|'css'|'role'|'label'|'placeholder'|'alt', ...}",
+                        "description": "FindQuery: {kind: 'text'|'css'|'regex', ...}",
                     },
                     "comment": {"type": "string", "minLength": 1},
                     "parent_pick_id": {"type": "string"},

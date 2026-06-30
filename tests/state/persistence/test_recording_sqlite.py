@@ -1,7 +1,7 @@
 """Tests für SqlitePersistence — Recording-Domäne (sub-plan 01, Section 3).
 
 Deckt: load_recordings, upsert_recording, append_timeline_entry,
-mark_recording_stopped, update_recording_meta, delete_recording,
+mark_recording_stopped, update_recording_meta,
 Resilience (corrupt JSON), WAL concurrent-read.
 """
 
@@ -210,44 +210,6 @@ def test_update_recording_meta(tmp_path: Path) -> None:
     assert updated.description == "New desc"
     # status unchanged
     assert updated.status == "active"
-
-
-# ---------------------------------------------------------------------------
-# delete_recording
-# ---------------------------------------------------------------------------
-
-
-def test_delete_recording_removes_recording_and_entries(tmp_path: Path) -> None:
-    """delete_recording entfernt das Recording und alle zugehörigen Einträge (cascade)."""
-    from frontprompt.state.persistence.sqlite import SqlitePersistence
-
-    db_path = tmp_path / "fp.db"
-    db = SqlitePersistence(db_path)
-    rec = _make_recording("rec-del")
-    db.upsert_recording(rec)
-    db.append_timeline_entry("rec-del", _make_page_event(seq=0))
-    db.append_timeline_entry("rec-del", _make_nav_entry(seq=1))
-
-    db.delete_recording("rec-del")
-
-    loaded = db.load_recordings()
-    assert loaded == []
-
-    # Verify timeline_entries are gone too (cascade)
-    import sqlite3
-
-    conn = sqlite3.connect(str(db_path))
-    rows = conn.execute("SELECT * FROM timeline_entries WHERE recording_id = ?", ("rec-del",)).fetchall()
-    conn.close()
-    assert rows == [], f"Expected no timeline_entries after delete, got: {rows}"
-
-
-def test_delete_recording_idempotent(tmp_path: Path) -> None:
-    """delete_recording für unbekannte ID ist ein no-op."""
-    from frontprompt.state.persistence.sqlite import SqlitePersistence
-
-    db = SqlitePersistence(tmp_path / "fp.db")
-    db.delete_recording("nonexistent-id")  # no exception
 
 
 # ---------------------------------------------------------------------------

@@ -156,12 +156,7 @@ class ReplayPlayer:
         recording_id = self._recording.recording_id
         results: list[ReplayStepResult] = []
 
-        # Fill parameter defaults from ParameterDeclaration
-        merged_params: dict[str, str] = {}
-        for decl in self._recording.parameters:
-            if decl.default_value is not None:
-                merged_params[decl.name] = decl.default_value
-        merged_params.update(self._parameters)  # provided values override defaults
+        merged_params: dict[str, str] = dict(self._parameters)
 
         entries = sorted(self._recording.entries, key=lambda e: e.seq)
         total_steps = len(entries)

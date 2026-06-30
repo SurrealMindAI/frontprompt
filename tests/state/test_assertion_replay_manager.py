@@ -2,7 +2,7 @@
 
 TDD: Tests geschrieben ZUERST (RED), dann Implementierung (GREEN).
 Deckt: add_assertion_to_timeline, delete_assertion, update_assertion,
-add_parameter_to_recording, save_replay_report, get_replay_report,
+save_replay_report, get_replay_report,
 list_replay_reports_meta, set_active_replay_progress.
 """
 
@@ -12,7 +12,6 @@ import pytest
 
 from frontprompt.state import StateManager
 from frontprompt.state.state import (
-    ParameterDeclaration,
     ReplayProgress,
     ReplayReport,
     ReplayStepResult,
@@ -224,46 +223,6 @@ async def test_update_assertion_patches_fields_and_broadcasts() -> None:
     assert assertion.description == "Updated description"  # type: ignore[attr-defined]
     assert assertion.expected == "New expected value"  # type: ignore[attr-defined]
     assert snap2 is not None
-
-
-# ---------------------------------------------------------------------------
-# add_parameter_to_recording
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.anyio
-async def test_add_parameter_appends_to_recording() -> None:
-    """add_parameter_to_recording adds parameter to recording."""
-    sm = StateManager(session_id="sess-001")
-    snap = await sm.start_recording(name="Param Test")
-    recording_id = snap.recordings_state.active_recording_id
-    assert recording_id is not None
-
-    await sm.stop_recording(recording_id)
-
-    param = ParameterDeclaration(name="base_url", param_type="url", description="Base URL")
-    await sm.add_parameter_to_recording(recording_id, param)
-
-    recording = sm.get_recording(recording_id)
-    assert recording is not None
-    assert len(recording.parameters) == 1
-    assert recording.parameters[0].name == "base_url"
-
-
-@pytest.mark.anyio
-async def test_add_parameter_duplicate_name_raises_value_error() -> None:
-    """add_parameter_to_recording with duplicate name raises ValueError."""
-    sm = StateManager(session_id="sess-001")
-    snap = await sm.start_recording(name="Param Dup Test")
-    recording_id = snap.recordings_state.active_recording_id
-    assert recording_id is not None
-
-    param = ParameterDeclaration(name="login_url", param_type="url", description="Login URL")
-    await sm.add_parameter_to_recording(recording_id, param)
-
-    param_dup = ParameterDeclaration(name="login_url", param_type="string", description="Duplicate")
-    with pytest.raises(ValueError, match="login_url"):
-        await sm.add_parameter_to_recording(recording_id, param_dup)
 
 
 # ---------------------------------------------------------------------------

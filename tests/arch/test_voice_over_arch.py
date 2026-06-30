@@ -78,15 +78,11 @@ def _top_level_imports(tree: ast.Module) -> list[str]:
     return names
 
 
-def _count_bridge_on_calls_excluding_dead_code(rel: str) -> int:
-    """Count bridge.on(...) calls in the source, excluding the dead _register_handlers method.
+def _count_bridge_on_calls(rel: str) -> int:
+    """Count bridge.on(...) calls in the source.
 
-    show_session.py has two places with bridge.on() registrations:
-    - ``_register_handlers()`` — defined but NEVER called (dead code, kept as doc reference)
-    - inline inside ``_run_browser()`` nested in ``run()`` — the live execution path
-
-    We count only the live registrations by skipping any FunctionDef named
-    ``_register_handlers``.
+    show_session.py registers all bridge handlers inline inside ``_run_browser()``
+    (nested in ``run()``) — the single live execution path.
     """
     src = _source(rel).read_text(encoding="utf-8")
     tree = ast.parse(src, filename=rel)
@@ -94,16 +90,6 @@ def _count_bridge_on_calls_excluding_dead_code(rel: str) -> int:
     class _Visitor(ast.NodeVisitor):
         def __init__(self) -> None:
             self.count = 0
-            self._in_register_handlers = False
-
-        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-            if node.name == "_register_handlers":
-                # Skip this dead-code method entirely
-                return
-            self.generic_visit(node)
-
-        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-            self.generic_visit(node)
 
         def visit_Call(self, node: ast.Call) -> None:
             if (
@@ -198,9 +184,8 @@ def test_show_session_handler_count_matches_bridge_on_registrations() -> None:
     """
     from frontprompt.show_session import ShowSession
 
-    # AST count: how many live bridge.on(...) calls are in the source?
-    # Excludes _register_handlers() which is dead code (never called).
-    ast_count = _count_bridge_on_calls_excluding_dead_code("show_session.py")
+    # AST count: how many bridge.on(...) calls are in the source?
+    ast_count = _count_bridge_on_calls("show_session.py")
 
     # handler_count() declares what the code claims to register
     session = ShowSession(url="http://example.com")

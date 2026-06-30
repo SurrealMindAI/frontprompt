@@ -182,7 +182,7 @@ def test_save_panel_state_swallows_sqlite_error(tmp_path: Path) -> None:
     p.save_panel_state(panel)  # must not raise
 
 
-# ── upsert_recording / delete_recording error paths ──────────────────────────
+# ── upsert_recording error path ──────────────────────────────────────────────
 
 
 def test_upsert_recording_swallows_sqlite_error(tmp_path: Path) -> None:
@@ -191,13 +191,6 @@ def test_upsert_recording_swallows_sqlite_error(tmp_path: Path) -> None:
     recording = _make_recording("rec1")
     p._conn = _broken_conn()
     p.upsert_recording(recording)  # must not raise
-
-
-def test_delete_recording_swallows_sqlite_error(tmp_path: Path) -> None:
-    """delete_recording logs warning and returns on sqlite3.Error."""
-    p = _make_fresh_persistence(tmp_path)
-    p._conn = _broken_conn()
-    p.delete_recording("rec1")  # must not raise
 
 
 # ── append_timeline_entry error path ─────────────────────────────────────────

@@ -98,11 +98,6 @@ class InMemoryPersistence:
         self._recordings[recording.recording_id] = recording.model_copy(deep=True)
         self._log.debug("state.persistence.upsert_recording.in_memory", recording_id=recording.recording_id)
 
-    def delete_recording(self, recording_id: str) -> None:
-        """In-memory delete. Idempotent."""
-        self._recordings.pop(recording_id, None)
-        self._log.debug("state.persistence.delete_recording.in_memory", recording_id=recording_id)
-
     def load_recordings(self) -> list[Recording]:
         """Return all in-memory recordings sorted by started_at_ms."""
         return sorted(self._recordings.values(), key=lambda r: r.started_at_ms)

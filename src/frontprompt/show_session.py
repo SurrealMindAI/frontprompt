@@ -232,11 +232,17 @@ class ShowSession:
         ``session.session_id`` is the single source of truth for session identity
         (produced by ``session_lifecycle`` in ``ipc/session.py``); this method only
         consumes it. Persistence is the disk-backed default via ``make_persistence()``.
+
+        The persisted mlx-whisper model id (if any) is read back here and threaded
+        into ``build_initial_transcription_state``, so a model selected in a prior
+        session is restored on restart instead of silently reverting to the default.
         """
+        persistence = make_persistence()
+        mlx_whisper_model_id = persistence.load_mlx_whisper_model_id()
         return StateManager(
             session_id=session.session_id,
-            persistence=make_persistence(),
-            transcription_state=build_initial_transcription_state(),
+            persistence=persistence,
+            transcription_state=build_initial_transcription_state(mlx_whisper_model_id),
         )
 
     async def __aenter__(self) -> ShowSession:
@@ -244,26 +250,6 @@ class ShowSession:
 
     async def __aexit__(self, *_args: object) -> None:
         pass
-
-    def _register_handlers(self, bridge: BridgeManager) -> None:
-        """Register all 17 bridge handler methods on the bridge instance."""
-        bridge.on(OverlayReady, self._on_overlay_ready)
-        bridge.on(PanelToggleRequested, self._on_panel_toggle)
-        bridge.on(PanelResizeRequested, self._on_panel_resize)
-        bridge.on(HideAllPanelsRequested, self._on_hide_all)
-        bridge.on(InspectorActivateRequested, self._on_inspector_activate)
-        bridge.on(InspectorCanceledRequested, self._on_inspector_canceled)
-        bridge.on(InspectorPickMadeRequested, self._on_inspector_pick_made)
-        bridge.on(PickSelectedRequested, self._on_pick_selected)
-        bridge.on(PickCommentUpdatedRequested, self._on_pick_comment_updated)
-        bridge.on(PickDeletedRequested, self._on_pick_deleted)
-        bridge.on(RelationCreatedRequested, self._on_relation_created)
-        bridge.on(RelationDeletedRequested, self._on_relation_deleted)
-        bridge.on(RelationUpdatedRequested, self._on_relation_updated)
-        bridge.on(RegionCreatedRequested, self._on_region_created)
-        bridge.on(RegionDeletedRequested, self._on_region_deleted)
-        bridge.on(RegionUpdatedRequested, self._on_region_updated)
-        bridge.on(RegionSelectedRequested, self._on_region_selected)
 
     # ----- Bridge handler methods (re-homed from cli.py closures) -----
 
@@ -605,7 +591,7 @@ class ShowSession:
                         BridgeManager (expose_function before navigate)
                           bridge.set_task_group(self._tg)
                           StateManager (single-writer aggregate)
-                          17 bridge.on(...) registrations
+                          29 bridge.on(...) registrations
                           state_manager.add_snapshot_listener(broadcast)
                           OverlayInjector.install_init_script()
                           browser.navigate(url)
@@ -719,7 +705,7 @@ class ShowSession:
                             bridge.on(RegionDeletedRequested, self._on_region_deleted)
                             bridge.on(RegionUpdatedRequested, self._on_region_updated)
                             bridge.on(RegionSelectedRequested, self._on_region_selected)
-                            # Recording handlers (sub-plan 04, COL-1 — inline in _run_browser, not _register_handlers)
+                            # Recording handlers (sub-plan 04, COL-1 — inline in _run_browser)
                             bridge.on(RecordingStartRequested, self._on_recording_start)
                             bridge.on(RecordingStopRequested, self._on_recording_stop)
                             bridge.on(RecordingRenameRequested, self._on_recording_rename)
