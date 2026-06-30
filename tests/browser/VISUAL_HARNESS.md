@@ -9,7 +9,7 @@ tools don't map cleanly onto a widget that lives inside arbitrary host pages.
 | Layer | Where | What it catches | Runs without a browser |
 |---|---|---|---|
 | **Semantic / interaction** | `frontend/src/**/*.test.ts` (vitest + Testing Library) | roles, `aria-pressed`, keyboard handlers, accessible names | ✅ yes (default suite) |
-| **Visual regression** | [`test_overlay_visual_a11y.py`](test_overlay_visual_a11y.py) | layout/colour/geometry drift of the rendered chrome | ❌ real Chromium |
+| **Visual regression** | [`test_overlay_visual_a11y.py`](test_overlay_visual_a11y.py) | structure + computed-CSS drift of the rendered chrome (colour/font/icon/markup; no geometry → portable) | ❌ real Chromium |
 | **Accessibility audit** | same file | unnamed controls, missing focus-ring / reduced-motion in the *rendered* shadow root | ❌ real Chromium |
 | **Performance budget** | [`../test_overlay_bundle_budget.py`](../test_overlay_bundle_budget.py) | bundle gzip/raw size ratchet | ✅ yes (needs a build) |
 
@@ -29,19 +29,23 @@ widget:
   a11y category, scoped to the overlay).
 - **performance** → a bundle **size budget** (the cost we actually impose on
   every navigation), instead of host-page paint timings.
-- **visual** → a deterministic computed-style + geometry snapshot diff, instead
+- **visual** → a deterministic structure + computed-style snapshot diff, instead
   of full-page pixel scoring.
 
-## Visual regression: computed-style + geometry snapshot
+## Visual regression: structural + computed-style snapshot
 
 Rather than pixel-diffing PNGs (which needs an image lib + tolerance tuning and
 is noisy across machines), the harness snapshots a **structured** view of the
-chrome — element rects (rounded to int under a fixed 1280×800 viewport) plus key
-computed styles — and diffs it against a committed JSON baseline at
-[`visual_baselines/overlay-chrome.json`](visual_baselines/). This is
-deterministic, diff-friendly in review, and catches the regressions that matter
-(a control moved, resized, lost its colour, or reverted to a glyph icon). A
-full-page PNG is also written to `visual_artifacts/` (gitignored) for human eyes.
+chrome — control counts, icon names, and ARIA state, plus key computed CSS
+values (declared colours/fonts) but **no absolute geometry** — and diffs it
+against a committed JSON baseline at
+[`visual_baselines/overlay-chrome.json`](visual_baselines/). Dropping element
+rects is deliberate: rect coordinates derive from system-font text metrics and
+drift between the macOS author and the Linux CI runner, so the snapshot stays
+portable. This is deterministic, diff-friendly in review, and catches the
+regressions that matter (a control lost its colour, changed its ARIA state, or
+reverted to a glyph icon). A full-page PNG is also written to
+`visual_artifacts/` (gitignored) for the human-visual layout check.
 
 ## Running
 

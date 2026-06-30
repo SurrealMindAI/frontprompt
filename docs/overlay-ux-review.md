@@ -25,23 +25,27 @@ Two regression-free commits (foundation first, then its test net):
 | Added **elevation** scale (`--fp-z-*`), migrated all 9 hardcoded z-indexes | Two components both used `z-index: 100` (recorder toolbar vs dropdown) — an undocumented collision. The named scale encodes the documented stack. |
 | One global `:focus-visible` ring | Keyboard focus was invisible on most controls (only 5 files had any focus style). |
 | One global `prefers-reduced-motion` neutraliser | Only 1 of 31 animated components honoured it. Now the whole HUD does, from one rule. |
-| Deleted the orphaned `lib/` design tree (14 files) | `lib/tokens`, `lib/theme`, `lib/primitives`, `lib/types`, `lib/utils/cn`, barrels — **0 importers, 0 tests**. The dead primitives were the *only* refs to scale tokens that never even reached the shadow root. |
+| Removed the unused `lib/` primitives tree (`lib/primitives`, `lib/theme`, `lib/types`, `lib/utils/cn`, barrels) | These had **0 importers, 0 tests** and were the *only* refs to scale tokens that never reached the shadow root. **Correction (post-branch):** `lib/tokens/*.css` was deleted here too but later **restored** — the static `site/` consumes it (see §2.1); only the primitives/theme/types/cn stayed gone. |
 | Dropped unused `clsx` devDependency | Its only consumer was the deleted `cn.ts`. |
 
 ---
 
 ## 2. Headline findings (evidence)
 
-### 2.1 The design-token system was half-dead and partly broken
-- `lib/tokens/*.css` + `lib/theme/dark.css` were **never imported anywhere**
-  (vite uses `emitCss:false` and forbids CSS imports — styles must live in
-  `.svelte`). They never reached the bundle.
-- The live overlay defines its colour tokens **inline on `.grid`**, and uses
-  **only** `--fp-color-*`. The scale tokens (`--fp-radius/space/typography/
-  shadow`) were referenced **only** by the dead `lib/primitives`, where they
-  resolved to *nothing* in the shadow root.
-- Net: a whole "design system" directory that shipped zero pixels. **Removed**;
-  the real tokens now live on `:host` as the single source of truth.
+### 2.1 The design-token system was half-dead *in the overlay* (but the site needs it)
+- For the **overlay bundle**, `lib/tokens/*.css` + the (now-gone) `lib/theme/dark.css`
+  were **not imported** (vite uses `emitCss:false` and forbids CSS imports — overlay
+  styles must live in `.svelte`), so they never reached the overlay bundle.
+- The live overlay defines its colour tokens **inline on `.grid`** (later hoisted to
+  `:host`, see §1) and uses **only** `--fp-color-*`. The scale tokens
+  (`--fp-radius/space/typography/shadow`) were referenced **only** by the dead
+  `lib/primitives`, where they resolved to *nothing* in the shadow root.
+- **Correction (post-branch):** this branch first deleted the whole `lib/` tree, but
+  `lib/tokens/*.css` was **restored** — the static `site/` (`site/src/main.ts`)
+  imports `lib/tokens/index.css` for the marketing/docs page, a normal CSS-import
+  context where the tokens *do* ship pixels. So `lib/tokens` is live and consumed
+  (by the site); only the genuinely-dead `lib/primitives`/`theme`/`types`/`cn` stayed
+  removed. The overlay's own tokens live on `:host` as its single source of truth.
 
 ### 2.2 Colour is hardcoded, not tokenised — 32 files
 `grep` finds raw `rgba()/#hex` in **32** component/service files, with a
@@ -64,8 +68,10 @@ no theming, variable screen-reader output.
 ### 2.5 Accessibility: good bones, real gaps
 - **62** buttons, **41** `aria-label`, **63** `title`. ~21 buttons lean on
   `title` alone (not a robust accessible name; not keyboard-surfaced).
-- axe (now wired) flags a **serious nested-interactive** violation: the
-  relations status pill is a `<button>` containing a focusable descendant.
+- The **serious nested-interactive** violation axe flagged (the relations status
+  pill was a `<button>` containing a focusable descendant) is **fixed**: `StatPill`
+  now renders its `action` snippet as a *sibling* of the clickable button, never
+  nested inside it.
 - Keyboard handling exists in 8 files but isn't systematic.
 - Focus visibility was effectively absent → **fixed globally** this branch.
 
@@ -82,7 +88,7 @@ Grouped by region (composition in `App.svelte`). All live in the shadow root.
 | Region | Controls | UX notes |
 |---|---|---|
 | **Shell** | `App` grid (5 areas), `Panel`, `PanelResizer`, `PanelTab`, `TabbedPanel` | Grid-template animation is tasteful; now uses `--fp-ease-standard`. Resizer lacks an `aria` value surface (slider semantics). |
-| **Toolbar (top)** | `Toolbar`, `StatPill`, `StatMetric`, `StatusDot`(component-local) | Status pills are dense; the relations pill has the nested-interactive a11y bug. |
+| **Toolbar (top)** | `Toolbar`, `StatPill`, `StatMetric`, `StatusDot`(component-local) | Status pills are dense; the relations pill's nested-interactive a11y bug is now fixed (`StatPill` renders `action` as a sibling, not nested). |
 | **Left panel** | `LeftPanel`, `LeftPanelTools`, tabs: `Picks/Regions/Relations/Events/Recordings/Settings` + per-row `*Item` | Tab strip is the primary nav; would benefit from roving-tabindex + `role="tablist"`. |
 | **Right panel** | `RightPanel`, `PickDetails`, `RegionDetails`, `RecordingDetails`, `CommentEditor`, `AssertionEditor`, `ReplayReportView` | Detail/editor surface; auto-opens on selection (nice). Editors are the densest text. |
 | **Inspector layers** | `InspectorLayer`, `HighlightBorder`, `DrawRegionLayer`, `RelationsLayer`, `QuickCommentBox` | Full-viewport pointer surfaces. `InspectorLayer` has a static-element-interaction a11y warning. |
@@ -123,9 +129,9 @@ tokens — lets the HUD breathe on large screens without losing the dense pro
 layout. Pure-token, zero structural change.
 
 ### 4.6 a11y hardening
-Fix the nested-interactive pill (§2.5), give every icon-button an `aria-label`,
-add `role="tablist"`/roving-tabindex to the tab strip, and `role="slider"` +
-`aria-valuenow` to `PanelResizer`.
+Give every icon-button an `aria-label`, add `role="tablist"`/roving-tabindex to
+the tab strip, and `role="slider"` + `aria-valuenow` to `PanelResizer`. (The
+nested-interactive pill from §2.5 is already fixed.)
 
 ---
 
