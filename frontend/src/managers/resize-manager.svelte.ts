@@ -31,7 +31,7 @@ interface ActiveDrag {
   onEnd?: () => void;
 }
 
-export class ResizeManager {
+class ResizeManager {
   private active: ActiveDrag | null = null;
   private prevBodyCursor = '';
   private prevBodyUserSelect = '';

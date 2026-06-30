@@ -6,7 +6,4 @@
  * docstring). Hier nur Capture.
  */
 export { generateCssSelector } from './selector-path';
-export type { GenerateOptions } from './selector-path';
 export { buildFingerprint } from './element-fingerprint';
-export { isStableId } from './stable-id';
-export { fingerprintHash } from './fingerprint-hash';

@@ -7,17 +7,4 @@
  * background. See contrast.ts (pure math) + background.ts (DOM sampling).
  */
 
-export {
-  DEFAULT_TARGET_RATIO,
-  type Hsl,
-  type Rgb,
-  adaptHslForContrast,
-  contrastRatio,
-  formatHsl,
-  hslToRgb,
-  parseCssColorToRgb,
-  parseHsl,
-  relativeLuminance,
-} from './contrast';
-
-export { clearBackgroundCache, contrastingColor, effectiveBackgroundColor } from './background';
+export { contrastingColor } from './background';
