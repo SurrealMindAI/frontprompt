@@ -18,14 +18,16 @@
   outer-edge (zum viewport-rand) — sieht aus wie eine echte Lasche die aus
   dem viewport-rand kommt.
 
-  Icon-Mapping:
-    left → ⚒ tools, right → ⓘ details, top → ▤ statistics, bottom → ⌬ debug
+  Icon-Mapping (via the shared Icon registry, no Unicode glyphs):
+    left → wrench (tools), right → info (details),
+    top → bar-chart (statistics), bottom → terminal (debug)
 -->
 <script lang="ts">
   import { backendState } from '../backend-state/backend-state.svelte';
   import type { PanelId } from '../backend-state/panel-state.svelte';
   import { PANEL_CONFIGS } from '../backend-state/panel-state.svelte';
   import { panelCollapse } from '../local-state/panel-collapse.svelte';
+  import { Icon, type IconName } from '../lib/icons';
 
   let { id, label }: { id: PanelId; label: string } = $props();
 
@@ -45,35 +47,33 @@
   }
 
   /**
-   * Icon-Mapping pro Panel — semantisch passend zum Panel-Inhalt:
-   *   - left (tools): inspector-toggle + picks/relations management → ⚒
-   *   - right (details): active-pick + relations details → ⓘ
-   *   - top (statistics): stat-pills + toolbar → ▤ (bars)
-   *   - bottom (debug): state-snapshot dump, logs → ⌬
-   * ``label`` bleibt als a11y-name + tooltip-text.
+   * Per-panel icon — semantically matched to the panel content, rendered via the
+   * shared Icon registry (no Unicode glyphs):
+   *   - left (tools) → wrench · right (details) → info
+   *   - top (statistics) → bar-chart · bottom (debug) → terminal
+   * ``label`` remains the a11y-name + tooltip text.
    */
-  const ICONS: Record<PanelId, string> = {
-    left: '⚒',
-    right: 'ⓘ',
-    top: '▤',
-    bottom: 'Debug',
+  const PANEL_ICONS: Record<PanelId, IconName> = {
+    left: 'wrench',
+    right: 'info',
+    top: 'bar-chart',
+    bottom: 'terminal',
   };
-  const icon = $derived(ICONS[id]);
+  const icon = $derived(PANEL_ICONS[id]);
 
-  // Arrow zeigt INWARDS wenn open (= "click to collapse"),
-  //         OUTWARDS wenn collapsed (= "click to expand").
-  const arrow = $derived.by(() => {
+  // Chevron points INWARDS when open (= "click to collapse"),
+  //              OUTWARDS when collapsed (= "click to expand").
+  const arrow = $derived.by<IconName>(() => {
     if (isOpen) {
-      if (id === 'left') return '◀';
-      if (id === 'right') return '▶';
-      if (id === 'top') return '▲';
-      return '▼';
-    } else {
-      if (id === 'left') return '▶';
-      if (id === 'right') return '◀';
-      if (id === 'top') return '▼';
-      return '▲';
+      if (id === 'left') return 'chevron-left';
+      if (id === 'right') return 'chevron-right';
+      if (id === 'top') return 'chevron-up';
+      return 'chevron-down';
     }
+    if (id === 'left') return 'chevron-right';
+    if (id === 'right') return 'chevron-left';
+    if (id === 'top') return 'chevron-down';
+    return 'chevron-up';
   });
 </script>
 
@@ -88,9 +88,9 @@
   aria-expanded={isOpen}
   title={`${isOpen ? 'Collapse' : 'Expand'} ${label}`}
 >
-  <span class="tab__arrow">{arrow}</span>
+  <span class="tab__arrow"><Icon name={arrow} size={12} /></span>
   {#if !isOpen}
-    <span class="tab__icon" aria-hidden="true">{icon}</span>
+    <span class="tab__icon"><Icon name={icon} size={16} /></span>
   {/if}
 </button>
 

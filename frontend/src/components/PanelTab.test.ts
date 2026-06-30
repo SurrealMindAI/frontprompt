@@ -51,25 +51,25 @@ describe('PanelTab — open state (default)', () => {
   test('left panel: shows ◀ arrow when open', () => {
     const { container } = render(PanelTab, { id: 'left', label: 'Tools' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('◀');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-left');
   });
 
   test('right panel: shows ▶ arrow when open', () => {
     const { container } = render(PanelTab, { id: 'right', label: 'Details' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▶');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-right');
   });
 
   test('top panel: shows ▲ arrow when open', () => {
     const { container } = render(PanelTab, { id: 'top', label: 'Stats' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▲');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-up');
   });
 
   test('bottom panel: shows ▼ arrow when open', () => {
     const { container } = render(PanelTab, { id: 'bottom', label: 'Debug' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▼');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-down');
   });
 
   test('icon is NOT visible when panel is open', () => {
@@ -97,25 +97,25 @@ describe('PanelTab — collapsed state', () => {
   test('left panel: shows ▶ arrow when collapsed', () => {
     const { container } = render(PanelTab, { id: 'left', label: 'Tools' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▶');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-right');
   });
 
   test('right panel: shows ◀ arrow when collapsed', () => {
     const { container } = render(PanelTab, { id: 'right', label: 'Details' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('◀');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-left');
   });
 
   test('top panel: shows ▼ arrow when collapsed', () => {
     const { container } = render(PanelTab, { id: 'top', label: 'Stats' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▼');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-down');
   });
 
   test('bottom panel: shows ▲ arrow when collapsed', () => {
     const { container } = render(PanelTab, { id: 'bottom', label: 'Debug' });
     const arrowSpan = container.querySelector('.tab__arrow');
-    expect(arrowSpan?.textContent).toBe('▲');
+    expect(arrowSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('chevron-up');
   });
 
   test('icon IS visible when panel is collapsed', () => {
@@ -127,13 +127,13 @@ describe('PanelTab — collapsed state', () => {
   test('left panel shows ⚒ icon when collapsed', () => {
     const { container } = render(PanelTab, { id: 'left', label: 'Tools' });
     const iconSpan = container.querySelector('.tab__icon');
-    expect(iconSpan?.textContent).toBe('⚒');
+    expect(iconSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('wrench');
   });
 
   test('right panel shows ⓘ icon when collapsed', () => {
     const { container } = render(PanelTab, { id: 'right', label: 'Details' });
     const iconSpan = container.querySelector('.tab__icon');
-    expect(iconSpan?.textContent).toBe('ⓘ');
+    expect(iconSpan?.querySelector('svg')?.getAttribute('data-icon')).toBe('info');
   });
 
   test('tab--open class is absent when collapsed', () => {
