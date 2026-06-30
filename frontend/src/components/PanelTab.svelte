@@ -132,8 +132,8 @@
   }
 
   .tab:focus-visible {
-    outline: 1px solid rgba(120, 180, 255, 0.6);
-    outline-offset: -1px;
+    outline: var(--fp-focus-ring-width) solid var(--fp-focus-ring-color);
+    outline-offset: calc(-1 * var(--fp-focus-ring-offset));
   }
 
   /*

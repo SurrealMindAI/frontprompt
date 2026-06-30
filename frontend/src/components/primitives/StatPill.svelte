@@ -112,8 +112,8 @@
   }
 
   .pill__open:focus-visible {
-    outline: 1px solid rgba(120, 180, 255, 0.7);
-    outline-offset: 1px;
+    outline: var(--fp-focus-ring-width) solid var(--fp-focus-ring-color);
+    outline-offset: var(--fp-focus-ring-offset);
     border-radius: 8px;
   }
 

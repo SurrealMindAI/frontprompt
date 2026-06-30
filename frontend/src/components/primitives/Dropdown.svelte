@@ -212,10 +212,14 @@
     border-color: rgba(120, 180, 255, 0.4);
   }
 
-  .dropdown__trigger:focus-visible,
   .dropdown__trigger--open {
     outline: none;
     border-color: rgba(120, 180, 255, 0.7);
+  }
+
+  .dropdown__trigger:focus-visible {
+    outline: var(--fp-focus-ring-width) solid var(--fp-focus-ring-color);
+    outline-offset: var(--fp-focus-ring-offset);
   }
 
   .dropdown__value {
