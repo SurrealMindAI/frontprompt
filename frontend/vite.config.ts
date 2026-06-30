@@ -80,11 +80,9 @@ export default defineConfig(() => {
       environment: 'jsdom',
       globals: true,
       setupFiles: ['./vitest.setup.ts'],
-      // Unit/component tests live under src/. The Playwright visual-regression
-      // harness (tests-visual/, visual/) owns its own runner — keep vitest from
-      // collecting its *.spec.ts (which would crash on Playwright's test API).
+      // Unit/component tests live under src/.
       include: ['src/**/*.{test,spec}.{ts,js}'],
-      exclude: ['**/node_modules/**', '**/dist/**', 'tests-visual/**', 'visual/**'],
+      exclude: ['**/node_modules/**', '**/dist/**'],
       // Svelte 5 needs browser-condition resolution for component mounting in jsdom.
       // Without this, svelte resolves to src/index-server.js which throws
       // "mount(...) is not available on the server".

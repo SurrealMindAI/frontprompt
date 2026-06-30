@@ -99,8 +99,7 @@
     }
   }
 
-  function togglePicksOverlay(e: MouseEvent): void {
-    e.stopPropagation();
+  function togglePicksOverlay(): void {
     uiPrefs.togglePicksVisible();
   }
 
@@ -121,10 +120,10 @@
     }
   }
 
-  function toggleRelationsOverlay(e: MouseEvent): void {
-    // Stop-propagation damit der pill-click (openRelationsView) nicht
-    // gleichzeitig feuert — wir wollen nur visibility toggeln.
-    e.stopPropagation();
+  function toggleRelationsOverlay(): void {
+    // Visibility-only toggle. The toggle is a sibling of the pill's open-button
+    // (not nested inside it), so a click here never reaches openRelationsView —
+    // no stopPropagation needed.
     uiPrefs.toggleRelationsVisible();
   }
 
@@ -136,8 +135,7 @@
     }
   }
 
-  function toggleRegionsOverlay(e: MouseEvent): void {
-    e.stopPropagation();
+  function toggleRegionsOverlay(): void {
     uiPrefs.toggleRegionsVisible();
   }
 </script>

@@ -22,9 +22,14 @@ function loadMermaid(): Promise<typeof import('mermaid').default> {
     mermaidReady = import('mermaid').then(async ({ default: mermaid }) => {
       // ELK layout engine — cleaner routing for subgraph-heavy flowcharts (e.g. the
       // ADR relationship graph) than the default dagre. Register before initialize;
-      // diagrams opt in via `%%{init: {"layout": "elk"}}%%`.
-      const { default: elkLayouts } = await import('@mermaid-js/layout-elk');
-      mermaid.registerLayoutLoaders(elkLayouts);
+      // diagrams opt in via `%%{init: {"layout": "elk"}}%%`. Optional: if the package
+      // fails to load, non-elk diagrams still render with the default engine.
+      try {
+        const { default: elkLayouts } = await import('@mermaid-js/layout-elk');
+        mermaid.registerLayoutLoaders(elkLayouts);
+      } catch {
+        // elk unavailable — leave the default layout engine in place
+      }
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'strict',

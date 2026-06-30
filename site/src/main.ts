@@ -1,11 +1,9 @@
 import { mount } from 'svelte';
 
-// Shared frontprompt design tokens (the product's own design system) — primitive
-// scale + dark theme. The site layers its own inspector/HUD aesthetic on top in
-// app.css. Keeping these as the base means the marketing site and the in-page
-// overlay speak the exact same visual language.
+// Shared frontprompt design tokens — the primitive colour + typography scale the
+// site consumes via app.css. The in-page overlay inlines its own token copy, so
+// the marketing site and the overlay speak the same visual language.
 import '../../frontend/src/lib/tokens/index.css';
-import '../../frontend/src/lib/theme/dark.css';
 import './app.css';
 
 import App from './App.svelte';

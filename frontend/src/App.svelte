@@ -305,7 +305,6 @@
     /* Accent + state */
     --fp-color-accent: #6ea8fe;
     --fp-color-accent-text: #0b1220;
-    --fp-color-error: #ff6b6b;
     --fp-color-hover-bg: rgba(255, 255, 255, 0.08);
 
     /* Easing — the standard curve, consumed by the .grid reveal transition.

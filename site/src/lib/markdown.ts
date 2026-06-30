@@ -136,9 +136,3 @@ export function renderSnippet(raw: string): string {
   const md = new MarkdownIt({ html: true, linkify: true, typographer: true });
   return md.render(raw);
 }
-
-/** Inline render (no wrapping <p>) for single-line bits like the hero lede. */
-export function renderInline(raw: string): string {
-  const md = new MarkdownIt({ html: true, linkify: true, typographer: true });
-  return md.renderInline(raw);
-}
