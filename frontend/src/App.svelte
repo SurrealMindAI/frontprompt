@@ -79,9 +79,10 @@
   });
 
   // panelCollapse-cross-derive: alle panels rendern als Lasche solange ein
-  // full-viewport-tool (Inspector ODER Region-Draw) ODER eine aktive Aufnahme
-  // (recorder.isActive) ODER about:blank aktiv ist. panel-state.gridTemplate*With(
-  // forceClosed) respektiert den flag, user-intent in panels[id].open bleibt unberührt.
+  // full-viewport-tool (Inspector ODER Region-Draw) den viewport beansprucht.
+  // Recording collabiert NICHT (orthogonale Achse — die Pick/Region-Tools müssen
+  // während der Aufnahme erreichbar bleiben); about:blank wird beim gridTemplate-
+  // Aufruf separat ge-ODER-t. user-intent in panels[id].open bleibt unberührt.
   const panelsCollapsed = $derived(panelCollapse.active);
   const inspectorActive = $derived(backendState.inspector.active);
 
@@ -273,9 +274,10 @@
   (localState, ephemere Drag-Position). isHudChrome-Prädikat schließt alle Toolbar-
   Clicks korrekt von durable Capture aus — kein Code-Change nötig (sub-plan 03).
   pageTool wird NICHT erweitert — floating toolbar nimmt keinen full-viewport ein.
-  Das Panel-Kollabieren bei aktiver Aufnahme läuft über panelCollapse (separat von
-  pageTool), das recorder.isActive mit-ODER-t: Panels retracten zu Laschen während
-  der Aufnahme (BUG 3), die floating toolbar bleibt sichtbar, restore beim Stop.
+  Recording collabiert die Panels NICHT (orthogonale Achse): die Pick/Region-Tools
+  im linken Panel bleiben während der Aufnahme erreichbar, der Pick/Region-Flow ist
+  identisch zum Normalfall. Die floating toolbar ist die einzige recording-spezifische
+  Chrome — sichtbar solange recorder.isActive, sonst nichts.
 -->
 {#if recorder.isActive}
   <FloatingRecorderToolbar />

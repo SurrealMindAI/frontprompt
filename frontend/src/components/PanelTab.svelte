@@ -33,10 +33,10 @@
 
   /*
     EffectiveOpenWith respektiert den cross-store override (panelCollapse.active=true
-    → panels rendern als Lasche, ausgelöst durch full-viewport-tools ODER aktive
-    Aufnahme). Panel.svelte nutzt dieselbe Logik — so kommt Tab + Panel-container
-    immer aus derselben source-of-truth, kein visual mismatch (e.g. tab denkt
-    "open", panel denkt "collapsed").
+    → panels rendern als Lasche, ausgelöst durch full-viewport-tools; Recording
+    collabiert bewusst NICHT — orthogonale Achse). Panel.svelte nutzt dieselbe Logik
+    — so kommt Tab + Panel-container immer aus derselben source-of-truth, kein visual
+    mismatch (e.g. tab denkt "open", panel denkt "collapsed").
   */
   const isOpen = $derived(backendState.panel.effectiveOpenWith(id, panelCollapse.active));
   const config = $derived(PANEL_CONFIGS[id]);

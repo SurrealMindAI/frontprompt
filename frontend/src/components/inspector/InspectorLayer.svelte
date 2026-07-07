@@ -153,8 +153,12 @@
   }
 
   $effect(() => {
+    // Escape goes through the SAME cancel path as click-on-nothing (handleCancel
+    // → the onCancel prop, which App.svelte wires to pickClaim.routeCancel). Calling
+    // backendState.inspector.cancel() directly here would clear inspector.active
+    // while leaving pickClaim.current set → "tool stays on, no picker" desync.
     const unsubEsc = keyboard.subscribe('Escape', () => {
-      backendState.inspector.cancel();
+      handleCancel();
     });
     return () => {
       stopTracking();

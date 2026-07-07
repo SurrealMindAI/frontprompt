@@ -14,8 +14,10 @@ vi.mock('../../bridge/bridge.svelte', () => ({ bridge: { send } }));
 
 import { describe, expect, test, afterEach, beforeEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import InspectorLayer from './InspectorLayer.svelte';
 import { backendState } from '../../backend-state/backend-state.svelte';
+import { keyboard } from '../../services/keyboard/keyboard.svelte';
 
 // jsdom does not implement document.elementsFromPoint — define it globally
 // so the component can call it. We control its return value per test.
@@ -23,6 +25,7 @@ let mockElementsFromPoint: ReturnType<typeof vi.fn>;
 
 afterEach(() => {
   cleanup();
+  keyboard._reset(); // drop the Escape subscription + window listener between tests
   send.mockClear();
   vi.restoreAllMocks();
 });
@@ -224,6 +227,32 @@ describe('InspectorLayer — default handlers (no custom props)', () => {
     const layer = container.querySelector('.inspector-layer') as HTMLElement;
     fireEvent.click(layer);
     expect(cancelSpy).toHaveBeenCalled();
+    cancelSpy.mockRestore();
+  });
+});
+
+describe('InspectorLayer — Escape routing (no claim/inspector desync)', () => {
+  test('Escape routes through the onCancel prop (not a direct backend cancel)', async () => {
+    const onCancel = vi.fn();
+    const cancelSpy = vi.spyOn(backendState.inspector, 'cancel');
+    render(InspectorLayer, { props: { onCancel } });
+    await tick(); // let the $effect install the Escape subscription
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    // Regression pin: Escape used to call backendState.inspector.cancel() DIRECTLY,
+    // bypassing the onCancel prop (= pickClaim.routeCancel in App.svelte). That
+    // cleared inspector.active while leaving pickClaim.current set → "tool stays on,
+    // no picker". Escape must go through the same handleCancel path as click-on-nothing.
+    expect(cancelSpy).not.toHaveBeenCalled();
+    cancelSpy.mockRestore();
+  });
+
+  test('Escape with no onCancel prop falls back to the default backend cancel', async () => {
+    const cancelSpy = vi.spyOn(backendState.inspector, 'cancel');
+    render(InspectorLayer);
+    await tick();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
     cancelSpy.mockRestore();
   });
 });
