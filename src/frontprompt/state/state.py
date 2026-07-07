@@ -674,6 +674,14 @@ class RecordingMeta(BaseModel):
     started_at_ms: int = Field(description="Client-clock epoch ms zum Start.")
     ended_at_ms: int | None = Field(default=None, description="None solange aktiv.")
     entry_count: int = Field(ge=0, description="Anzahl Timeline-Einträge (≥0).")
+    origin_session: str | None = Field(
+        default=None,
+        description=(
+            "session_id of the session that last mutated this entity "
+            "(steal-on-mutate provenance via sqlite-persistence). "
+            "None until first persisted."
+        ),
+    )
     # Voice-over fields (Schema 0.10.0 — additive, backward-compat via defaults)
     has_voice_over: bool = Field(
         default=False,

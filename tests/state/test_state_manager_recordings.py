@@ -92,6 +92,24 @@ async def test_start_recording_creates_recording_and_sets_active() -> None:
 
 
 @pytest.mark.anyio
+async def test_start_recording_meta_carries_origin_session() -> None:
+    """RecordingMeta in the broadcast snapshot carries origin_session provenance.
+
+    The full Recording is stamped with the manager's session_id at creation
+    (start_recording). The lightweight meta builder (_recording_to_meta) must
+    propagate that provenance, otherwise the overlay's RecordingsTab ownership
+    grouping is blind (every row degrades to "foreign"). This proves the builder
+    carries it through to the broadcast list-item type.
+    """
+    sm = StateManager(session_id="owner-session")
+    snap = await sm.start_recording(name="Owned Recording")
+
+    assert snap.recordings_state.recordings[0].origin_session == "owner-session"
+    # And it matches the manager's own provenance session-id.
+    assert snap.recordings_state.recordings[0].origin_session == sm.session_id
+
+
+@pytest.mark.anyio
 async def test_start_recording_calls_upsert_on_persistence() -> None:
     """start_recording persistiert Recording via persistence.upsert_recording."""
     from frontprompt.state.persistence.in_memory import InMemoryPersistence

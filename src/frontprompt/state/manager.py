@@ -268,6 +268,7 @@ class StateManager:
             started_at_ms=recording.started_at_ms,
             ended_at_ms=recording.ended_at_ms,
             entry_count=len(recording.entries),
+            origin_session=recording.origin_session,
             has_voice_over=recording.has_voice_over,
             audio_path=recording.audio_path,
             transcription_status=recording.transcription_status,

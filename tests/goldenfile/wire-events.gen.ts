@@ -318,6 +318,10 @@ export interface RecordingMeta {
    */
   entry_count: number;
   /**
+   * session_id of the session that last mutated this entity (steal-on-mutate provenance via sqlite-persistence). None until first persisted.
+   */
+  origin_session?: string | null;
+  /**
    * True wenn eine Voice-Over-Aufnahme für dieses Recording vorliegt.
    */
   has_voice_over?: boolean;
@@ -339,6 +343,7 @@ export const RecordingMeta = z.object({
   started_at_ms: z.number().int(),
   ended_at_ms: z.number().int().nullable().optional().default(null),
   entry_count: z.number().int().gte(0),
+  origin_session: z.string().nullable().optional().default(null),
   has_voice_over: z.boolean().default(false),
   audio_path: z.string().nullable().optional().default(null),
   transcription_status: z.enum(["none", "pending", "transcribing", "done", "failed"]).default("none"),

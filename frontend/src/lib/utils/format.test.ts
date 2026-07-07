@@ -1,8 +1,9 @@
 /**
  * formatCount — all branches including k/M/G suffixes.
+ * formatTimestamp — stability + shape (locale/TZ-robust assertions).
  */
 import { describe, expect, test } from 'vitest';
-import { formatCount } from './format';
+import { formatCount, formatTimestamp } from './format';
 
 describe('formatCount < 1000 (no suffix)', () => {
   test('0 → "0"', () => expect(formatCount(0)).toBe('0'));
@@ -29,4 +30,26 @@ describe('formatCount ≥ 1 000 000 000 (G suffix)', () => {
   test('1 000 000 000 → "1.00G"', () => expect(formatCount(1_000_000_000)).toBe('1.00G'));
   test('2 500 000 000 → "2.50G"', () => expect(formatCount(2_500_000_000)).toBe('2.50G'));
   test('1 234 567 890 → "1.23G"', () => expect(formatCount(1_234_567_890)).toBe('1.23G'));
+});
+
+describe('formatTimestamp', () => {
+  // Locale/TZ-robust: assert stability + shape, never an exact localized string
+  // (the test host's locale + timezone are unknown).
+  test('returns a non-empty string', () => {
+    expect(formatTimestamp(1700000000000).length).toBeGreaterThan(0);
+  });
+
+  test('is deterministic for the same input', () => {
+    expect(formatTimestamp(1700000000000)).toBe(formatTimestamp(1700000000000));
+  });
+
+  test('distinguishes timestamps that are days apart', () => {
+    const a = formatTimestamp(1700000000000);
+    const b = formatTimestamp(1700000000000 + 3 * 24 * 60 * 60 * 1000);
+    expect(a).not.toBe(b);
+  });
+
+  test('contains a digit (numeric day / time component)', () => {
+    expect(formatTimestamp(1700000000000)).toMatch(/\d/);
+  });
 });

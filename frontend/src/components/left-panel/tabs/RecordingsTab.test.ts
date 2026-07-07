@@ -23,6 +23,8 @@ import { describe, expect, test, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import RecordingsTab from './RecordingsTab.svelte';
 import { backendState } from '../../../backend-state/backend-state.svelte';
+import { overlayContext } from '../../../services/context/overlay-context.svelte';
+import { formatTimestamp } from '../../../lib/utils/format';
 import type { RecordingMeta, Recording, ReplayProgress, Region, Relation } from '../../../_generated/state';
 import type { Pick as PickType } from '../../../_generated/state';
 
@@ -38,10 +40,17 @@ afterEach(() => {
   backendState.inspector.picks = [];
   backendState.inspector.regions = [];
   backendState.inspector.relations = [];
+  // RecordingsTab now reads overlayContext for ownership grouping — reset to the
+  // fully-degraded default (currentSessionId null → all owned) between tests.
+  overlayContext.resetForTests();
 });
 
 // --- Fixtures ---------------------------------------------------------------
 
+// `origin_session` is part of RecordingMeta (the lightweight list-item type broadcast
+// in every snapshot) — the list's ownership split reads it directly (via
+// overlayContext.isOwned, structurally an OriginBearing), so tests drive
+// owned-vs-foreign behaviour through the real, type-checked field.
 function makeRecordingMeta(overrides: Partial<RecordingMeta> = {}): RecordingMeta {
   return {
     recording_id: 'rec-0001',
@@ -52,7 +61,7 @@ function makeRecordingMeta(overrides: Partial<RecordingMeta> = {}): RecordingMet
     ended_at_ms: 1700000010000,
     entry_count: 3,
     ...overrides,
-  };
+  } as RecordingMeta;
 }
 
 function makeDetailRecording(overrides: Partial<Recording> = {}): Recording {
@@ -182,6 +191,136 @@ describe('RecordingsTab — list view', () => {
         recording_id: 'rec-abc',
       })
     );
+  });
+});
+
+// --- Tests: list view (timestamp, ordering, ownership grouping) -------------
+
+describe('RecordingsTab — list view: human-readable timestamp', () => {
+  test('renders a timestamp subline for a row', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ started_at_ms: 1700000000000 })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    const time = container.querySelector('.recording-row__time');
+    expect(time).not.toBeNull();
+    expect(time!.textContent!.trim().length).toBeGreaterThan(0);
+  });
+
+  test('timestamp text matches formatTimestamp(started_at_ms)', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ started_at_ms: 1700000000000 })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    const time = container.querySelector('.recording-row__time');
+    expect(time!.textContent).toBe(formatTimestamp(1700000000000));
+  });
+});
+
+describe('RecordingsTab — list view: newest-first ordering', () => {
+  test('sorts recordings by started_at_ms descending', () => {
+    backendState.recordings.recordings = [
+      makeRecordingMeta({ recording_id: 'old', name: 'Old', started_at_ms: 1_000 }),
+      makeRecordingMeta({ recording_id: 'new', name: 'New', started_at_ms: 9_000 }),
+      makeRecordingMeta({ recording_id: 'mid', name: 'Mid', started_at_ms: 5_000 }),
+    ];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    const names = Array.from(container.querySelectorAll('.recording-row__name')).map(
+      (n) => n.textContent
+    );
+    expect(names).toEqual(['New', 'Mid', 'Old']);
+  });
+});
+
+describe('RecordingsTab — list view: session-ownership grouping', () => {
+  test('owned recordings render first, foreign after, with the .foreign dim class', () => {
+    overlayContext.setForTests({ url: new URL('https://example.com'), currentSessionId: 'sess-1' });
+    backendState.recordings.recordings = [
+      // foreign has the newer timestamp, yet owned must still come first (group order wins).
+      makeRecordingMeta({ recording_id: 'theirs', name: 'Theirs', origin_session: 'sess-2', started_at_ms: 3_000 }),
+      makeRecordingMeta({ recording_id: 'mine', name: 'Mine', origin_session: 'sess-1', started_at_ms: 2_000 }),
+    ];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+
+    const headers = Array.from(container.querySelectorAll('.group-header')).map((h) => h.textContent);
+    expect(headers).toEqual(['This session', 'Other sessions']);
+
+    const rows = Array.from(container.querySelectorAll('.recording-row'));
+    expect(rows[0]!.querySelector('.recording-row__name')!.textContent).toBe('Mine');
+    expect(rows[0]!.classList.contains('foreign')).toBe(false);
+    expect(rows[1]!.querySelector('.recording-row__name')!.textContent).toBe('Theirs');
+    expect(rows[1]!.classList.contains('foreign')).toBe(true);
+  });
+
+  test('each ownership group is sorted newest-first independently', () => {
+    overlayContext.setForTests({ url: new URL('https://example.com'), currentSessionId: 'sess-1' });
+    backendState.recordings.recordings = [
+      makeRecordingMeta({ recording_id: 'mine-old', name: 'MineOld', origin_session: 'sess-1', started_at_ms: 1_000 }),
+      makeRecordingMeta({ recording_id: 'mine-new', name: 'MineNew', origin_session: 'sess-1', started_at_ms: 8_000 }),
+      makeRecordingMeta({ recording_id: 'their-old', name: 'TheirOld', origin_session: 'sess-9', started_at_ms: 2_000 }),
+      makeRecordingMeta({ recording_id: 'their-new', name: 'TheirNew', origin_session: 'sess-9', started_at_ms: 7_000 }),
+    ];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    const names = Array.from(container.querySelectorAll('.recording-row__name')).map((n) => n.textContent);
+    expect(names).toEqual(['MineNew', 'MineOld', 'TheirNew', 'TheirOld']);
+  });
+
+  test('null currentSessionId degrades to a single owned group (all owned, no foreign)', () => {
+    overlayContext.setForTests({ url: null, currentSessionId: null });
+    backendState.recordings.recordings = [
+      makeRecordingMeta({ recording_id: 'a', name: 'A', origin_session: 'sess-x', started_at_ms: 1_000 }),
+      makeRecordingMeta({ recording_id: 'b', name: 'B', origin_session: 'sess-y', started_at_ms: 2_000 }),
+    ];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+
+    const headers = Array.from(container.querySelectorAll('.group-header')).map((h) => h.textContent);
+    expect(headers).toEqual(['This session']);
+    expect(container.querySelector('.recording-row.foreign')).toBeNull();
+    expect(container.querySelectorAll('.recording-row').length).toBe(2);
+  });
+});
+
+// --- Tests: list view (voice-processing indicator) --------------------------
+
+describe('RecordingsTab — list view: voice-processing indicator', () => {
+  test('renders the voice-processing indicator while transcription is "transcribing"', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ transcription_status: 'transcribing' })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    const badge = container.querySelector('.recording-row__processing');
+    expect(badge).not.toBeNull();
+    // Carries a short, human-readable affordance label.
+    expect(badge!.textContent).toMatch(/verarbeitet/i);
+  });
+
+  test('renders the voice-processing indicator while transcription is "pending"', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ transcription_status: 'pending' })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.recording-row__processing')).not.toBeNull();
+  });
+
+  test('does NOT render the voice-processing indicator when transcription is "done"', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ transcription_status: 'done' })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.recording-row__processing')).toBeNull();
+  });
+
+  test('does NOT render the voice-processing indicator when transcription is "none"', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({ transcription_status: 'none' })];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.recording-row__processing')).toBeNull();
+  });
+
+  test('does NOT render the voice-processing indicator by default (no transcription field)', () => {
+    backendState.recordings.recordings = [makeRecordingMeta({})];
+    backendState.recordings.activeDetailRecordingId = null;
+    const { container } = render(RecordingsTab, {});
+    expect(container.querySelector('.recording-row__processing')).toBeNull();
   });
 });
 

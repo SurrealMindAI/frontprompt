@@ -18,6 +18,8 @@
 
 <script lang="ts">
   import { backendState } from '../../../backend-state/backend-state.svelte';
+  import { overlayContext } from '../../../services/context/overlay-context.svelte';
+  import { formatTimestamp } from '../../../lib/utils/format';
   import type {
     AssertionEntry,
     PageEventEntry,
@@ -28,11 +30,39 @@
     TranscriptSegmentEntry,
     Region,
     Relation,
+    RecordingMeta,
   } from '../../../_generated/state';
 
   // --- Reactive reads from backendState (PIT-037: inline, no local $state copy) ---
 
   const recordings = $derived(backendState.recordings.recordings);
+
+  // Newest-first comparator — recordings default to the name "New Recording", so
+  // start time is the primary distinguishing handle; show the freshest on top.
+  function byStartedDesc(a: RecordingMeta, b: RecordingMeta): number {
+    return b.started_at_ms - a.started_at_ms;
+  }
+
+  // Session-ownership split — mirrors the PicksTab convention but on recordings.
+  // We DO NOT reuse `visibleGroups` (that groups by hostname, wrong axis here);
+  // instead a small derived split via `overlayContext.isOwned`, which encodes the
+  // exact ownership + null-degrade rule (currentSessionId === null → all owned).
+  //
+  // `origin_session` is carried on `RecordingMeta` (the list-item type broadcast in
+  // every snapshot), stamped from the originating session at start_recording. We feed
+  // it as an OriginBearing into isOwned; a null value (never persisted) resolves to
+  // foreign unless the current session is null (degrade → owned). Each group is
+  // sorted newest-first.
+  const ownership = $derived.by(() => {
+    const owned: RecordingMeta[] = [];
+    const foreign: RecordingMeta[] = [];
+    for (const rec of recordings) {
+      (overlayContext.isOwned({ origin_session: rec.origin_session ?? null }) ? owned : foreign).push(rec);
+    }
+    owned.sort(byStartedDesc);
+    foreign.sort(byStartedDesc);
+    return { owned, foreign };
+  });
   const activeDetailId = $derived(backendState.recordings.activeDetailRecordingId);
   const detailRecording = $derived(backendState.recordings.detailRecording);
 
@@ -371,24 +401,51 @@
         </p>
       </div>
     {:else}
-      <div class="list">
-        {#each recordings as rec (rec.recording_id)}
-          <button
-            type="button"
-            class="recording-row"
-            onclick={() => selectRecording(rec.recording_id)}
-            title={rec.name}
-          >
+      {#snippet recordingRow(rec: RecordingMeta, isForeign: boolean)}
+        <button
+          type="button"
+          class="recording-row"
+          class:foreign={isForeign}
+          onclick={() => selectRecording(rec.recording_id)}
+          title={rec.name}
+        >
+          <span class="recording-row__main">
             <span class="recording-row__name">{rec.name}</span>
-            <span class="recording-row__meta">
-              {#if rec.status === 'active'}
-                <span class="recording-indicator" aria-label="Recording active"></span>
-              {:else}
-                <span class="recording-row__count">{rec.entry_count}</span>
-              {/if}
-            </span>
-          </button>
-        {/each}
+            <span class="recording-row__time">{formatTimestamp(rec.started_at_ms)}</span>
+          </span>
+          <span class="recording-row__meta">
+            {#if rec.transcription_status === 'pending' || rec.transcription_status === 'transcribing'}
+              <span
+                class="recording-row__processing"
+                title="Voice wird verarbeitet"
+                aria-label="Voice wird verarbeitet"
+              >
+                <span class="recording-row__processing-dot" aria-hidden="true"></span>
+                wird verarbeitet
+              </span>
+            {/if}
+            {#if rec.status === 'active'}
+              <span class="recording-indicator" aria-label="Recording active"></span>
+            {:else}
+              <span class="recording-row__count">{rec.entry_count}</span>
+            {/if}
+          </span>
+        </button>
+      {/snippet}
+
+      <div class="list">
+        {#if ownership.owned.length > 0}
+          <div class="group-header">This session</div>
+          {#each ownership.owned as rec (rec.recording_id)}
+            {@render recordingRow(rec, false)}
+          {/each}
+        {/if}
+        {#if ownership.foreign.length > 0}
+          <div class="group-header">Other sessions</div>
+          {#each ownership.foreign as rec (rec.recording_id)}
+            {@render recordingRow(rec, true)}
+          {/each}
+        {/if}
       </div>
     {/if}
   </div>
@@ -495,13 +552,50 @@
     background: var(--fp-color-surface-secondary);
   }
 
+  /* Name (top) + timestamp (muted subline) stacked in a column. */
+  .recording-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .recording-row__name {
     font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1 1 auto;
     min-width: 0;
+  }
+
+  /* Muted start-time subline — disambiguates same-named ("New Recording") rows. */
+  .recording-row__time {
+    font-size: 10px;
+    color: var(--fp-color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  /* Session-ownership grouping (mirrors PicksTab) ---------------------------- */
+
+  .group-header {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fp-color-text-muted);
+    padding: 5px 10px 3px;
+    background: var(--fp-color-surface-secondary);
+    border-bottom: 1px solid var(--fp-color-border-subtle);
+    position: sticky;
+    top: 0;
+  }
+
+  /* Foreign-session recordings are de-emphasised. */
+  .recording-row.foreign {
+    opacity: 0.55;
   }
 
   .recording-row__meta {
@@ -516,6 +610,29 @@
     font-size: 10px;
     color: var(--fp-color-text-muted);
     font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+
+  /* Voice-processing affordance — subtle pulsing dot + label shown while a
+     voice-over transcription is pending/in-flight. Matches the .recording-indicator
+     register but muted (secondary, not red) to distinguish it from the active-
+     recording dot. */
+  .recording-row__processing {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    color: var(--fp-color-text-muted);
+    white-space: nowrap;
+  }
+
+  .recording-row__processing-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--fp-color-text-secondary);
+    animation: pulse-recording 1.2s ease-in-out infinite;
+    flex-shrink: 0;
   }
 
   /* Pulsing red dot — active recording indicator */
