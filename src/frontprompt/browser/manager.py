@@ -58,6 +58,22 @@ LoadState = Literal["load", "domcontentloaded", "networkidle"]
 _LOG = structlog.get_logger(__name__)
 
 
+def _bypass_csp_enabled() -> bool:
+    """Opt-in CSP-Bypass für den Browser-Context (``FRONTPROMPT_BYPASS_CSP``).
+
+    Seiten mit strikter Content-Security-Policy (``style-src`` ohne
+    ``unsafe-inline``, z.B. elster.de) blocken die Inline-Styles des
+    Svelte-Overlays — das Overlay rendert dann sichtbar kaputt, während die
+    Playwright-Steuerung (CDP) unbeeinträchtigt bleibt. Playwrights
+    ``bypass_csp`` (CDP ``Page.setBypassCSP``) hebt das auf. Default ist aus,
+    weil der Bypass die Security-Semantik jeder besuchten Seite verändert —
+    bewusstes Opt-in per Env-Var beim Session-Start.
+    """
+    import os
+
+    return os.environ.get("FRONTPROMPT_BYPASS_CSP", "").strip().lower() in ("1", "true", "yes")
+
+
 def _chromium_present() -> bool:
     """Probe the known Playwright browser-cache locations for a chromium build."""
     import glob
@@ -166,7 +182,11 @@ class BrowserSessionManager:
             # — die rendert sub-window-area und lässt rest des fensters leer.
             # Mit no_viewport managt Playwright das viewport NICHT, page rendert
             # auf voller window-fläche + folgt user-resize.
-            self._context = await self._browser.new_context(no_viewport=True)
+            self._context = await self._browser.new_context(
+                no_viewport=True,
+                # Opt-in via FRONTPROMPT_BYPASS_CSP — siehe _bypass_csp_enabled.
+                bypass_csp=_bypass_csp_enabled(),
+            )
             self._page = await self._context.new_page()
             self._entered = True
             self._log.info("browser_session.ready")

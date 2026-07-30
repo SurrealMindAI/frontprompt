@@ -192,3 +192,33 @@ def test_repr_entered() -> None:
     mgr._entered = True
     r = repr(mgr)
     assert "ready" in r
+
+
+# ── _bypass_csp_enabled ───────────────────────────────────────────────────────
+
+
+def test_bypass_csp_enabled_default_off() -> None:
+    """Ohne FRONTPROMPT_BYPASS_CSP bleibt der CSP-Bypass aus (sicherer Default)."""
+    from frontprompt.browser.manager import _bypass_csp_enabled
+
+    env_without = {k: v for k, v in os.environ.items() if k != "FRONTPROMPT_BYPASS_CSP"}
+    with patch.dict(os.environ, env_without, clear=True):
+        assert _bypass_csp_enabled() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes"])
+def test_bypass_csp_enabled_truthy_values(value: str) -> None:
+    """FRONTPROMPT_BYPASS_CSP akzeptiert die üblichen truthy-Schreibweisen."""
+    from frontprompt.browser.manager import _bypass_csp_enabled
+
+    with patch.dict(os.environ, {"FRONTPROMPT_BYPASS_CSP": value}):
+        assert _bypass_csp_enabled() is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", ""])
+def test_bypass_csp_enabled_falsy_values(value: str) -> None:
+    """Explizit falsy-Werte (und leer) lassen den Bypass aus."""
+    from frontprompt.browser.manager import _bypass_csp_enabled
+
+    with patch.dict(os.environ, {"FRONTPROMPT_BYPASS_CSP": value}):
+        assert _bypass_csp_enabled() is False
