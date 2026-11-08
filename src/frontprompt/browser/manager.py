@@ -62,7 +62,7 @@ def _bypass_csp_enabled() -> bool:
     """Opt-in CSP-Bypass für den Browser-Context (``FRONTPROMPT_BYPASS_CSP``).
 
     Seiten mit strikter Content-Security-Policy (``style-src`` ohne
-    ``unsafe-inline``, z.B. elster.de) blocken die Inline-Styles des
+    ``unsafe-inline``, z.B. Behörden- oder Banking-Portale) blocken die Inline-Styles des
     Svelte-Overlays — das Overlay rendert dann sichtbar kaputt, während die
     Playwright-Steuerung (CDP) unbeeinträchtigt bleibt. Playwrights
     ``bypass_csp`` (CDP ``Page.setBypassCSP``) hebt das auf. Default ist aus,

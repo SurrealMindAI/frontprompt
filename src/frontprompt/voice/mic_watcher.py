@@ -2,7 +2,7 @@
 
 Enumerates available input devices via sounddevice and pushes updates to
 StateManager only when the device topology changes (state-based change detection,
-not TTL-based polling — atlas convention).
+not TTL-based polling — project convention).
 
 Design constraints:
     - COL-2: ``import sounddevice`` is LAZY — inside ``run()`` only, never at module

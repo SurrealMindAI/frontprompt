@@ -172,7 +172,7 @@ Build als Teil von `uv tool install frontprompt` / `pip install` via custom hatc
 `make build` als orchestrator.
 
 **Pro**: traditionell für solche pipelines.
-**Con**: noch ein weiteres tool im stack. `python -m frontprompt.build` ist atlas-konform (PEP 723 / uv-first). **Ruled out**.
+**Con**: noch ein weiteres tool im stack. `python -m frontprompt.build` ist konsistent mit den Projekt-Konventionen (PEP 723 / uv-first). **Ruled out**.
 
 ---
 

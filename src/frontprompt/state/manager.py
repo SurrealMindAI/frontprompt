@@ -1198,7 +1198,7 @@ class StateManager:
         """Persist a ReplayReport. Delegates to persistence; no snapshot broadcast.
 
         Replay reports are large; agents poll via GetReplayReportRequest IPC call.
-        Non-broadcasting path (mirrors append_timeline_entry discipline, PIT-105).
+        Non-broadcasting path (mirrors append_timeline_entry discipline).
         Acquires lock for safe write-through to the persistence layer.
         """
         async with self._lock:
@@ -1332,7 +1332,7 @@ class StateManager:
     ) -> StateSnapshot:
         """Append all TranscriptSegmentEntry items and set transcription_status='done'.
 
-        PIT-105 pattern: hold lock once for all appends, single broadcast at the end.
+        Pattern: hold lock once for all appends, single broadcast at the end.
         ``timestamp_ms`` is stamped as ``recording.started_at_ms + segment.start_ms``
         (voice-over semantics differ from real-time event timestamps).
         ``seq`` is assigned by Python (len(entries) at the time of each append).
@@ -1363,7 +1363,7 @@ class StateManager:
                     recording_id=recording_id,
                     count=len(segments),
                 )
-                # Single broadcast for all appends (PIT-105 pattern)
+                # Single broadcast for all appends (non-broadcasting append pattern)
                 snap = self._post_mutate_locked(lambda: self._persistence.upsert_recording(recording))
         return await self._notify_and_return(snap)
 
@@ -1582,7 +1582,7 @@ class StateManager:
         """Re-derive each ``RecordingMeta.entry_count`` from the authoritative full
         recording before a snapshot is built.
 
-        BUG 1 fix: the non-broadcasting ``append_timeline_entry`` path (PIT-105)
+        BUG 1 fix: the non-broadcasting ``append_timeline_entry`` path
         mutates only ``_full_recordings[*].entries`` and never the lightweight metas
         in ``_recordings_state``. Without this re-derivation the broadcast snapshot
         (and ``list_recordings_meta()``) keeps the stale ``entry_count`` captured at

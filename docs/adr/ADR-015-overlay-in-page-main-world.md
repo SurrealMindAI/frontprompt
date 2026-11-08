@@ -112,7 +112,7 @@ In TypeScript, im Overlay-SvelteKit-Bundle:
 ### Positive
 
 - **Einfache Architektur**: ein Inject-Point, ein Build, ein Browser. Kein State-Sync zwischen UI-Tab und automated Tab.
-- **Funktioniert über Cross-Origin-Nav**: Playwright re-injectet das Script auf jeden neuen Document-Load. INC-013-Klasse von Problemen ist strukturell vermieden.
+- **Funktioniert über Cross-Origin-Nav**: Playwright re-injectet das Script auf jeden neuen Document-Load. Die Problemklasse "Overlay verschwindet nach Cross-Origin-Navigation" ist strukturell vermieden.
 - **SvelteKit-Features nutzbar**: Routing, Layouts, $derived/$state/$effect, `@sveltejs/adapter-static` für Build, alles wie für normale Static-SPA.
 - **Single-IIFE-Artifact**: `vite-plugin-singlefile` produziert ein einziges JS-File das in eine einzige `add_init_script`-Call geht. Kein Asset-Server, kein zweiter HTTP-Endpoint für JS-Hosting.
 - **CSS-Isolation via Shadow DOM**: keine Kollision mit Host-Page-Styles.
@@ -126,7 +126,7 @@ In TypeScript, im Overlay-SvelteKit-Bundle:
 
 ### Was diese ADR NICHT macht
 
-- Sie löst nicht das Audio/STT-Recording-Problem. Audio ist Phase 2+ — siehe PIT-092 für die Cross-Origin-Nav-Komplikationen die MediaRecorder im Main-World hat. Falls Audio zurückkommt, wird es **außerhalb** der Page hostet (separater Recording-Service, nicht im Inject).
+- Sie löst nicht das Audio/STT-Recording-Problem. Audio ist Phase 2+ — MediaRecorder im Main-World hat bekannte Komplikationen bei Cross-Origin-Navigation (die Aufnahme bricht beim Document-Wechsel ab). Falls Audio zurückkommt, wird es **außerhalb** der Page hostet (separater Recording-Service, nicht im Inject).
 - Sie löst nicht die "Mission-Control für den Entwickler"-Frage. Falls eine Debug-View nützlich wird, kommt sie als read-only `/debug`-Route im selben Overlay-Bundle — kein separater Build, kein separater Tab.
 - Sie macht keine Aussage zu Plugin-Discovery oder Multi-Site-Permissions. Phase 1 = der User startet `frontprompt show <url>` selbst, kennt die URL.
 
@@ -181,5 +181,5 @@ Idee: ~80 LoC Vanilla-TS ohne Framework, IIFE direkt geschrieben.
 - [ADR-009 Scrapling-Only-Substrate](./ADR-009-scrapling-only-substrate.md) — Scrapling liefert die `AsyncDynamicSession` mit Playwright-Page-API; `page.add_init_script` ist Playwright-Standard
 - [ADR-012 Pick + Annotation Aggregate](./ADR-012-pick-annotation-aggregate.md) — Pick-Mode-Logik aus dieser ADR feedet in die `PointingSession`-Lifecycle; Implementation simpler
 - [ADR-014 Daemon-Singleton via Lockfile](./ADR-014-daemon-singleton-via-lockfile.md) — Daemon hält den Overlay-IIFE im Memory, serviert HTTP-Endpoints für Overlay-Calls
-- chrome-extension-overlay-architecture — Atlas-Research zu Overlay-Patterns; relevante Sub-Sektionen zu Shadow-DOM-Isolation bleiben gültig, MV3-Sektionen sind in dieser ADR explizit ausgeschlossen
+- Interne Recherche zu Overlay-Architekturen in Browser-Extensions (interne Recherche, nicht veröffentlicht); relevante Sub-Sektionen zu Shadow-DOM-Isolation bleiben gültig, MV3-Sektionen sind in dieser ADR explizit ausgeschlossen
 - 2026-05-18 Architecture Reset — Reset-Decision aus der diese ADR folgt

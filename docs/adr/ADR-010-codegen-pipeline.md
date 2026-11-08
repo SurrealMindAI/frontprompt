@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: [ADR-004 Pydantic SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, F-3, pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert)
+**Cross-References**: [ADR-004 Pydantic SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, F-3, Pydantic-Versions-Snapshot (interne Recherche, nicht veröffentlicht)
 
 ---
 
@@ -12,14 +12,14 @@
 
 [ADR-004](./ADR-004-pydantic-2-13-ssot.md) etabliert Pydantic v2.13.x als Schema-Source-of-Truth. Diese ADR ist die **operative Detail-Spezifikation**, wie die Schemas in das Frontend (Zod 3.24.1) und in die MCP-Wire-Manifests (JSON-Schema 2020-12) übersetzt werden, und welche Drift-Klassen strukturell vermieden werden müssen.
 
-HTM's Konsortiums-Analyse (consortium-of-brain-verdict §2.1, historische atlas-Recherche, nicht extrahiert) listete vier Drift-Klassen bei deterministischen totalen Generatoren:
+Die Analyse des Design-Reviews listete vier Drift-Klassen bei deterministischen totalen Generatoren:
 
 1. **Hand-Edition** (eliminierbar via pre-commit-Hook + CI-Drift-Gate)
 2. **Validation-Default-Divergenz** (`additionalProperties` als `extra="forbid"` ↔ Zod `.strict()`)
 3. **Recursion / Discriminated-Union-Branch-Drift** (Runtime-Restrisiko)
 4. **Regex-Pattern-Divergenz** (ECMA-262 vs Python `re`-Unicode-Klassen)
 
-HTM verlangte als Co-Sign-Bedingung: *"Codegen-Tests (Goldenfile-Property-Tests, Discriminated-Union-Cross-Tests, `None`/`undefined`/`missing`-Tristate-Tests, Regex-Pattern-Normalisierungs-Tests) sind Teil der CI; ohne sie ist ADR-010 nicht wahr"*. Bedingung akzeptiert, hier formalisiert.
+Das Review verlangte als Freigabe-Bedingung: *"Codegen-Tests (Goldenfile-Property-Tests, Discriminated-Union-Cross-Tests, `None`/`undefined`/`missing`-Tristate-Tests, Regex-Pattern-Normalisierungs-Tests) sind Teil der CI; ohne sie ist ADR-010 nicht wahr"*. Bedingung akzeptiert, hier formalisiert.
 
 ---
 
@@ -68,7 +68,7 @@ Pydantic-`Optional[T]` vs Zod-`.optional()` vs Zod-`.nullable()`:
 
 Diese Tristate-Normierung ist **explizit dokumentiert** im Generator-Source und wird durch F-2-Property-Test gegen Goldenfile-Corpus geprüft.
 
-### Goldenfile-Property-Tests (HTM Co-Sign-Bedingung)
+### Goldenfile-Property-Tests (Freigabe-Bedingung des Reviews)
 
 Bidirektional, gegen einen committedem Schema-Corpus in `tests/codegen-goldenfile/`:
 
@@ -99,12 +99,12 @@ Schema, das gegen die Depth-Bound trifft, wird mit Audit-Event `recursion_bound_
 
 **Was strukturell akzeptiert wird**:
 
-- Generator-Implementierung lebt in `tools/codegen/` (atlas-internes Tool, nicht Distribution-Bundle). Der Generator selbst hat unit-tests gegen ein Mini-Corpus aus Single-Field-Modellen, plus die Goldenfile-Tests gegen das Production-Corpus.
+- Generator-Implementierung lebt in `tools/codegen/` (internes Build-Tool des Repos, nicht Teil des Distribution-Bundles). Der Generator selbst hat unit-tests gegen ein Mini-Corpus aus Single-Field-Modellen, plus die Goldenfile-Tests gegen das Production-Corpus.
 - Brand-Augmentation für Frontend ist **separat** von `_generated/zod/`. Frontend-Code: `import { PageSessionIdBrand } from "../augment/page-session.brand"` plus `import { PageSession } from "../_generated/zod/page-session.schema"`.
 
 **Distribution-Konsequenz**:
 
-- Das `_generated/`-Verzeichnis ist **committed in git** (nicht .gitignore'd). Das ist die Audit-Trail-Disziplin aus HTM §5 P.4: Drift = git-diff.
+- Das `_generated/`-Verzeichnis ist **committed in git** (nicht .gitignore'd). Das ist die Audit-Trail-Disziplin aus dem Design-Review: Drift = git-diff.
 - Beim Develop wird der Generator manuell oder per pre-commit gestartet (Bash-One-Liner `make codegen` oder ähnlich). Der Generator ist Python (Teil der Backend-Pipeline), nicht TypeScript.
 
 **Was diese ADR NICHT macht**:

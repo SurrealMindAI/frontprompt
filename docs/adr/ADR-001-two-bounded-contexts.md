@@ -5,13 +5,13 @@
 **Status**: accepted with amendments (2026-05-18: §UI-Surface revoked, Two-BC-Axiom deferred)
 **Date**: 2026-05-14
 **Amendment-Date**: 2026-05-18
-**Cross-References**: overview.md §3 Bounded Contexts, [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), single-writer-helland-explained (historische atlas-Recherche, nicht extrahiert), [ADR-014 Daemon-Singleton via Lockfile](./ADR-014-daemon-singleton-via-lockfile.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
+**Cross-References**: overview.md §3 Bounded Contexts, [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), Single-Writer-Erläuterung (interne Recherche, nicht veröffentlicht), [ADR-014 Daemon-Singleton via Lockfile](./ADR-014-daemon-singleton-via-lockfile.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
 
 ---
 
 ## Context
 
-Der archivierte Patient `frontprompt-legacy` (v4.2.0) starb laut Krall-Hypothese-0 an einem **Category Error**: das Produkt wurde als "MCP-First browser-automation server with a Lit overlay for human-in-the-loop" spezifiziert. Dieser Satz schmuggelt zwei Produkte unter einem Banner:
+Der archivierte Patient `frontprompt-legacy` (v4.2.0) starb laut Ausgangshypothese des Design-Reviews an einem **Category Error**: das Produkt wurde als "MCP-First browser-automation server with a Lit overlay for human-in-the-loop" spezifiziert. Dieser Satz schmuggelt zwei Produkte unter einem Banner:
 
 1. **Ein programmatischer Browser-Executor** mit typed I/O, adressiert durch einen MCP-Client (Agent-Workflow).
 2. **Eine interaktive Human-in-the-Loop-Annotation-Surface** mit dem Page-DOM als Schauplatz (Mensch-Workflow).

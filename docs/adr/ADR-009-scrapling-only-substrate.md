@@ -4,7 +4,7 @@
 
 **Status**: accepted · **amended** (2026-06-29)
 **Date**: 2026-05-14
-**Cross-References**: user-directive-corrections Korrektur 1 (historische atlas-Recherche, nicht extrahiert), scrapling-context7-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-4, F-5, [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md)
+**Cross-References**: Maintainer-Korrektur (interne Recherche, nicht veröffentlicht), Scrapling-API-Snapshot (interne Recherche, nicht veröffentlicht), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-4, F-5, [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md)
 
 > **Amendment (2026-06-29):** This decision was never realised in code. Phase 1
 > drives the browser with **Playwright directly** (`browser/` + `ipc/playwright_controller/`);
@@ -18,15 +18,15 @@
 
 ## Context
 
-Das Konsortium (consortium-of-brain-verdict §2.3 + §2.4 + §2.5, historische atlas-Recherche, nicht extrahiert) empfahl drei Browser-Substrate-Implementierungen als Co-Equal hinter einem `BrowserSubstrate`-Protocol: `PlaywrightSubstrate` (default), `UCSeleniumSubstrate` (Cloudflare Tier-3), `ScraplingStealthySubstrate` (One-Shot Pure-Scrape). Routing-Policy in der Application-Schicht, Substrate-Swap-als-First-Class-Operation als Konfiguration plus Hot-Reload.
+Das Design-Review empfahl drei Browser-Substrate-Implementierungen als Co-Equal hinter einem `BrowserSubstrate`-Protocol: `PlaywrightSubstrate` (default), `UCSeleniumSubstrate` (Cloudflare Tier-3), `ScraplingStealthySubstrate` (One-Shot Pure-Scrape). Routing-Policy in der Application-Schicht, Substrate-Swap-als-First-Class-Operation als Konfiguration plus Hot-Reload.
 
-User-Korrektur 1 (user-directive-corrections, historische atlas-Recherche, nicht extrahiert) überschrieb diese Empfehlung: **ein** Substrate, **Scrapling**. Begründung im Korrektur-Dokument festgehalten:
+Eine Maintainer-Korrektur überschrieb diese Empfehlung: **ein** Substrate, **Scrapling**. Begründung im Korrektur-Dokument festgehalten:
 
 - Scrapling sitzt drunter auf Playwright (`DynamicFetcher` / `StealthyFetcher` nutzen Playwright + Chromium + CDP-Patches + Canvas-Noise) und auf curl-cffi (`Fetcher` / `AsyncFetcher`). Playwright-Funktionalität kommt durch Scrapling, ohne ein zweites Substrate.
 - Three-substrates-with-protocol ist Premature-Generalization, ohne dass je gemessen wurde, dass die Bypass-Rate strukturell unzureichend wäre.
 - UC-Selenium-Eskalation bleibt **Reserve** für F-4 (Substrate-Detection-Failure), nicht Front-Door-Substrate.
 
-Scrapling-API-Snapshot in scrapling-context7-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert).
+Scrapling-API-Snapshot (interne Recherche, nicht veröffentlicht).
 
 ---
 
@@ -40,7 +40,7 @@ Der Successor verwendet **Scrapling** als **einziges Browser-Substrate**, mit di
 
 3. **`FetcherSession` / `AsyncFetcher`** — für Pure-HTTP-Operationen ohne Browser-Roundtrip (z.B. einfacher GET auf statische Pages, JSON-API-Endpoints, REST-Calls innerhalb eines Flows). curl-cffi-drunter, sehr schnell, kein Chromium-Cold-Start.
 
-**Wichtig**: es gibt **kein eigenes `BrowserSubstrate`-Protocol** im Code. Scrapling-API ist der Substrate. Das spart eine Abstraction-Layer (Protocol + drei Implementierungen + Routing-Policy + Hot-Reload-Logik), die der Konsortiums-Entwurf vorgesehen hatte und die für den aktuellen Bedarf Premature-Generalization wäre.
+**Wichtig**: es gibt **kein eigenes `BrowserSubstrate`-Protocol** im Code. Scrapling-API ist der Substrate. Das spart eine Abstraction-Layer (Protocol + drei Implementierungen + Routing-Policy + Hot-Reload-Logik), die der Review-Entwurf vorgesehen hatte und die für den aktuellen Bedarf Premature-Generalization wäre.
 
 **Substrate-Wahl pro Page Session**:
 
@@ -71,7 +71,7 @@ Siehe [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-5 für v
 
 **Verifikations-Spike**:
 
-PKR's IDK-Punkte (consortium-of-brain-verdict §2.4 + §6, historische atlas-Recherche, nicht extrahiert) sind autoritativ **offen** und werden im overview.md §10 Offene Punkte als 2. Punkt geführt:
+Die offenen Punkte aus dem Design-Review sind autoritativ **offen** und werden im overview.md §10 Offene Punkte als 2. Punkt geführt:
 
 - Threadsafety unter geteiltem Browser-Pool.
 - Empirische Bypass-Rate gegen aktuellen Cloudflare-Stand.
@@ -87,7 +87,7 @@ Verifikations-Spike vor Implementations-Beginn.
 
 **Bezug zu Nursery-per-PageSession**:
 
-Jede PageSession besitzt eine eigene Scrapling-Session-Instanz (`DynamicSession`, `StealthySession`, oder `AsyncFetcher`) in ihrer Nursery. Cross-Session-Browser-Pool ist **nicht** implementiert — jede PageSession hat ihren eigenen BrowserContext. Das eliminiert PKR's Threadsafety-IDK-Punkt strukturell: kein Sharing → keine Threadsafety-Frage.
+Jede PageSession besitzt eine eigene Scrapling-Session-Instanz (`DynamicSession`, `StealthySession`, oder `AsyncFetcher`) in ihrer Nursery. Cross-Session-Browser-Pool ist **nicht** implementiert — jede PageSession hat ihren eigenen BrowserContext. Das eliminiert den offenen Threadsafety-Punkt aus dem Review strukturell: kein Sharing → keine Threadsafety-Frage.
 
 **Was diese ADR NICHT macht**:
 

@@ -11,7 +11,7 @@
 
 ## Context
 
-Der Konsortiums-Hub identifizierte im consortium-of-brain-verdict §"Pick + Annotation Aggregate-Konflikt" (historische atlas-Recherche, nicht extrahiert), dass die Aggregat-Granularität für die Interactive-Surface-Entities `Pick` und `Annotation` ungeklärt geblieben ist. Zwei Sub-Fragen wurden offen markiert (overview.md §10.1):
+Das Design-Review identifizierte, dass die Aggregat-Granularität für die Interactive-Surface-Entities `Pick` und `Annotation` ungeklärt geblieben ist. Zwei Sub-Fragen wurden offen markiert (overview.md §10.1):
 
 1. **Pick-Aggregate-Status** — ist `Pick` ein eigenständiges Aggregate mit eigener Konsistenz-Grenze, eigenem Single-Writer und eigenen Invarianten? Oder ist `Pick` eine Entity innerhalb der `PointingSession`?
 2. **Annotation-BC-Boundary** — lebt `Annotation` rein in der Interactive Surface BC? Oder straddelt sie in die Programmatic Executor BC, weil eine Annotation auf eine `InteractionFlow`-Step oder einen DOM-Snapshot referenzieren kann, deren Eigentümer die Programmatic-Seite ist?

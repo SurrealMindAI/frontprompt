@@ -5,7 +5,7 @@
 **Status**: accepted with amendment (2026-05-18: SvelteKit Static-SPA-Build explizit erlaubt)
 **Date**: 2026-05-14
 **Amendment-Date**: 2026-05-18
-**Cross-References**: [ADR-003 Stack](./ADR-003-python-svelte-stack.md), user-directive-corrections Korrektur 3 (historische atlas-Recherche, nicht extrahiert), [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
+**Cross-References**: [ADR-003 Stack](./ADR-003-python-svelte-stack.md), Maintainer-Korrektur (interne Recherche, nicht veröffentlicht), [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-015 Overlay in Page Main World](./ADR-015-overlay-in-page-main-world.md), 2026-05-18 Architecture Reset
 
 ---
 
@@ -18,7 +18,7 @@ Das Frontend des frontprompt-Successors ist das **Annotation UI**, das im extern
 - Visualisierung des aktuellen Page-State (DOM-Snapshot via Server-Side-Rendered Preview oder native iframe-Embed).
 - Annotation-Workflow (User wählt ein Element, kommentiert es; das fließt zurück zum Daemon).
 
-User-Korrektur 3 (user-directive-corrections, historische atlas-Recherche, nicht extrahiert) hat das Framework auf **Svelte 5 mit Runes** festgelegt — autoritativ, gegen die Konsortiums-Empfehlung SolidJS.
+Eine Maintainer-Korrektur hat das Framework auf **Svelte 5 mit Runes** festgelegt — autoritativ, gegen die Review-Empfehlung SolidJS.
 
 ---
 
@@ -34,17 +34,17 @@ User-Korrektur 3 (user-directive-corrections, historische atlas-Recherche, nicht
 
 **Persistierter State**:
 
-- **Keiner** im Frontend. Beim Tab-Reload geht der lokale UI-State verloren; die Wahrheit lebt im Daemon. WS-Reconnect mit Cursor (12-hub-final-synthesis Phase 1 Protocol-Synthese, historische atlas-Recherche, nicht extrahiert) holt den State erneut.
+- **Keiner** im Frontend. Beim Tab-Reload geht der lokale UI-State verloren; die Wahrheit lebt im Daemon. WS-Reconnect mit Cursor (Protokoll-Synthese (interne Recherche, nicht veröffentlicht)) holt den State erneut.
 - Bewusste Architektur-Entscheidung: der Frontend ist **Stateless-Client**, der Daemon ist die Truth-Quelle. Das vermeidet die "Local-vs-Remote-State-Drift"-Klasse, die im Patient (`OverlayState`-Pydantic-Aggregate-Singleton mit Browser-Side-Mirror) eine Bug-Quelle war.
 
 ---
 
 ## Consequences
 
-**Begründung gegen SolidJS** (das war die Konsortiums-Empfehlung):
+**Begründung gegen SolidJS** (das war die Review-Empfehlung):
 
 - **Team-Erfahrung**: das SurrealMind-Team hat Svelte 5 produktiv eingesetzt. SolidJS hätte ein neues Framework eingeführt mit einem Onboarding-Tax, der die Bundle-Size-Argumente (15 kB vs vergleichbarer Svelte-5-Bundle-Size) nicht aufwiegt.
-- **Atlas-interne Knowledge-Base**: Svelte 5 hat mehrere existierende Research-Topics im Atlas (svelte-5-ecosystem, svelte-runes-extension-rules, svelte5-runes-external-state-bridge, svelte5-microtask-proxy-interaction, tiptap-svelte5-prosemirror-bridge, sveltekit-vite-bench-hydration-silent-failure, svelte-component-library-best-practices). SolidJS hat keine Atlas-Knowledge.
+- **Interne Knowledge-Base**: zu Svelte 5 existiert interne Recherche zum Ökosystem (Runes, External-State-Bridges, Editor-Integration, Hydration-Fallstricke, Component-Library-Praktiken). Zu SolidJS gibt es keine vergleichbare Vorarbeit.
 - **Reaktivitäts-Modell-Parität**: Runes sind Signal-basiert (gleicher Mechanismus wie SolidJS). Push-only WS-Subscriptions sind mit `$state` + `$effect` direkt ausdrückbar — keine Funktions-Asymmetrie gegenüber SolidJS.
 
 **Bezug zur Codegen-Pipeline**:

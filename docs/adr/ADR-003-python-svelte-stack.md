@@ -4,17 +4,17 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: overview.md §4 Stack-Inventar, [ADR-008 Svelte 5 Runes](./ADR-008-svelte-5-runes.md), [ADR-004 Pydantic 2.13 SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), user-directive-corrections (historische atlas-Recherche, nicht extrahiert)
+**Cross-References**: overview.md §4 Stack-Inventar, [ADR-008 Svelte 5 Runes](./ADR-008-svelte-5-runes.md), [ADR-004 Pydantic 2.13 SSoT](./ADR-004-pydantic-2-13-ssot.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), Maintainer-Korrekturen (interne Recherche, nicht veröffentlicht)
 
 ---
 
 ## Context
 
-Der 12-Hub konvergierte initial auf TypeScript-end-to-end (Polyglots Eröffnung: Node 22 LTS für Daemon, Bun für Tooling). Diese Wahl hatte zwei Probleme: (1) sie war eine **unausgesprochene** Default-Setzung — keine Persona forderte expliziten Counter-Beweis; (2) sie folgte einem Reflex ("TS ist neuer und nicer für lokale Tools"), nicht einer Invariante.
+Die erste Design-Review-Runde konvergierte initial auf TypeScript-end-to-end (Eröffnungsvorschlag: Node 22 LTS für Daemon, Bun für Tooling). Diese Wahl hatte zwei Probleme: (1) sie war eine **unausgesprochene** Default-Setzung — kein Reviewer forderte expliziten Counter-Beweis; (2) sie folgte einem Reflex ("TS ist neuer und nicer für lokale Tools"), nicht einer Invariante.
 
-Im Konsortium-Hub kippte das. Krall stellte seinen unausgesprochenen Python-Prior explizit; PKR lieferte die GIL-Analyse mit klaren Tragfähigkeits-Bedingungen; HTM stützte die Pydantic-SSoT-Asymmetrie; SKH dokumentierte den Disziplin-Defekt der unausgesprochenen Präferenz. Die Konsortiums-Empfehlung wurde: Python 3.13 für Backend, TypeScript für Frontend.
+In der zweiten Design-Review-Runde kippte das. Ein unausgesprochener Python-Prior wurde explizit gemacht; eine GIL-Analyse lieferte klare Tragfähigkeits-Bedingungen; die Pydantic-SSoT-Asymmetrie stützte die Wahl; das Review dokumentierte den Disziplin-Defekt der unausgesprochenen Präferenz. Die Review-Empfehlung wurde: Python 3.13 für Backend, TypeScript für Frontend.
 
-Die User-Direktive (user-directive-corrections Korrektur 3, historische atlas-Recherche, nicht extrahiert) korrigierte das Frontend-Framework von SolidJS auf **Svelte 5 mit Runes** (Team-Erfahrung).
+Eine Maintainer-Korrektur (interne Recherche, nicht veröffentlicht) korrigierte das Frontend-Framework von SolidJS auf **Svelte 5 mit Runes** (Team-Erfahrung).
 
 ---
 
@@ -52,11 +52,11 @@ Das Frontend läuft im Browser-Tab. Es hat keine andere ausführbare Sprache. Po
 
 **Warum Svelte 5 statt SolidJS**:
 
-User-Korrektur 3 ist autoritativ. Begründung: Team-Erfahrung. Atlas hat mehrere Research-Topics zu Svelte 5 (svelte-5-ecosystem, svelte-runes-extension-rules, svelte5-runes-external-state-bridge, tiptap-svelte5-prosemirror-bridge) — SolidJS hätte ein neues Framework eingeführt. Bundle-Size und Signal-Modell sind zwischen den beiden in derselben Klasse. Siehe [ADR-008](./ADR-008-svelte-5-runes.md) für Details.
+Die Maintainer-Korrektur ist autoritativ. Begründung: Team-Erfahrung. Das Team hat interne Recherchen zum Svelte-5-Ökosystem — SolidJS hätte ein neues Framework eingeführt. Bundle-Size und Signal-Modell sind zwischen den beiden in derselben Klasse. Siehe [ADR-008](./ADR-008-svelte-5-runes.md) für Details.
 
 **Warum kein Node-Daemon**:
 
-Der MCP-Python-SDK (Anthropic-official) ist gleich-wertig zum Node-SDK. Das Bun-vs-Node-vs-stdio-Risiko des 12-Hub-Pfads (Polyglots Vorhersage: Bun's `process.stdin.resume()` in stdio-pipe-Mode hatte zuletzt subtile Issues) entfällt, weil wir die Python-Implementation nehmen, die diese Issues strukturell nicht hat.
+Der MCP-Python-SDK (Anthropic-official) ist gleich-wertig zum Node-SDK. Das Bun-vs-Node-vs-stdio-Risiko des ursprünglichen TypeScript-Pfads (Review-Vorhersage: Bun's `process.stdin.resume()` in stdio-pipe-Mode hatte zuletzt subtile Issues) entfällt, weil wir die Python-Implementation nehmen, die diese Issues strukturell nicht hat.
 
 **Wartbarkeit**:
 

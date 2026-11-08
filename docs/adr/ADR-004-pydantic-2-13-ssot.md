@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: overview.md §4, [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert), user-directive-corrections Korrektur 2 (historische atlas-Recherche, nicht extrahiert)
+**Cross-References**: overview.md §4, [ADR-010 Codegen-Pipeline](./ADR-010-codegen-pipeline.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-1, F-2, Pydantic-Versions-Snapshot (interne Recherche, nicht veröffentlicht), Maintainer-Korrektur (interne Recherche, nicht veröffentlicht)
 
 ---
 
@@ -12,18 +12,18 @@
 
 Codegen-Drift war im Patienten v4.2.0 strukturell präsent: Pydantic-Modelle in `state/models.py`, TypeScript-Interfaces in `overlay/src/types/*.ts`, dazwischen ein `scripts/codegen.py` mit sechs Stufen und ein `test_codegen_no_drift.py` als CI-Pflaster. Drei Definitionen eines Konzepts, drei Stellen, an denen Drift entstehen kann. Eine `test_ts_python_parity.py` testete eine Klasse von Drift retroaktiv.
 
-HTM hat im Konsortium das Phänomen formal definiert: `Drift(Spec_P, Spec_T) ≡ ∃ i ∈ U_op. Spec_P.validate(i) ≠ Spec_T.validate(i)`. Vier Bedingungen für No-Drift: (a) eindeutige Quelle, (b) deterministische totale Generatoren, (c) validation-extensional äquivalente Encodings, (d) kein Hand-Edition-Pfad in der Build-Pipeline.
+Das Design-Review hat das Phänomen formal definiert: `Drift(Spec_P, Spec_T) ≡ ∃ i ∈ U_op. Spec_P.validate(i) ≠ Spec_T.validate(i)`. Vier Bedingungen für No-Drift: (a) eindeutige Quelle, (b) deterministische totale Generatoren, (c) validation-extensional äquivalente Encodings, (d) kein Hand-Edition-Pfad in der Build-Pipeline.
 
-Vier Begründungs-Punkte für **Pydantic-als-Source** (HTM §5):
+Vier Begründungs-Punkte für **Pydantic-als-Source** (Design-Review):
 
 1. **Beweislast-Asymmetrie**: ein Generator zu beweisen ist strikt einfacher als zwei plus eine Schema-IR-Treue-Bedingung.
 2. **Validation-Default-Vermeidung**: Pydantic *ist* schon das Backend-Validation-Modell. `Spec_P = identity` schließt die Lücke zwischen Spec-Definition und Backend-Verhalten strukturell.
 3. **Single-Writer-Erzwingung**: Pydantic-as-Source erzwingt einen einzigen Writer für Schema-Mutationen — den Python-Entwickler. ([ADR-002](./ADR-002-single-writer-helland.md) verlangt das.)
 4. **Audit-Trail**: Pydantic-Modelle und `_generated/*.ts` leben beide in git; Drift = git-diff.
 
-Der konkrete Pin ist **v2.13.x** — gewählt nach Context7-Verifikation 2026-04-13. v2.13.0 ist die aktuelle Production-Release-Linie. v3 ist Roadmap, nicht released. Auf v2.10.x zu pinnen (Konsortium-Default) wäre ein bewusster Backstep um drei Minor-Versions. Snapshot der Verifikation: pydantic-version-policy-snapshot (historische atlas-Recherche-Quelle, nicht extrahiert).
+Der konkrete Pin ist **v2.13.x** — gewählt nach Context7-Verifikation 2026-04-13. v2.13.0 ist die aktuelle Production-Release-Linie. v3 ist Roadmap, nicht released. Auf v2.10.x zu pinnen (Review-Default) wäre ein bewusster Backstep um drei Minor-Versions. Snapshot der Verifikation: (interne Recherche, nicht veröffentlicht).
 
-User-Korrektur 2 hat den Pin von v2.10.x auf v2.13.x angehoben — autoritative Begründung in user-directive-corrections (historische atlas-Recherche, nicht extrahiert).
+Eine Maintainer-Korrektur hat den Pin von v2.10.x auf v2.13.x angehoben — autoritativ.
 
 ---
 
@@ -55,9 +55,9 @@ Konkrete Sub-Entscheidungen:
 - **F-2 Tristate-Drift** wird durch explizite Generator-Normierung plus bidirektionale Goldenfile-Property-Tests gefangen.
 - **Manuelle Edits in `_generated/`** sind durch pre-commit-Hook verboten. Frontend importiert ausschließlich aus `_generated/`-Pfaden für Wire-Types.
 
-**Was strukturell akzeptiert wird** (SKH's Eingeständnis):
+**Was strukturell akzeptiert wird** (Eingeständnis des Reviews):
 
-Die Wahl macht Bedienung *teuer*, nicht *unmöglich*. Universe-of-Codes (Option C) wäre strukturell unausdrückbar als Drift, aber der Interpreter-Boilerplate-Preis pro Sprache ist außerhalb unseres Budgets. Wir akzeptieren "teuer statt unmöglich" und kompensieren mit Goldenfile-Property-Tests (HTM §6 Co-Sign-Bedingung).
+Die Wahl macht Bedienung *teuer*, nicht *unmöglich*. Universe-of-Codes (Option C) wäre strukturell unausdrückbar als Drift, aber der Interpreter-Boilerplate-Preis pro Sprache ist außerhalb unseres Budgets. Wir akzeptieren "teuer statt unmöglich" und kompensieren mit Goldenfile-Property-Tests (Freigabe-Bedingung des Reviews).
 
 **Versions-Disziplin**:
 

@@ -433,7 +433,7 @@ class ShowSession:
         await self._sm.select_recording(msg.recording_id)
 
     async def _on_recorded_event_captured(self, msg: RecordedEventCapturedRequested) -> None:
-        """RecordedEventCapturedRequested → append timeline entry. NON-broadcasting path (COL-5 / PIT-105).
+        """RecordedEventCapturedRequested → append timeline entry. NON-broadcasting path (COL-5).
 
         seq is stamped Python-side in append_timeline_entry (reviewer Q1).
         No snapshot broadcast — ~10 Hz keydown events must not flood the wire.

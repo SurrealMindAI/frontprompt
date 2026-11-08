@@ -21,7 +21,7 @@ Design principles:
       segments persist. The WAV is a durable source artifact for re-transcription.
     - **Single broadcast**: ``append_transcript_segments`` holds the lock once
       for all appends and sets ``transcription_status="done"`` atomically,
-      emitting a single snapshot broadcast (PIT-105 discipline).
+      emitting a single snapshot broadcast (non-broadcasting append discipline).
 """
 
 from __future__ import annotations

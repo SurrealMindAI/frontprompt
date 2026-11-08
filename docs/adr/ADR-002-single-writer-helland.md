@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: single-writer-helland-explained (historische atlas-Recherche, nicht extrahiert), [ADR-001 Two BCs](./ADR-001-two-bounded-contexts.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md)
+**Cross-References**: Single-Writer-Erläuterung (interne Recherche, nicht veröffentlicht), [ADR-001 Two BCs](./ADR-001-two-bounded-contexts.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md)
 
 ---
 
@@ -12,7 +12,7 @@
 
 Pat Hellands "Life beyond Distributed Transactions" (CIDR 2007) postuliert: in einem System mit ernsthafter Skalierungs-Ambition kann es keine ACID-Transaktion über mehr als ein Aggregat geben. Cross-Aggregate-Coordination passiert ausschließlich über typed Messages, jedes Aggregat hat genau einen Writer.
 
-Im Patienten v4.2.0 wurde das Pattern strukturell **gebrochen**: der `BrowserManager`-Module-Singleton hielt einen coarse-grained `RLock`, der den Driver und den Transcription-Worker gleichzeitig schützte — zwei orthogonale Concerns in einem Lock-Slot. PKRs Diagnose (Konsortium): das war **Ownership-Confusion**, nicht "zu viele Prozesse". Multi-Process war nicht das Übel, geteilter Lock-Slot über zwei unzusammenhängende Aggregate war es.
+Im Patienten v4.2.0 wurde das Pattern strukturell **gebrochen**: der `BrowserManager`-Module-Singleton hielt einen coarse-grained `RLock`, der den Driver und den Transcription-Worker gleichzeitig schützte — zwei orthogonale Concerns in einem Lock-Slot. Diagnose des Design-Reviews: das war **Ownership-Confusion**, nicht "zu viele Prozesse". Multi-Process war nicht das Übel, geteilter Lock-Slot über zwei unzusammenhängende Aggregate war es.
 
 Der Successor übernimmt Helland's Pattern als **Charter**. Die Disziplin wird **strukturell** (durch Nursery-Ownership, [ADR-005](./ADR-005-nursery-per-pagesession.md)) und **runtime-checkable** (durch Owner-Task-ID-Assertion in Aggregate-Methoden, AST-Tests gegen Lock-Imports, Audit-Log-Property-Tests) erzwungen.
 

@@ -4,17 +4,17 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: nursery-per-pagesession-explained (historische atlas-Recherche, nicht extrahiert), [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-6
+**Cross-References**: Nursery-per-PageSession-Erläuterung (interne Recherche, nicht veröffentlicht), [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-011 anyio Concurrency](./ADR-011-anyio-concurrency.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-6
 
 ---
 
 ## Context
 
-Der Patient v4.2.0 hatte einen `BrowserManager`-Module-Singleton mit `RLock` über zwei orthogonalen Concerns (Driver-Lifecycle und Transcription-Worker-Lifecycle). PKR-Diagnose im Konsortium-Hub: das war **Ownership-Confusion**, nicht ein bloßes "zu viele Prozesse"-Problem.
+Der Patient v4.2.0 hatte einen `BrowserManager`-Module-Singleton mit `RLock` über zwei orthogonalen Concerns (Driver-Lifecycle und Transcription-Worker-Lifecycle). Diagnose des Design-Reviews: das war **Ownership-Confusion**, nicht ein bloßes "zu viele Prozesse"-Problem.
 
-Im 12-Hub-ADR-005 stand ursprünglich nur: *"Single MCP-Server pro User, on-demand."* PKR hat das gechärft: **Anzahl ≠ Ownership.** Single-MCP-Server schließt das Coarse-Grained-Lock-Problem nicht aus, wenn der eine Server intern wieder einen Module-Singleton hält, der zwei Concerns lockt.
+In der ersten Fassung von ADR-005 stand ursprünglich nur: *"Single MCP-Server pro User, on-demand."* Das Review hat das geschärft: **Anzahl ≠ Ownership.** Single-MCP-Server schließt das Coarse-Grained-Lock-Problem nicht aus, wenn der eine Server intern wieder einen Module-Singleton hält, der zwei Concerns lockt.
 
-Die Schärfung wurde Co-Sign-Bedingung des Konsortiums (PKR Bedingung 2). Sie wird hier in der ADR-005-Endfassung als finale Decision festgehalten.
+Die Schärfung wurde Freigabe-Bedingung des Design-Reviews. Sie wird hier in der ADR-005-Endfassung als finale Decision festgehalten.
 
 ---
 

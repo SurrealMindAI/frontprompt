@@ -4,7 +4,7 @@
 
 **Status**: accepted
 **Date**: 2026-05-14
-**Cross-References**: [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-6, nursery-per-pagesession-explained (historische atlas-Recherche, nicht extrahiert)
+**Cross-References**: [ADR-002 Single-Writer Helland](./ADR-002-single-writer-helland.md), [ADR-005 Nursery-per-PageSession](./ADR-005-nursery-per-pagesession.md), [ADR-007 Failure-Mode-Budget](./ADR-007-failure-mode-budget.md) F-6, Nursery-per-PageSession-Erläuterung (interne Recherche, nicht veröffentlicht)
 
 ---
 
@@ -18,7 +18,7 @@ Structured concurrency ([Trio](https://trio.readthedocs.io/), [anyio](https://an
 - **ExceptionGroup** statt swallowed exceptions in background tasks.
 - **Cancellation-Scope** propagiert deterministisch in den Subtree, nicht in fremde Aggregates.
 
-PKR (Konsortium) markierte das als Bedingung 1 für Python-Backend-Tragfähigkeit (consortium-of-brain-verdict §2.2 Bedingung 1, historische atlas-Recherche, nicht extrahiert).
+Das Design-Review markierte das als Bedingung 1 für Python-Backend-Tragfähigkeit.
 
 ---
 

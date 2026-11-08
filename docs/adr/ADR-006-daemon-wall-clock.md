@@ -18,7 +18,7 @@ Gründe:
 2. **NTP-Jumps**: ein Daemon, der monate-lang läuft, sieht NTP-Adjustments. Wall-Clock kann rückwärts springen.
 3. **DST-Transitions**: lokale Zeitzonen-Adjustments sind außerhalb UTC-internal-time-Domäne, aber Systemzeit kann beeinflusst sein.
 
-Im Patient v4.2.0 wurde das nie als Architektur-Constraint formuliert. Die Causality-Persona aus dem 12-Hub identifizierte das als CE-6 (Causality-Event Nr. 6): die Reihenfolge von Aggregate-Mutations ist nicht-trivial im einzelnen Aggregate, und ULID-Präfix darf das nicht entscheiden.
+Im Patient v4.2.0 wurde das nie als Architektur-Constraint formuliert. Das Design-Review identifizierte das als Kausalitäts-Befund: die Reihenfolge von Aggregate-Mutations ist nicht-trivial im einzelnen Aggregate, und ULID-Präfix darf das nicht entscheiden.
 
 ---
 
